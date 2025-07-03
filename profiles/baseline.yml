@@ -1,0 +1,22 @@
+# profiles/baseline.yml
+
+profile_name: "ФСТЭК Минимум"
+description: "Базовые проверки ИБ в Linux"
+checks:
+  - id: check_ssh_root_login
+    name: "Запрещен ли root-вход по SSH"
+    command: "grep -i '^PermitRootLogin' /etc/ssh/sshd_config"
+    expect: "no"
+    severity: "high"
+
+  - id: check_sudo_nopasswd
+    name: "Есть ли sudo без пароля"
+    command: "grep -E 'NOPASSWD' /etc/sudoers"
+    expect: ""
+    severity: "medium"
+
+  - id: check_pam_lockout
+    name: "Настроен ли PAM-блок после 3 неудачных входов"
+    command: "grep 'pam_tally2' /etc/pam.d/common-auth"
+    expect: "deny=3"
+    severity: "high"

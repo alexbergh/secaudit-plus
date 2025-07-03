@@ -1,0 +1,24 @@
+.DS_Store
+# Python
+__pycache__/
+*.pyc
+
+# VSCode/IDE
+.vscode/
+.idea/
+
+# Logs
+*.log
+
+# Reports
+results/*.json
+results/*.html
+results/*.md
+
+# PyInstaller
+dist/
+build/
+
+# Venv
+venv/
+.env
