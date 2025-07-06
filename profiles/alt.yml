@@ -1,0 +1,38 @@
+profile_name: "Профиль Альт СП"
+description: "Базовый аудит ИБ-состояния Alt Linux СП и Сервер 10"
+
+checks:
+  - id: check_alt_kernel
+    name: "Используется ядро с поддержкой защит (grsecurity/CONFIG_SECURITY)"
+    command: "uname -a"
+    expect: "alt"
+    assert_type: "contains"
+    severity: "low"
+
+  - id: check_ssh_root_login
+    name: "Запрещен ли root-вход по SSH"
+    command: "grep -i '^PermitRootLogin' /etc/ssh/sshd_config"
+    expect: "no"
+    assert_type: "contains"
+    severity: "high"
+
+  - id: check_shadow_perms
+    name: "Файл /etc/shadow защищён"
+    command: "stat -c '%a' /etc/shadow"
+    expect: "600"
+    assert_type: "exact"
+    severity: "high"
+
+  - id: check_sudo_nopasswd
+    name: "Нет NOPASSWD в /etc/sudoers"
+    command: "grep 'NOPASSWD' /etc/sudoers"
+    expect: ""
+    assert_type: "not_contains"
+    severity: "medium"
+
+  - id: check_auditd
+    name: "Служба auditd активна"
+    command: "systemctl is-active auditd"
+    expect: "active"
+    assert_type: "exact"
+    severity: "high"

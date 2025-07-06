@@ -1,22 +1,18 @@
-# Отчёт аудита безопасности
+# Отчёт SecAudit++
 
-**Профиль:** {{ profile.profile_name }}
-**Описание:** {{ profile.description }}
-**Дата:** {{ date }}
+**Профиль:** {{ profile.profile_name }}  
+**Описание:** {{ profile.description }}  
+**Дата проведения:** {{ now.strftime("%Y-%m-%d %H:%M:%S") }}
 
 ---
 
-## 📋 Результаты
+{% for module, checks in results | groupby('module') %}
+## Модуль: {{ module | capitalize }} ({{ checks | length }} проверок)
 
-| Проверка | Статус | Уровень | Детали |
-|----------|--------|---------|--------|
-{% for item in results %}
-| {{ item.name }} | {{ item.result }} | {{ item.severity }} | `{{ item.output }}` |
+| №  | Название проверки                     | Severity | Результат    | Комментарий/Вывод                 |
+|----|-------------------------------------|----------|--------------|----------------------------------|
+{% for check in checks %}
+| {{ loop.index }} | {{ check.name }}                   | {% if check.severity == 'high' %}**🔴 {{ check.severity|upper }}**{% elif check.severity == 'medium' %}🟠 {{ check.severity|capitalize }}{% else %}🟢 {{ check.severity|capitalize }}{% endif %} | {% if check.result == 'PASS' %}✅ Пройдено{% elif check.result == 'FAIL' %}❌ Не пройдено{% else %}⚠️ Неопределён{% endif %} | ```\n{{ check.output | trim }}\n``` |
 {% endfor %}
 
----
-
-**Всего:** {{ results | length }}  
-**PASS:** {{ pass_count }}  
-**FAIL:** {{ fail_count }}  
-**WARN:** {{ warn_count }}
+{% endfor %}

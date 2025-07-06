@@ -1,0 +1,38 @@
+profile_name: "CentOS 7 Security Profile"
+description: "Базовые проверки соответствия требованиям безопасности (CIS/FSTEC)"
+
+checks:
+  - id: check_selinux
+    name: "SELinux включен и работает"
+    command: "getenforce"
+    expect: "Enforcing"
+    assert_type: "exact"
+    severity: "high"
+
+  - id: check_ssh_protocol
+    name: "Используется SSH-протокол 2"
+    command: "grep -i '^Protocol' /etc/ssh/sshd_config"
+    expect: "2"
+    assert_type: "contains"
+    severity: "medium"
+
+  - id: check_password_auth
+    name: "Отключена аутентификация по паролю"
+    command: "grep -i '^PasswordAuthentication' /etc/ssh/sshd_config"
+    expect: "no"
+    assert_type: "contains"
+    severity: "high"
+
+  - id: check_auditd
+    name: "Служба auditd включена"
+    command: "systemctl is-enabled auditd"
+    expect: "enabled"
+    assert_type: "exact"
+    severity: "high"
+
+  - id: check_suid_files
+    name: "Количество SUID-бинарников не превышает 30"
+    command: "find / -xdev -type f -perm -4000 2>/dev/null | wc -l"
+    expect: "30"
+    assert_type: "regexp"
+    severity: "medium"

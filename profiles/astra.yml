@@ -1,0 +1,17 @@
+profile_name: "Профиль Astra Linux SE 1.7"
+description: "Рекомендованные проверки безопасности для Astra"
+
+checks:
+  - id: check_privsock
+    name: "Привилегии privsock настроены"
+    command: "systemctl is-enabled privsockd"
+    expect: "enabled"
+    assert_type: "exact"
+    severity: "high"
+
+  - id: check_mandatory_access
+    name: "МКД включён (mandatory policy)"
+    command: "cat /etc/astra_mandatory_policy | grep 'MANDATORY_MODE=1'"
+    expect: "MANDATORY_MODE=1"
+    assert_type: "contains"
+    severity: "high"

@@ -1,0 +1,38 @@
+profile_name: "Профиль Debian/Ubuntu"
+description: "Проверки конфигурации безопасности для DEB-семейства"
+
+checks:
+  - id: check_apparmor
+    name: "AppArmor включен"
+    command: "aa-status | grep 'profiles are in enforce mode'"
+    expect: "enforce mode"
+    assert_type: "contains"
+    severity: "medium"
+
+  - id: check_root_cron
+    name: "Нет активных cron-заданий у root"
+    command: "crontab -u root -l 2>/dev/null | grep -v '^#' | grep -v '^$'"
+    expect: ""
+    assert_type: "exact"
+    severity: "low"
+
+  - id: check_shadow_permissions
+    name: "Права на /etc/shadow равны 640 или жёстче"
+    command: "stat -c '%a' /etc/shadow"
+    expect: "640"
+    assert_type: "regexp"
+    severity: "high"
+
+  - id: check_journald_limit
+    name: "Настроен journald (ограничение по размеру)"
+    command: "grep '^SystemMaxUse=' /etc/systemd/journald.conf"
+    expect: "SystemMaxUse="
+    assert_type: "contains"
+    severity: "medium"
+
+  - id: check_auditd
+    name: "auditd активен"
+    command: "systemctl is-active auditd"
+    expect: "active"
+    assert_type: "exact"
+    severity: "high"

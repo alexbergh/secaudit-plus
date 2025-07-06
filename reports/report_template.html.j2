@@ -1,44 +1,60 @@
 <!DOCTYPE html>
 <html lang="ru">
 <head>
-  <meta charset="UTF-8">
-  <title>Отчёт аудита: {{ profile.profile_name }}</title>
-  <style>
-    body { font-family: sans-serif; margin: 40px; }
-    table { border-collapse: collapse; width: 100%; margin-top: 20px; }
-    th, td { border: 1px solid #ccc; padding: 8px; }
-    th { background: #eee; }
-    .PASS { color: green; font-weight: bold; }
-    .FAIL { color: red; font-weight: bold; }
-    .WARN { color: orange; font-weight: bold; }
-  </style>
+  <meta charset="UTF-8" />
+  <title>Отчёт SecAudit++</title>
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet"/>
 </head>
 <body>
-  <h1>Отчёт аудита безопасности</h1>
-  <p><strong>Профиль:</strong> {{ profile.profile_name }}<br>
-     <strong>Описание:</strong> {{ profile.description }}<br>
-     <strong>Дата:</strong> {{ date }}</p>
+  <div class="container my-4">
+    <h1>Отчёт SecAudit++</h1>
 
-  <table>
-    <thead>
-      <tr><th>Проверка</th><th>Статус</th><th>Уровень</th><th>Детали</th></tr>
-    </thead>
-    <tbody>
-    {% for item in results %}
-      <tr>
-        <td>{{ item.name }}</td>
-        <td class="{{ item.result }}">{{ item.result }}</td>
-        <td>{{ item.severity }}</td>
-        <td><code>{{ item.output }}</code></td>
-      </tr>
-    {% endfor %}
-    </tbody>
-  </table>
+    <div class="accordion" id="modulesAccordion">
+      {% for module, checks in results | groupby('module') %}
+      <div class="accordion-item">
+        <h2 class="accordion-header" id="heading-{{ loop.index }}">
+          <button class="accordion-button {% if not loop.first %}collapsed{% endif %}" type="button" data-bs-toggle="collapse" data-bs-target="#collapse-{{ loop.index }}" aria-expanded="{{ 'true' if loop.first else 'false' }}" aria-controls="collapse-{{ loop.index }}">
+            Модуль: {{ module | capitalize }} ({{ checks | length }} проверок)
+          </button>
+        </h2>
+        <div id="collapse-{{ loop.index }}" class="accordion-collapse collapse {% if loop.first %}show{% endif %}" aria-labelledby="heading-{{ loop.index }}" data-bs-parent="#modulesAccordion">
+          <div class="accordion-body">
+            <ul class="list-group">
+              {% for check in checks %}
+              <li class="list-group-item d-flex justify-content-between align-items-start">
+                <div>
+                  <div><strong>{{ check.name }}</strong></div>
+                  <small>ID: {{ check.id }}</small><br/>
+                  <small>Severity: <span class="badge bg-{{ 'danger' if check.severity == 'high' else 'warning' if check.severity == 'medium' else 'secondary' }}">{{ check.severity }}</span></small><br/>
+                  <small>Результат: 
+                    {% if check.result == 'PASS' %}
+                      <span class="text-success fw-bold">Успешно</span>
+                    {% elif check.result == 'FAIL' %}
+                      <span class="text-danger fw-bold">Не пройдено</span>
+                    {% else %}
+                      <span class="text-warning fw-bold">Неопределён</span>
+                    {% endif %}
+                  </small>
+                </div>
+                <div>
+                  <button class="btn btn-sm btn-outline-primary" type="button" data-bs-toggle="collapse" data-bs-target="#output-{{ loop.parentloop.index }}-{{ loop.index }}" aria-expanded="false" aria-controls="output-{{ loop.parentloop.index }}-{{ loop.index }}">
+                    Показать вывод
+                  </button>
+                </div>
+              </li>
+              <li class="list-group-item collapse" id="output-{{ loop.parentloop.index }}-{{ loop.index }}">
+                <pre>{{ check.output | e }}</pre>
+              </li>
+              {% endfor %}
+            </ul>
+          </div>
+        </div>
+      </div>
+      {% endfor %}
+    </div>
 
-  <p><strong>Итог:</strong> {{ results | length }} проверок,
-    <span style="color:green">PASS: {{ pass_count }}</span>,
-    <span style="color:red">FAIL: {{ fail_count }}</span>,
-    <span style="color:orange">WARN: {{ warn_count }}</span>
-  </p>
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
 </body>
 </html>

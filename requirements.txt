@@ -1,3 +1,4 @@
 pyyaml
 colorama
 jinja2
+pytest

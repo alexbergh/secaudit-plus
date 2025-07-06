@@ -1,0 +1,79 @@
+profile_name: "ФСТЭК. Базовые проверки"
+description: "Базовый аудит параметров безопасности Linux-систем"
+
+checks:
+  - id: check_ssh_root_login
+    name: "Запрещен ли root-вход по SSH"
+    command: "grep -i '^PermitRootLogin' /etc/ssh/sshd_config"
+    expect: "no"
+    assert_type: "contains"
+    severity: "high"
+
+  - id: check_sudo_nopasswd
+    name: "Есть ли sudo без пароля"
+    command: "grep -E 'NOPASSWD' /etc/sudoers"
+    expect: ""
+    assert_type: "not_contains"
+    severity: "medium"
+
+  - id: check_pam_lockout
+    name: "Настроен ли PAM-блок после 3 неудачных входов"
+    command: "grep 'pam_tally2' /etc/pam.d/common-auth"
+    expect: "deny=3"
+    assert_type: "contains"
+    severity: "high"
+
+  - id: check_auditd
+    name: "Активирован ли auditd"
+    command: "systemctl is-active auditd"
+    expect: "active"
+    assert_type: "exact"
+    severity: "high"
+    tags:
+      fstec: "IAF.1"
+      cis: "5.3.2"
+      stig: "V-71985"
+
+  - id: check_journald_retention
+    name: "Настроен лимит хранения журналов (journald)"
+    command: "grep -i '^SystemMaxUse=' /etc/systemd/journald.conf"
+    expect: "SystemMaxUse="
+    assert_type: "contains"
+    severity: "medium"
+    tags:
+      fstec: "RSB.4"
+      cis: "5.3.3"
+      stig: "V-71989"
+
+  - id: check_world_writable
+    name: "Нет world-writable файлов вне /tmp"
+    command: "find / -xdev -type f -perm -0002 ! -path '/tmp/*' 2>/dev/null | head -n 1"
+    expect: ""
+    assert_type: "exact"
+    severity: "high"
+    tags:
+      fstec: "ZNI.2"
+      cis: "1.1.1"
+      stig: "V-72229"
+
+  - id: check_suid_files
+    name: "Количество SUID-бинарников не превышает 30"
+    command: "find / -xdev -type f -perm -4000 2>/dev/null | wc -l"
+    expect: "30"
+    assert_type: "regexp"
+    severity: "medium"
+    tags:
+      fstec: "OPS.3"
+      cis: "5.4.3"
+      stig: "V-72235"
+
+  - id: check_crontab_root
+    name: "Нет крон-заданий у root"
+    command: "crontab -l 2>/dev/null | grep -v '^#' | grep -v '^$'"
+    expect: ""
+    assert_type: "exact"
+    severity: "low"
+    tags:
+      fstec: "UPD.1"
+      cis: "2.2.2"
+      stig: "V-71999"
