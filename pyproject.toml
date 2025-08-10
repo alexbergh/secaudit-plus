@@ -1,0 +1,26 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "secaudit"
+version = "0.1.0"
+description = "SecAudit++ core CLI"
+readme = "README.md"
+requires-python = ">=3.10"
+authors = [{ name = "Your Name" }]
+dependencies = [
+  "PyYAML>=6.0.1",
+  "Jinja2>=3.1.4",
+  "colorama>=0.4.6"
+]
+
+[project.scripts]
+secaudit = "secaudit.main:main"
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["secaudit*", "modules*", "utils*", "seclib*"]
+
+[tool.setuptools.package-data]
+secaudit = ["*.j2"]

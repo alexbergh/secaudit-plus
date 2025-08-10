@@ -18,7 +18,7 @@ python3 main.py
 
 ---
 
-##  Тесты
+##  Тест
 
 Для проверки логики assert'ов (`exact`, `contains`, `regexp`, `not_contains`) реализованы модульные юнит-тесты на `pytest`.
 
@@ -26,3 +26,11 @@ python3 main.py
 
 ```bash
 pip install -r requirements.txt
+
+## Установка из исходников
+
+```bash
+python3 -m venv venv
+source venv/bin/activate
+pip install .
+

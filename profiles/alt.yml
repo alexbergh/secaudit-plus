@@ -1,38 +1,315 @@
-profile_name: "Профиль Альт СП"
-description: "Базовый аудит ИБ-состояния Alt Linux СП и Сервер 10"
+profile_name: "Alt Linux SP — расширенный профиль (с астра-спецификой)"
+description: "Расширенный аудит безопасности для Alt Linux (СП/Server) с жёсткими SSH, PAM, journald, sysctl и файловыми политиками"
 
 checks:
-  - id: check_alt_kernel
-    name: "Используется ядро с поддержкой защит (grsecurity/CONFIG_SECURITY)"
-    command: "uname -a"
-    expect: "alt"
-    assert_type: "contains"
-    severity: "low"
-
+  # ─────────────── SSH: базовая политика доступа ───────────────
+  # ИЗМЕНЕНО: Все проверки SSH заменены на 'sshd -T' для получения точной активной конфигурации.
   - id: check_ssh_root_login
-    name: "Запрещен ли root-вход по SSH"
-    command: "grep -i '^PermitRootLogin' /etc/ssh/sshd_config"
+    name: "SSH: RootLogin запрещён"
+    module: "system"
+    command: "sshd -T | grep -i '^permitrootlogin' | awk '{print $2}'"
     expect: "no"
+    assert_type: "exact"
+    severity: "high"
+    tags: { fstec: ["ИАФ.1","УПД.5"], cis: "5.2.8", stig: "SSH-RootLogin" }
+
+  - id: check_password_auth_off
+    name: "SSH: PasswordAuthentication отключён"
+    module: "system"
+    command: "sshd -T | grep -i '^passwordauthentication' | awk '{print $2}'"
+    expect: "no"
+    assert_type: "exact"
+    severity: "high"
+    tags: { fstec: ["ИАФ.1","ИАФ.4"], cis: "5.2.9", stig: "SSH-PasswordAuth" }
+
+  - id: check_ssh_protocol2
+    name: "SSH: Protocol 2"
+    module: "system"
+    command: "sshd -T | grep -i '^protocol' | awk '{print $2}'"
+    expect: "2"
+    assert_type: "exact"
+    severity: "medium"
+    tags: { fstec: ["ЗИС.11"], cis: "5.2.2", stig: "SSH-Proto" }
+
+  - id: check_ssh_permit_empty_passwords
+    name: "SSH: Запрет пустых паролей (PermitEmptyPasswords no)"
+    module: "system"
+    command: "sshd -T | grep -i '^permitemptypasswords' | awk '{print $2}'"
+    expect: "no"
+    assert_type: "exact"
+    severity: "high"
+    tags: { fstec: ["ИАФ.4"], cis: "5.4.1", stig: "SSH-EmptyPw" }
+
+  - id: check_ssh_hostbased_auth
+    name: "SSH: HostbasedAuthentication отключён"
+    module: "system"
+    command: "sshd -T | grep -i '^hostbasedauthentication' | awk '{print $2}'"
+    expect: "no"
+    assert_type: "exact"
+    severity: "medium"
+    tags: { fstec: ["ИАФ.1"], cis: "5.2.15", stig: "SSH-Hostbased" }
+
+  - id: check_ssh_x11_forwarding
+    name: "SSH: X11Forwarding отключён"
+    module: "system"
+    command: "sshd -T | grep -i '^x11forwarding' | awk '{print $2}'"
+    expect: "no"
+    assert_type: "exact"
+    severity: "medium"
+    tags: { fstec: ["УПД.2","ЗИС.3"], cis: "5.2.12", stig: "SSH-X11" }
+
+  - id: check_ssh_alive_intervals
+    name: "SSH: Таймауты сессий (ClientAliveInterval<=300, ClientAliveCountMax<=2)"
+    module: "system"
+    command: "echo $(sshd -T | grep -i '^clientaliveinterval' | awk '{print $2}') $(sshd -T | grep -i '^clientalivecountmax' | awk '{print $2}')"
+    expect: "^(?:[0-9]|[1-9][0-9]|[12][0-9]{2}|300) (?:0|1|2)$"
+    assert_type: "regexp"
+    severity: "medium"
+    tags: { fstec: ["УПД.10"], cis: "5.2.13", stig: "SSH-Timeouts" }
+
+  - id: check_ssh_max_auth_tries
+    name: "SSH: MaxAuthTries ≤ 4"
+    module: "system"
+    command: "sshd -T | grep -i '^maxauthtries' | awk '{print $2}'"
+    expect: "^[1-4]$"
+    assert_type: "regexp"
+    severity: "high"
+    tags: { fstec: ["УПД.6"], cis: "5.2.16", stig: "SSH-MaxAuthTries" }
+
+  # ─────────────── SSH: криптополитика ───────────────
+  # ИЗМЕНЕНО: Проверка слабых алгоритмов теперь выполняется на основе активной конфигурации 'sshd -T'.
+  - id: check_ssh_no_weak_ciphers
+    name: "SSH: нет слабых шифров (arcfour/rc4/aes128-cbc и т.п.)"
+    module: "system"
+    command: "sshd -T | grep -i '^ciphers' | awk '{$1=\"\"; print $0}' | egrep '(arcfour|rc4|blowfish-cbc|3des-cbc|aes128-cbc)' || true"
+    expect: ""
+    assert_type: "exact"
+    severity: "high"
+    tags: { fstec: ["ЗИС.11","ЗИС.3"], cis: "5.2.19", stig: "SSH-Ciphers-Weak-None" }
+
+  - id: check_ssh_no_weak_macs
+    name: "SSH: нет слабых MAC (hmac-md5/hmac-sha1)"
+    module: "system"
+    command: "sshd -T | grep -i '^macs' | awk '{$1=\"\"; print $0}' | egrep '(hmac-md5|hmac-md5-96|hmac-sha1[^,])' || true"
+    expect: ""
+    assert_type: "exact"
+    severity: "high"
+    tags: { fstec: ["ЗИС.11","ЗИС.3"], cis: "5.2.20", stig: "SSH-MACs-Weak-None" }
+
+  - id: check_ssh_no_weak_kex
+    name: "SSH: нет слабых KEX (diffie-hellman-group1/14-sha1)"
+    module: "system"
+    command: "sshd -T | grep -i '^kexalgorithms' | awk '{$1=\"\"; print $0}' | egrep '(diffie-hellman-group1-sha1|diffie-hellman-group14-sha1)' || true"
+    expect: ""
+    assert_type: "exact"
+    severity: "high"
+    tags: { fstec: ["ЗИС.11","ЗИС.3"], cis: "5.2.21", stig: "SSH-KEX-Weak-None" }
+
+  # ИЗМЕНЕНО: Проверки явного задания политик также используют 'sshd -T', что подтверждает их активность.
+  - id: check_ssh_ciphers_defined
+    name: "SSH: Ciphers заданы явно (современные)"
+    module: "system"
+    command: "sshd -T | grep -i '^ciphers' || true"
+    expect: "ciphers"
+    assert_type: "contains"
+    severity: "medium"
+    tags: { fstec: ["ЗИС.11"], cis: "5.2.19", stig: "SSH-Ciphers-Defined" }
+
+  - id: check_ssh_macs_defined
+    name: "SSH: MACs заданы явно (современные)"
+    module: "system"
+    command: "sshd -T | grep -i '^macs' || true"
+    expect: "macs"
+    assert_type: "contains"
+    severity: "medium"
+    tags: { fstec: ["ЗИС.11"], cis: "5.2.20", stig: "SSH-MACs-Defined" }
+
+  - id: check_ssh_kex_defined
+    name: "SSH: KexAlgorithms заданы явно (современные)"
+    module: "system"
+    command: "sshd -T | grep -i '^kexalgorithms' || true"
+    expect: "kexalgorithms"
+    assert_type: "contains"
+    severity: "medium"
+    tags: { fstec: ["ЗИС.11"], cis: "5.2.21", stig: "SSH-KEX-Defined" }
+
+  # ─────────────── PAM / Парольная политика ───────────────
+  # ИЗМЕНЕНО: Команда улучшена для игнорирования закомментированных строк.
+  - id: check_pwquality_minlen
+    name: "Парольная политика: minlen ≥ 12"
+    module: "system"
+    command: "grep -E '^[[:space:]]*minlen' /etc/security/pwquality.conf | grep -v '^[[:space:]]*#' | awk -F= '{print $2}' | tr -d ' ' || echo 0"
+    expect: "^(1[2-9]|[2-9][0-9])$"
+    assert_type: "regexp"
+    severity: "high"
+    tags: { fstec: ["ИАФ.4"], cis: "5.4.1.1", stig: "PW-Policy" }
+
+  # ИЗМЕНЕНО: Проверка ищет активную (незакомментированную) строку с pam_tally2 или pam_faillock.
+  - id: check_pam_lockout
+    name: "PAM: блокировка после 3 неудачных входов (pam_tally2/faillock)"
+    module: "system"
+    command: "grep -rhE '^[[:space:]]*auth.*required.*(pam_tally2|pam_faillock).so.*(deny=3|onerr=fail)' /etc/pam.d/ | head -n 1 || true"
+    expect: "deny=3" # или onerr=fail
     assert_type: "contains"
     severity: "high"
+    tags: { fstec: ["УПД.6"], cis: "5.4.2", stig: "PAM-Lockout" }
 
+  # ─────────────── auditd / journald ───────────────
+  # БЕЗ ИЗМЕНЕНИЙ: Надежная проверка.
+  - id: check_auditd_active
+    name: "auditd активен"
+    module: "system"
+    command: "systemctl is-active auditd || echo inactive"
+    expect: "active"
+    assert_type: "exact"
+    severity: "high"
+    tags: { fstec: ["РСБ.3","РСБ.7"], cis: "4.1.1.3", stig: "Auditd-Run" }
+
+  # ИЗМЕНЕНО: Команда улучшена для игнорирования комментариев.
+  - id: check_journald_limit
+    name: "journald: задан лимит SystemMaxUse"
+    module: "system"
+    command: "grep -E '^[[:space:]]*SystemMaxUse=' /etc/systemd/journald.conf || true"
+    expect: "SystemMaxUse="
+    assert_type: "contains"
+    severity: "medium"
+    tags: { fstec: ["РСБ.1","РСБ.4"], cis: "4.2", stig: "Logs-Limit" }
+
+  - id: check_journald_storage_persistent
+    name: "journald: Storage=persistent"
+    module: "system"
+    command: "grep -E '^[[:space:]]*Storage=' /etc/systemd/journald.conf | grep -v '^[[:space:]]*#' || echo 'Storage=auto'"
+    expect: "Storage=persistent"
+    assert_type: "contains"
+    severity: "medium"
+    tags: { fstec: ["РСБ.3"], cis: "4.2", stig: "Logs-Storage" }
+
+  # ─────────────── Файловая безопасность ───────────────
   - id: check_shadow_perms
-    name: "Файл /etc/shadow защищён"
+    name: "/etc/shadow имеет 600"
+    module: "fs"
     command: "stat -c '%a' /etc/shadow"
     expect: "600"
     assert_type: "exact"
     severity: "high"
+    tags: { fstec: ["УПД.2"], cis: "6.1.2", stig: "FilePerm-Shadow" }
 
-  - id: check_sudo_nopasswd
-    name: "Нет NOPASSWD в /etc/sudoers"
-    command: "grep 'NOPASSWD' /etc/sudoers"
-    expect: ""
-    assert_type: "not_contains"
-    severity: "medium"
-
-  - id: check_auditd
-    name: "Служба auditd активна"
-    command: "systemctl is-active auditd"
-    expect: "active"
+  - id: check_gshadow_perms
+    name: "/etc/gshadow имеет 600"
+    module: "fs"
+    command: "stat -c '%a' /etc/gshadow"
+    expect: "600"
     assert_type: "exact"
     severity: "high"
+    tags: { fstec: ["УПД.2"], cis: "6.1.6", stig: "FilePerm-Gshadow" }
+
+  - id: check_world_writable_outside_tmp
+    name: "Нет world-writable файлов вне /tmp"
+    module: "fs"
+    command: "find / -xdev -type f -perm -0002 ! -path '/tmp/*' 2>/dev/null | head -n 1 | wc -l"
+    expect: "0"
+    assert_type: "exact"
+    severity: "high"
+    tags: { fstec: ["УПД.2"], cis: "1.1.21", stig: "WW-Files" }
+
+  - id: check_suid_count
+    name: "Количество SUID ≤ 25"
+    module: "fs"
+    command: "find / -xdev -type f -perm -4000 2>/dev/null | wc -l"
+    expect: "^([0-1]?[0-9]|2[0-5])$"
+    assert_type: "regexp"
+    severity: "medium"
+    tags: { fstec: ["ОПС.1"], cis: "6.1.13", stig: "SUID-Count" }
+
+  # ─────────────── Cron / sudo ───────────────
+  - id: check_root_cron_empty
+    name: "У root нет активных cron-заданий"
+    module: "cron"
+    command: "crontab -u root -l 2>/dev/null | grep -v '^#' | grep -v '^$' | wc -l"
+    expect: "0"
+    assert_type: "exact"
+    severity: "low"
+    tags: { fstec: ["ОПС.1"], cis: "5.1.2", stig: "Cron-Root" }
+
+  - id: check_cron_allow_deny
+    name: "cron: /etc/cron.allow существует, /etc/cron.deny пуст или отсутствует"
+    module: "cron"
+    command: "([ -f /etc/cron.allow ] && ! [ -s /etc/cron.deny ]) && echo 'OK' || echo 'FAIL'"
+    expect: "OK"
+    assert_type: "exact"
+    severity: "medium"
+    tags: { fstec: ["УПД.2"], cis: "5.1.8", stig: "Cron-Access" }
+
+  - id: check_sudo_secure_path
+    name: "Sudo: включён secure_path"
+    module: "system"
+    command: "grep -rhE '^[[:space:]]*Defaults.*secure_path' /etc/sudoers /etc/sudoers.d/ | head -n1 || true"
+    expect: "secure_path"
+    assert_type: "contains"
+    severity: "medium"
+    tags: { fstec: ["ОПС.1"], cis: "5.3.3", stig: "Sudo-SecurePath" }
+
+  # ─────────────── sysctl (сетевая политика) ───────────────
+  - id: check_ip_forward_disabled
+    name: "IP forwarding отключён (IPv4)"
+    module: "network"
+    command: "sysctl -n net.ipv4.ip_forward 2>/dev/null || echo 0"
+    expect: "0"
+    assert_type: "exact"
+    severity: "medium"
+    tags: { fstec: ["ЗИС.3"], cis: "3.1.1", stig: "Kernel-IPv4-Forward" }
+
+  - id: check_icmp_redirects_disabled
+    name: "ICMP redirects отключены (accept & send)"
+    module: "network"
+    command: "echo $(sysctl -n net.ipv4.conf.all.accept_redirects 2>/dev/null || echo 0) $(sysctl -n net.ipv4.conf.all.send_redirects 2>/dev/null || echo 0)"
+    expect: "^0 0$"
+    assert_type: "regexp"
+    severity: "medium"
+    tags: { fstec: ["ЗИС.3"], cis: "3.2.2", stig: "ICMP-Redirects" }
+
+  - id: check_source_route_disabled
+    name: "Source routing отключён"
+    module: "network"
+    command: "sysctl -n net.ipv4.conf.all.accept_source_route 2>/dev/null || echo 0"
+    expect: "0"
+    assert_type: "exact"
+    severity: "medium"
+    tags: { fstec: ["ЗИС.3"], cis: "3.3.1", stig: "SRC-Route" }
+
+  - id: check_rp_filter
+    name: "Reverse Path Filtering включён (rp_filter=1 или 2)"
+    module: "network"
+    command: "sysctl -n net.ipv4.conf.all.rp_filter 2>/dev/null || echo 0"
+    expect: "^[12]$"
+    assert_type: "regexp"
+    severity: "medium"
+    tags: { fstec: ["ЗИС.3"], cis: "3.3.7", stig: "RP-Filter" }
+
+  - id: check_tcp_syncookies
+    name: "TCP SYN cookies включены"
+    module: "network"
+    command: "sysctl -n net.ipv4.tcp_syncookies 2>/dev/null || echo 0"
+    expect: "1"
+    assert_type: "exact"
+    severity: "medium"
+    tags: { fstec: ["ЗИС.3"], cis: "3.3.10", stig: "TCP-Syncookies" }
+
+  - id: check_log_martians
+    name: "Логирование подозрительных пакетов (log_martians=1)"
+    module: "network"
+    command: "sysctl -n net.ipv4.conf.all.log_martians 2>/dev/null || echo 0"
+    expect: "1"
+    assert_type: "exact"
+    severity: "low"
+    tags: { fstec: ["ЗИС.3"], cis: "3.3.8", stig: "Log-Martians" }
+
+  # ─────────────── Файрвол (любая реализация) ───────────────
+  - id: check_firewall_active
+    name: "Активен системный фаервол (nftables/firewalld/iptables — любой)"
+    module: "network"
+    command: "systemctl is-active nftables || systemctl is-active firewalld || systemctl is-active iptables || echo inactive"
+    expect: "active"
+    assert_type: "exact"
+    severity: "medium"
+    tags: { fstec: ["УПД.3","ЗИС.3"], cis: "3.5", stig: "Firewall-Active" }

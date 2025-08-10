@@ -3,57 +3,413 @@
 <head>
   <meta charset="UTF-8" />
   <title>Отчёт SecAudit++</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
   <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet"/>
+  <style>
+    .code-pre { white-space: pre-wrap; word-break: break-word; }
+    .mono { font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace; }
+    .small-mono { font-size: .875rem; }
+    .table-sm td, .table-sm th { vertical-align: middle; }
+    .badge-pill { border-radius: 1rem; }
+  </style>
 </head>
 <body>
-  <div class="container my-4">
-    <h1>Отчёт SecAudit++</h1>
+  {# =========================== SETTINGS =========================== #}
+  {% set OUTPUT_TRIM = 400 %}
 
+  {# =========================== HELPERS ============================ #}
+  {% macro norm_status(r) -%}
+    {%- set s = (r.status if r.status is defined else r.result|default('')) -%}
+    {%- set s = s|string -%}
+    {%- if s|lower in ['pass','ok','success'] or s == 'PASS' -%}pass
+    {%- elif s|lower in ['fail','failed'] or s == 'FAIL' -%}fail
+    {%- elif s|lower in ['error','err'] -%}error
+    {%- else -%}unknown
+    {%- endif -%}
+  {%- endmacro %}
+
+  {% macro sev_badge(sev) -%}
+    {%- set v = (sev|string|lower) -%}
+    {%- if v == 'high' -%}<span class="badge bg-danger">HIGH</span>
+    {%- elif v == 'medium' -%}<span class="badge bg-warning text-dark">Medium</span>
+    {%- elif v == 'low' -%}<span class="badge bg-success">Low</span>
+    {%- else -%}<span class="badge bg-secondary">n/a</span>
+    {%- endif -%}
+  {%- endmacro %}
+
+  {% macro result_badge(s) -%}
+    {%- set s = s|lower -%}
+    {%- if s == 'pass' -%}<span class="text-success fw-semibold">Успешно</span>
+    {%- elif s == 'fail' -%}<span class="text-danger fw-semibold">Не пройдено</span>
+    {%- elif s == 'error' -%}<span class="text-warning fw-semibold">Ошибка</span>
+    {%- else -%}<span class="text-muted">Неопределён</span>
+    {%- endif -%}
+  {%- endmacro %}
+
+  {% macro fstec_list(r) -%}
+    {%- if r.tags is not defined or not r.tags or ('fstec' not in r.tags) -%}
+      []
+    {%- else -%}
+      {%- set raw = r.tags.fstec -%}
+      {%- if raw is string -%}[{{ raw }}]{% elif raw is sequence -%}{{ raw }}{% else -%}[]{% endif -%}
+    {%- endif -%}
+  {%- endmacro %}
+
+  {% macro short_output(text) -%}
+    {{ (text|default('')|replace('\r','')|trim|truncate(OUTPUT_TRIM, True)) }}
+  {%- endmacro %}
+
+  {% set FSTEK21 = {
+    'ИАФ.1':'Идентификация/аутентификация работников',
+    'ИАФ.2':'Идентификация/аутентификация устройств',
+    'ИАФ.3':'Управление идентификаторами',
+    'ИАФ.4':'Управление средствами аутентификации',
+    'ИАФ.5':'Защита обратной связи при вводе',
+    'ИАФ.6':'ИА внешних пользователей',
+    'УПД.1':'Управление учётными записями',
+    'УПД.2':'Разграничение доступа',
+    'УПД.3':'Управление информационными потоками',
+    'УПД.4':'Разделение ролей',
+    'УПД.5':'Минимальные привилегии',
+    'УПД.6':'Ограничение неуспешных входов',
+    'УПД.7':'Баннер безопасности',
+    'УПД.8':'Оповещение о предыдущем входе',
+    'УПД.9':'Лимит параллельных сессий',
+    'УПД.10':'Таймаут сессии',
+    'УПД.11':'Права до аутентификации',
+    'УПД.12':'Атрибуты безопасности',
+    'УПД.13':'Защищённый удалённый доступ',
+    'УПД.14':'Контроль Wi-Fi',
+    'УПД.15':'Контроль мобильных ТС',
+    'УПД.16':'Внешние ИС',
+    'УПД.17':'Доверенная загрузка',
+    'ОПС.1':'Управление запуском ПО',
+    'ОПС.2':'Управление установкой ПО',
+    'ОПС.3':'Только разрешённое ПО',
+    'ОПС.4':'Управление временными файлами',
+    'ЗНИ.1':'Учёт носителей ПДн',
+    'ЗНИ.2':'Доступ к носителям ПДн',
+    'ЗНИ.3':'Контроль перемещения носителей',
+    'ЗНИ.4':'Исключить НСД к ПДн на носителях',
+    'ЗНИ.5':'Контроль интерфейсов ввода/вывода',
+    'ЗНИ.6':'Контроль ввода/вывода',
+    'ЗНИ.7':'Контроль подключения носителей',
+    'ЗНИ.8':'Уничтожение/обезличивание ПДн',
+    'РСБ.1':'События и сроки хранения',
+    'РСБ.2':'Состав записей',
+    'РСБ.3':'Сбор/запись/хранение',
+    'РСБ.4':'Сбои регистрации',
+    'РСБ.5':'Мониторинг журналов',
+    'РСБ.6':'Синхронизация времени',
+    'РСБ.7':'Защита информации о событиях',
+    'АВЗ.1':'Антивирусная защита',
+    'АВЗ.2':'Обновление сигнатур',
+    'СОВ.1':'Обнаружение вторжений',
+    'СОВ.2':'Обновление правил',
+    'АНЗ.1':'Управление уязвимостями',
+    'АНЗ.2':'Контроль обновлений',
+    'АНЗ.3':'Контроль СЗИ/настроек',
+    'АНЗ.4':'Контроль состава ТС/ПО/СЗИ',
+    'АНЗ.5':'Контроль паролей/аккаунтов/ролей',
+    'ОЦЛ.1':'Целостность ПО',
+    'ОЦЛ.2':'Целостность ПДн в БД',
+    'ОЦЛ.3':'Восстановление ПО',
+    'ОЦЛ.4':'Защита от спама',
+    'ОЦЛ.5':'Контроль исходящего контента',
+    'ОЦЛ.6':'Ограничение прав ввода',
+    'ОЦЛ.7':'Точность вводимых данных',
+    'ОЦЛ.8':'Предупреждение об ошибках',
+    'ОДТ.1':'Отказоустойчивые ТС',
+    'ОДТ.2':'Резервирование',
+    'ОДТ.3':'Контроль безотказности',
+    'ОДТ.4':'Бэкап ПДн',
+    'ОДТ.5':'Восстановление ПДн',
+    'ЗСВ.1':'ИАФ в ВИ',
+    'ЗСВ.2':'Доступ в ВИ',
+    'ЗСВ.3':'Журналы в ВИ',
+    'ЗСВ.4':'Потоки/периметр ВИ',
+    'ЗСВ.5':'Доверенная загрузка в ВИ',
+    'ЗСВ.6':'Миграция ВМ/контейнеров',
+    'ЗСВ.7':'Целостность ВИ/конфигураций',
+    'ЗСВ.8':'Резерв в ВИ',
+    'ЗСВ.9':'Антивирус в ВИ',
+    'ЗСВ.10':'Сегментирование ВИ',
+    'ЗТС.1':'Утечки по ТКУ',
+    'ЗТС.2':'Контролируемая зона',
+    'ЗТС.3':'Физический доступ',
+    'ЗТС.4':'Размещение дисплеев',
+    'ЗТС.5':'Внешние воздействия',
+    'ЗИС.1':'Разделение функций',
+    'ЗИС.2':'Приоритетные процессы',
+    'ЗИС.3':'Защита ПДн при передаче',
+    'ЗИС.4':'Доверенные каналы/маршруты',
+    'ЗИС.5':'Запрет удалённой периферии',
+    'ЗИС.6':'Атрибуты безопасности при обмене',
+    'ЗИС.7':'Мобильный код',
+    'ЗИС.8':'Передача речи',
+    'ЗИС.9':'Видеоинформация',
+    'ЗИС.10':'Происхождение имён/адресов',
+    'ЗИС.11':'Подлинность соединений',
+    'ЗИС.12':'Неотрекаемость отправки',
+    'ЗИС.13':'Неотрекаемость получения',
+    'ЗИС.14':'Терминальный доступ',
+    'ЗИС.15':'Защита архивов/настроек',
+    'ЗИС.16':'Скрытые каналы',
+    'ЗИС.17':'Сегментирование ИС',
+    'ЗИС.18':'Чтение-только носители + целостность',
+    'ЗИС.19':'Изоляция процессов',
+    'ЗИС.20':'Защита беспроводных соединений'
+  } %}
+
+  {# ======================== KPI / SUMMARY ======================== #}
+  {% set total = results|length %}
+  {% set passed = results|selectattr('status','equalto','pass')|list|length %}
+  {% if passed == 0 %}{% set passed = results|selectattr('result','equalto','PASS')|list|length %}{% endif %}
+  {% set failed = results|selectattr('status','equalto','fail')|list|length %}
+  {% if failed == 0 %}{% set failed = results|selectattr('result','equalto','FAIL')|list|length %}{% endif %}
+  {% set errors = results|selectattr('status','equalto','error')|list|length %}
+  {% set unknown = total - passed - failed - errors %}
+  {% set compliance = (100.0 * passed / total) | round(1) if total > 0 else 0 %}
+
+  <div class="container my-4">
+    <h1 class="mb-3">Отчёт SecAudit++</h1>
+
+    <div class="row g-3 mb-4">
+      <div class="col-12 col-lg-8">
+        <div class="card">
+          <div class="card-body">
+            <div class="d-flex flex-wrap gap-4">
+              <div><div class="text-muted small">Профиль</div><div class="fw-semibold">{{ (profile.profile_name if profile is defined and profile.profile_name is defined else profile_name|default('—')) }}</div></div>
+              <div><div class="text-muted small">Описание</div><div>{{ (profile.description if profile is defined and profile.description is defined else profile_description|default('—')) }}</div></div>
+              <div><div class="text-muted small">Дата</div><div>{{ (now.strftime("%Y-%m-%d %H:%M:%S") if now is defined else timestamp|default('—')) }}</div></div>
+              <div><div class="text-muted small">Хост</div><div>{{ host.hostname|default('—') }}</div></div>
+              <div><div class="text-muted small">ОС</div><div>{{ host.os|default('—') }}</div></div>
+              <div><div class="text-muted small">Ядро</div><div>{{ host.kernel|default('—') }}</div></div>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="col-12 col-lg-4">
+        <div class="card h-100">
+          <div class="card-body">
+            <div class="row text-center g-3">
+              <div class="col">
+                <div class="text-muted small">Всего</div>
+                <div class="fs-4 fw-bold">{{ total }}</div>
+              </div>
+              <div class="col">
+                <div class="text-muted small">✅ Pass</div>
+                <div class="fs-4 text-success fw-bold">{{ passed }}</div>
+              </div>
+              <div class="col">
+                <div class="text-muted small">❌ Fail</div>
+                <div class="fs-4 text-danger fw-bold">{{ failed }}</div>
+              </div>
+              <div class="col">
+                <div class="text-muted small">⚠️ Err</div>
+                <div class="fs-4 text-warning fw-bold">{{ errors }}</div>
+              </div>
+            </div>
+            <hr/>
+            <div class="d-flex justify-content-between align-items-center">
+              <div class="text-muted small">Индекс соответствия</div>
+              <div class="fs-5 fw-bold">{{ compliance }}%</div>
+            </div>
+            <div class="progress mt-2" role="progressbar" aria-valuenow="{{ compliance }}" aria-valuemin="0" aria-valuemax="100">
+              <div class="progress-bar" style="width: {{ compliance }}%"></div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    {# =================== МОДУЛИ (АККОРДЕОН) =================== #}
     <div class="accordion" id="modulesAccordion">
       {% for module, checks in results | groupby('module') %}
       <div class="accordion-item">
         <h2 class="accordion-header" id="heading-{{ loop.index }}">
-          <button class="accordion-button {% if not loop.first %}collapsed{% endif %}" type="button" data-bs-toggle="collapse" data-bs-target="#collapse-{{ loop.index }}" aria-expanded="{{ 'true' if loop.first else 'false' }}" aria-controls="collapse-{{ loop.index }}">
+          <button class="accordion-button {% if not loop.first %}collapsed{% endif %}" type="button"
+                  data-bs-toggle="collapse"
+                  data-bs-target="#collapse-{{ loop.index }}"
+                  aria-expanded="{{ 'true' if loop.first else 'false' }}"
+                  aria-controls="collapse-{{ loop.index }}">
             Модуль: {{ module | capitalize }} ({{ checks | length }} проверок)
           </button>
         </h2>
-        <div id="collapse-{{ loop.index }}" class="accordion-collapse collapse {% if loop.first %}show{% endif %}" aria-labelledby="heading-{{ loop.index }}" data-bs-parent="#modulesAccordion">
+        <div id="collapse-{{ loop.index }}" class="accordion-collapse collapse {% if loop.first %}show{% endif %}"
+             aria-labelledby="heading-{{ loop.index }}" data-bs-parent="#modulesAccordion">
           <div class="accordion-body">
-            <ul class="list-group">
-              {% for check in checks %}
-              <li class="list-group-item d-flex justify-content-between align-items-start">
-                <div>
-                  <div><strong>{{ check.name }}</strong></div>
-                  <small>ID: {{ check.id }}</small><br/>
-                  <small>Severity: <span class="badge bg-{{ 'danger' if check.severity == 'high' else 'warning' if check.severity == 'medium' else 'secondary' }}">{{ check.severity }}</span></small><br/>
-                  <small>Результат: 
-                    {% if check.result == 'PASS' %}
-                      <span class="text-success fw-bold">Успешно</span>
-                    {% elif check.result == 'FAIL' %}
-                      <span class="text-danger fw-bold">Не пройдено</span>
-                    {% else %}
-                      <span class="text-warning fw-bold">Неопределён</span>
-                    {% endif %}
-                  </small>
-                </div>
-                <div>
-                  <button class="btn btn-sm btn-outline-primary" type="button" data-bs-toggle="collapse" data-bs-target="#output-{{ loop.parentloop.index }}-{{ loop.index }}" aria-expanded="false" aria-controls="output-{{ loop.parentloop.index }}-{{ loop.index }}">
-                    Показать вывод
-                  </button>
-                </div>
-              </li>
-              <li class="list-group-item collapse" id="output-{{ loop.parentloop.index }}-{{ loop.index }}">
-                <pre>{{ check.output | e }}</pre>
-              </li>
-              {% endfor %}
-            </ul>
+
+            <div class="table-responsive">
+              <table class="table table-sm table-bordered align-middle">
+                <thead class="table-light">
+                  <tr>
+                    <th style="width:3ch;">#</th>
+                    <th>Проверка</th>
+                    <th style="width:9ch;">Sev</th>
+                    <th style="width:10ch;">Результат</th>
+                    <th style="width:12ch;">Assert</th>
+                    <th>Ожидание</th>
+                    <th>FSTEK №21</th>
+                    <th style="width:1%"></th>
+                  </tr>
+                </thead>
+                <tbody>
+                {% for check in checks %}
+                  {% set s = norm_status(check) %}
+                  {% set fl = fstec_list(check) %}
+                  <tr>
+                    <td class="text-muted">{{ loop.index }}</td>
+                    <td>
+                      <div class="fw-semibold">{{ check.name }}</div>
+                      <div class="small text-muted mono">ID: {{ check.id }}</div>
+                      {% if check.command %}
+                      <details class="small mt-1">
+                        <summary class="text-muted">Команда</summary>
+                        <pre class="code-pre small-mono">{{ check.command }}</pre>
+                      </details>
+                      {% endif %}
+                    </td>
+                    <td>{{ sev_badge(check.severity) }}</td>
+                    <td>{{ result_badge(s) }}</td>
+                    <td><span class="badge bg-secondary badge-pill mono">{{ check.assert_type|default('exact') }}</span></td>
+                    <td><span class="mono small">{{ check.expect|default('') }}</span></td>
+                    <td>
+                      {% if fl|length > 0 %}
+                        {% for m in fl %}
+                          <span class="badge bg-info text-dark me-1 mb-1" title="{{ FSTEK21.get(m, '') }}">{{ m }}</span>
+                        {% endfor %}
+                      {% else %}
+                        <span class="text-muted">—</span>
+                      {% endif %}
+                    </td>
+                    <td class="text-end">
+                      <button class="btn btn-sm btn-outline-primary" type="button"
+                              data-bs-toggle="collapse"
+                              data-bs-target="#output-{{ loop.parentloop.index }}-{{ loop.index }}"
+                              aria-expanded="false"
+                              aria-controls="output-{{ loop.parentloop.index }}-{{ loop.index }}">
+                        Вывод
+                      </button>
+                    </td>
+                  </tr>
+                  <tr class="collapse" id="output-{{ loop.parentloop.index }}-{{ loop.index }}">
+                    <td colspan="8">
+                      <pre class="code-pre mono mb-0">{{ short_output(check.output)|e }}</pre>
+                    </td>
+                  </tr>
+                {% endfor %}
+                </tbody>
+              </table>
+            </div>
+
           </div>
         </div>
       </div>
       {% endfor %}
     </div>
 
-  </div>
+    {# ============== СВОДКА ПО МЕРАМ ФСТЭК №21 ============== #}
+    {% set seen = {} %}
+    {% for r in results %}
+      {% for m in fstec_list(r) %}
+        {% set _ = seen.update({m: (seen.get(m, []) + [r])}) %}
+      {% endfor %}
+    {% endfor %}
+
+    <hr class="my-4"/>
+
+    <h2 class="h4 mb-3">Сводка по мерам ФСТЭК №21</h2>
+    {% if seen %}
+      <div class="table-responsive">
+        <table class="table table-sm table-hover table-bordered align-middle">
+          <thead class="table-light">
+            <tr>
+              <th style="width:10ch;">Мера</th>
+              <th>Описание</th>
+              <th class="text-end" style="width:8ch;">Всего</th>
+              <th class="text-end text-success" style="width:8ch;">Pass</th>
+              <th class="text-end text-danger" style="width:8ch;">Fail</th>
+              <th class="text-end text-warning" style="width:8ch;">Error</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for m, rs in seen|dictsort %}
+              {% set p = rs | selectattr('status','equalto','pass') | list | length %}
+              {% if p == 0 %}{% set p = rs | selectattr('result','equalto','PASS') | list | length %}{% endif %}
+              {% set f = rs | selectattr('status','equalto','fail') | list | length %}
+              {% if f == 0 %}{% set f = rs | selectattr('result','equalto','FAIL') | list | length %}{% endif %}
+              {% set e = rs | selectattr('status','equalto','error') | list | length %}
+              <tr>
+                <td><span class="badge bg-info text-dark">{{ m }}</span></td>
+                <td>{{ FSTEK21.get(m, '—') }}</td>
+                <td class="text-end">{{ rs|length }}</td>
+                <td class="text-end">{{ p }}</td>
+                <td class="text-end">{{ f }}</td>
+                <td class="text-end">{{ e }}</td>
+              </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    {% else %}
+      <p class="text-muted">Теги ФСТЭК №21 в проверках отсутствуют.</p>
+    {% endif %}
+
+    {# ============== КРИТИЧЕСКИЕ (HIGH) НЕСООТВЕТСТВИЯ ============== #}
+    {% set highs = results
+      | selectattr('severity','equalto','high')
+      | selectattr('status','equalto','fail') | list %}
+    {% if highs|length == 0 %}
+      {% set highs = results
+        | selectattr('severity','equalto','high')
+        | selectattr('result','equalto','FAIL') | list %}
+    {% endif %}
+
+    <hr class="my-4"/>
+    <h2 class="h4">Критические несоответствия (High)</h2>
+    {% if highs %}
+      <div class="list-group mb-5">
+        {% for r in highs %}
+        <div class="list-group-item">
+          <div class="d-flex justify-content-between">
+            <div class="fw-semibold">{{ r.name }}</div>
+            <div>{{ sev_badge(r.severity) }}</div>
+          </div>
+          <div class="small text-muted mono">ID: {{ r.id }} · Модуль: {{ r.module }}</div>
+          <div class="mt-2">
+            <span class="text-muted small">Меры №21:</span>
+            {% set fl = fstec_list(r) %}
+            {% if fl|length > 0 %}
+              {% for m in fl %}
+                <span class="badge bg-info text-dark me-1" title="{{ FSTEK21.get(m, '') }}">{{ m }}</span>
+              {% endfor %}
+            {% else %}
+              <span class="text-muted">—</span>
+            {% endif %}
+          </div>
+          {% if r.expect %}
+          <div class="small mt-2"><span class="text-muted">Ожидание:</span> <span class="mono">{{ r.expect }}</span></div>
+          {% endif %}
+          <div class="small mt-1"><span class="text-muted">Assert:</span> <span class="badge bg-secondary mono">{{ r.assert_type|default('exact') }}</span></div>
+          {% if r.command %}
+          <details class="mt-2">
+            <summary class="text-muted">Команда</summary>
+            <pre class="code-pre small-mono">{{ r.command }}</pre>
+          </details>
+          {% endif %}
+          <details class="mt-2">
+            <summary class="text-muted">Фактический вывод</summary>
+            <pre class="code-pre mono">{{ r.output|default('')|trim }}</pre>
+          </details>
+        </div>
+        {% endfor %}
+      </div>
+    {% else %}
+      <p class="text-muted mb-5">Критических несоответствий не выявлено.</p>
+    {% endif %}
+
+  </div> <!-- /container -->
 
   <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
 </body>
