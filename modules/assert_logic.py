@@ -1,44 +1,67 @@
-# modules/assert_logic.py
+"""Utility helpers for validating command output against expectations."""
+
 import re
 from enum import Enum, auto
 
+
 class AssertStatus(Enum):
-    """Перечисление для статусов выполнения проверки."""
+    """Статусы выполнения проверки."""
+
     PASS = auto()
     FAIL = auto()
-    ERROR = auto()    # Ошибка в данных проверки (например, неверный regexp)
-    UNKNOWN = auto()  # Неизвестный тип проверки
+    ERROR = auto()  # Ошибка в данных проверки (например, неверный regexp)
+    WARN = auto()  # Неподдерживаемый тип проверки
 
-def assert_output(output: str, expected: str, assert_type: str) -> AssertStatus:
+
+def assert_output(output: str, expected: str, assert_type: str) -> str:
+    """Сравнивает фактический вывод с ожидаемым значением.
+
+    Parameters
+    ----------
+    output:
+        Фактический строковый результат, полученный от команды.
+    expected:
+        Ожидаемая строка или шаблон для сравнения.
+    assert_type:
+        Тип сравнения (``exact``, ``contains``, ``not_contains`` или
+        ``regexp``).
+
+    Returns
+    -------
+    str
+        Строковый статус проверки: ``PASS``, ``FAIL`` или ``WARN``.
     """
-    Сравнивает фактический вывод с ожидаемым значением на основе типа утверждения.
 
-    Args:
-        output: Фактический строковый результат, полученный от команды.
-        expected: Ожидаемая строка или шаблон для сравнения.
-        assert_type: Тип сравнения ('exact', 'contains', 'not_contains', 'regexp').
-
-    Returns:
-        Член перечисления AssertStatus (PASS, FAIL, ERROR, UNKNOWN).
-    """
     if assert_type == "exact":
-        # .strip() делает сравнение устойчивым к ведущим/конечным пробелам.
-        return AssertStatus.PASS if output.strip() == expected.strip() else AssertStatus.FAIL
+        status = (
+            AssertStatus.PASS
+            if output.strip() == expected.strip()
+            else AssertStatus.FAIL
+        )
 
     elif assert_type == "contains":
-        return AssertStatus.PASS if expected in output else AssertStatus.FAIL
+        status = AssertStatus.PASS if expected in output else AssertStatus.FAIL
 
     elif assert_type == "not_contains":
-        return AssertStatus.PASS if expected not in output else AssertStatus.FAIL
+        status = (
+            AssertStatus.PASS if expected not in output else AssertStatus.FAIL
+        )
 
     elif assert_type == "regexp":
         try:
             # re.search ищет совпадение в любом месте строки.
-            return AssertStatus.PASS if re.search(expected, output) else AssertStatus.FAIL
+            status = (
+                AssertStatus.PASS
+                if re.search(expected, output)
+                else AssertStatus.FAIL
+            )
         except re.error:
-            # Некорректный синтаксис регулярного выражения — это ошибка в профиле.
-            return AssertStatus.ERROR
+            # Некорректный синтаксис регулярного выражения трактуем
+            # как провал проверки.
+            status = AssertStatus.FAIL
 
     else:
         # Передан неподдерживаемый тип утверждения.
-        return AssertStatus.UNKNOWN
+        status = AssertStatus.WARN
+
+    return status.name
