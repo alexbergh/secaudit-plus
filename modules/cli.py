@@ -194,6 +194,11 @@ def parse_args() -> argparse.Namespace:
         default="none",
         help="Порог неуспеха (код возврата 2, если найдены проблемы >= уровня). По умолчанию: none.",
     )
+    sub_audit.add_argument(
+        "--fail-on-undef",
+        action="store_true",
+        help="Return exit code 2 if any check result is UNDEF."
+    )
 
     return parser.parse_args()
 
