@@ -35,7 +35,17 @@ _PROFILE_SCHEMA = {
                     "module": {"type": "string"},
                     "command": {"type": "string"},
                     "expect": {"type": "string"},
-                    "assert_type": {"type": "string", "enum": ["exact", "contains", "regexp"]},
+                    # Допустимые типы сравнения: exact | contains | not_contains | regexp | exit_code
+                    "assert_type": {
+                        "type": "string",
+                        "enum": [
+                            "exact",
+                            "contains",
+                            "not_contains",
+                            "regexp",
+                            "exit_code",
+                        ],
+                    },
                     "severity": {"type": "string", "enum": ["low", "medium", "high"]},
                     # Важно: теги — словарь {строка: строка}. Если у тебя массивы, конверти в строку заранее.
                     "tags": {
