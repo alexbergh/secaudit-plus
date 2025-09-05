@@ -108,11 +108,14 @@ def validate_profile(profile: Dict[str, Any]) -> Tuple[bool, List[str]]:
     Валидирует YAML-профиль по JSON-схеме.
     Возвращает (is_valid, errors[]).
     """
+    profile = normalize_profile(profile)
     validator = Draft7Validator(PROFILE_SCHEMA)
     errors: List[str] = []
     for err in sorted(validator.iter_errors(profile), key=lambda e: e.path):
         loc = " -> ".join([str(p) for p in err.path]) or "<root>"
         errors.append(f"{loc}: {err.message}")
+    errors.extend(_check_unique_ids(profile.get("checks", [])))
+    errors.extend(_precompile_regexps(profile.get("checks", [])))
     return (len(errors) == 0, errors)
 
 def severity_rank(sev: str) -> int:
