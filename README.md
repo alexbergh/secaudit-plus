@@ -18,6 +18,8 @@ python3 main.py
 # Запуск аудита с ошибкой при UNDEF
 python3 main.py audit --fail-on-undef
 
+```
+
 ---
 
 ##  Тест
@@ -29,10 +31,14 @@ python3 main.py audit --fail-on-undef
 ```bash
 pip install -r requirements.txt
 
+```
+
 ## Установка из исходников
 
 ```bash
 python3 -m venv venv
 source venv/bin/activate
 pip install .
+
+```
 
