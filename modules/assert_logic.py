@@ -9,7 +9,6 @@ class AssertStatus(Enum):
 
     PASS = auto()
     FAIL = auto()
-    ERROR = auto()  # Ошибка в данных проверки (например, неверный regexp)
     WARN = auto()  # Неподдерживаемый тип проверки
 
 
