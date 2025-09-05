@@ -1,10 +1,12 @@
 # seclib/validator.py
 from __future__ import annotations
 
+import re
 from typing import Any, Dict, List, Tuple
 
 try:
     from jsonschema import Draft7Validator
+    from jsonschema.exceptions import ValidationError
 except Exception as e:
     # Жёсткое требование jsonschema в зависимостях проекта
     raise RuntimeError(
@@ -58,7 +60,7 @@ PROFILE_SCHEMA: Dict[str, Any] = {
 
 SEVERITY_RANK = {"low": 1, "medium": 2, "high": 3}
 
-def _format_error(e: js_exceptions.ValidationError) -> str:
+def _format_error(e: ValidationError) -> str:
     """Форматирует ошибку jsonschema в человекочитаемую строку."""
     path = "$"
     if e.absolute_path:
