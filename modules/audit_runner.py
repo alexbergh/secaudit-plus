@@ -6,7 +6,7 @@ import yaml
 from pathlib import Path
 from typing import Any, Dict, List, Tuple
 
-from modules.bash_executor import run_bash  # <= используем мягкий исполнитель
+from modules.bash_executor import run_bash, CommandError  # <= используем мягкий исполнитель
 
 
 # ───────────────────────── Загрузка профиля ─────────────────────────
@@ -58,8 +58,28 @@ def _execute_check(check: Dict[str, Any]) -> Dict[str, Any]:
     rc_ok = tuple(check.get("rc_ok", (0, 1)))
 
     # Выполняем
-    exec_res = run_bash(cmd, timeout=timeout, rc_ok=rc_ok)
-    rc, stdout, stderr = exec_res.returncode, exec_res.stdout, exec_res.stderr
+    try:
+        exec_res = run_bash(cmd, timeout=timeout, rc_ok=rc_ok)
+        rc, stdout, stderr = exec_res.returncode, exec_res.stdout, exec_res.stderr
+    except CommandError as e:
+        rc = e.returncode if e.returncode is not None else 1
+        stdout = getattr(e, "stdout", "")
+        stderr = e.stderr
+        return {
+            "id": check.get("id", ""),
+            "name": check.get("name", ""),
+            "module": check.get("module", "core"),
+            "severity": check.get("severity", "low"),
+            "tags": check.get("tags", {}),
+            "command": cmd,
+            "assert_type": assert_type,
+            "expect": expect,
+            "rc": rc,
+            "output": stdout if stdout else (stderr or "").strip(),
+            "stderr": stderr,
+            "result": "FAIL",        # Ошибка выполнения команды
+            "reason": str(e),          # сообщение об ошибке
+        }
 
     # Нормализация результатов
     status, verdict_detail = _apply_assert(stdout, rc, expect, assert_type, rc_ok)
