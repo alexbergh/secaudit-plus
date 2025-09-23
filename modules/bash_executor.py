@@ -9,10 +9,17 @@ import subprocess
 class CommandError(Exception):
     """Исключение, возникающее при ошибке выполнения внешней команды."""
 
-    def __init__(self, message: str, stderr: str = "", returncode: int | None = None):
+    def __init__(
+        self,
+        message: str,
+        stderr: str = "",
+        returncode: int | None = None,
+        stdout: str = "",
+    ):
         super().__init__(message)
         self.stderr = stderr
         self.returncode = returncode
+        self.stdout = stdout
 
     def __str__(self) -> str:  # pragma: no cover - simple formatting
         if self.returncode is not None:
@@ -58,6 +65,7 @@ def run_bash(
                 message=f"Command '{command}' failed.",
                 stderr=(result.stderr or "").strip(),
                 returncode=result.returncode,
+                stdout=result.stdout or "",
             )
 
         return result

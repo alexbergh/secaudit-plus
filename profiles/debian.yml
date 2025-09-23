@@ -1,3 +1,4 @@
+schema_version: "1.1"
 profile_name: "Debian/Ubuntu — усиленный профиль"
 description: "Жёсткий аудит безопасности для Debian/Ubuntu. Совместим с SecAudit++."
 
@@ -333,4 +334,299 @@ checks:
     expect: "active"
     assert_type: "exact"
     severity: "medium"
-    tags: { fstec: ["УПД.3","ЗИС.3"], cis: "3.5", stig: "Firewall-Active" }
+    tags: { fstec: ["УПД.3","ЗИС.3"], cis: "3.5", stig: "Firewall-Active" }  # ─────────────── РСБ.6 — Синхронизация времени ───────────────
+  - id: check_time_sync_ntp
+    name: "Время: timedatectl сообщает о синхронизации"
+    module: "services"
+    command: "timedatectl show -p NTPSynchronized --value 2>/dev/null || echo no"
+    expect: "yes"
+    assert_type: "exact"
+    severity: "medium"
+    tags: { fstec: ["РСБ.6"] }
+
+  - id: check_time_sync_service
+    name: "Время: активен chronyd/systemd-timesyncd"
+    module: "services"
+    command: "systemctl is-active chronyd || systemctl is-active systemd-timesyncd || echo inactive"
+    expect: "active"
+    assert_type: "exact"
+    severity: "medium"
+    tags: { fstec: ["РСБ.6"] }
+
+  # ─────────────── УПД.7 — Баннеры предупреждения ───────────────
+  - id: check_issue_banner_present
+    name: "Баннер /etc/issue непустой"
+    module: "system"
+    command: "test -s /etc/issue && echo OK || echo FAIL"
+    expect: "OK"
+    assert_type: "exact"
+    severity: "medium"
+    tags: { fstec: ["УПД.7"] }
+
+  - id: check_ssh_banner_enabled
+    name: "SSH: задан и наполнен баннер"
+    module: "system"
+    command: "banner=$(sshd -T | awk '/^banner /{print $2}'); if [ -n \"$banner\" ] && [ -f \"$banner\" ] && [ -s \"$banner\" ]; then echo OK; else echo FAIL; fi"
+    expect: "OK"
+    assert_type: "exact"
+    severity: "medium"
+    tags: { fstec: ["УПД.7"] }
+
+  # ─────────────── УПД.8 — Оповещение о предыдущем входе ───────────────
+  - id: check_pam_lastlog
+    name: "PAM: включено pam_lastlog без silent"
+    module: "users"
+    command: "grep -rhE '^[[:space:]]*session.*pam_lastlog\\.so(?!.*silent)' /etc/pam.d/ | head -n1"
+    expect: "pam_lastlog.so"
+    assert_type: "contains"
+    severity: "medium"
+    tags: { fstec: ["УПД.8"] }
+
+  # ─────────────── УПД.9 — Ограничение параллельных сессий ───────────────
+  - id: check_pam_limits_present
+    name: "PAM: подключён pam_limits"
+    module: "users"
+    command: "grep -rhE '^[[:space:]]*session.*pam_limits\\.so' /etc/pam.d/ | head -n1"
+    expect: "pam_limits.so"
+    assert_type: "contains"
+    severity: "medium"
+    tags: { fstec: ["УПД.9"] }
+
+  - id: check_maxlogins_threshold
+    name: "MaxLogins ≤ 10"
+    module: "users"
+    command: "grep -E '^[[:space:]]*\\*?[[:space:]]+hard[[:space:]]+maxlogins' /etc/security/limits.conf /etc/security/limits.d/* 2>/dev/null | awk '{print $NF}' | sort -n | head -n1 || echo 0"
+    expect: 10
+    assert_type: "int_lte"
+    severity: "medium"
+    tags: { fstec: ["УПД.9"] }
+
+  # ─────────────── АНЗ.5 — Политика паролей ───────────────
+  - id: check_pass_max_days_policy
+    name: "PASS_MAX_DAYS ≤ 90"
+    module: "users"
+    command: "awk '/^PASS_MAX_DAYS/{print $2}' /etc/login.defs || echo 999"
+    expect: 90
+    assert_type: "int_lte"
+    severity: "high"
+    tags: { fstec: ["АНЗ.5"] }
+
+  - id: check_pass_min_days_policy
+    name: "PASS_MIN_DAYS ≥ 1"
+    module: "users"
+    command: "awk '/^PASS_MIN_DAYS/{print $2}' /etc/login.defs || echo 0"
+    expect: "^([1-9][0-9]*)$"
+    assert_type: "regexp"
+    severity: "high"
+    tags: { fstec: ["АНЗ.5"] }
+
+  - id: check_pass_warn_age_policy
+    name: "PASS_WARN_AGE ≥ 7"
+    module: "users"
+    command: "awk '/^PASS_WARN_AGE/{print $2}' /etc/login.defs || echo 0"
+    expect: "^([7-9]|[1-9][0-9]+)$"
+    assert_type: "regexp"
+    severity: "medium"
+    tags: { fstec: ["АНЗ.5"] }
+
+  - id: check_user_inactive_policy
+    name: "useradd -D INACTIVE ≤ 30"
+    module: "users"
+    command: "useradd -D | awk -F= '/^INACTIVE/{print $2}' | tr -d ' ' || echo 0"
+    expect: 30
+    assert_type: "int_lte"
+    severity: "medium"
+    tags: { fstec: ["АНЗ.5"] }
+
+  - id: check_pam_pwhistory_remember
+    name: "PAM pwhistory: remember ≥ 4"
+    module: "users"
+    command: "grep -rhE '^[[:space:]]*password.*pam_pwhistory\\.so.*remember=([4-9]|[1-9][0-9]+)' /etc/pam.d/ | head -n1"
+    expect: "remember="
+    assert_type: "contains"
+    severity: "high"
+    tags: { fstec: ["АНЗ.5"] }
+
+  # ─────────────── ЗИС.3 — IPv6 жёсткие sysctl ───────────────
+  - id: check_ipv6_hardening
+    name: "IPv6: отключены redirects/RA/router_solicitations"
+    module: "network"
+    command: "echo $(sysctl -n net.ipv6.conf.all.accept_redirects 2>/dev/null || echo 0) $(sysctl -n net.ipv6.conf.all.accept_ra 2>/dev/null || echo 0) $(sysctl -n net.ipv6.conf.all.router_solicitations 2>/dev/null || echo 0)"
+    expect: "^0 0 0$"
+    assert_type: "regexp"
+    severity: "medium"
+    tags: { fstec: ["ЗИС.3"] }
+
+  # ─────────────── РСБ.1/2/3/7 — Расширенные аудит-правила ───────────────
+  - id: check_audit_rules_immutable
+    name: "auditd: включен immutable режим"
+    module: "services"
+    command: "grep -Rhs '^-e[[:space:]]*2$' /etc/audit/rules.d/ /etc/audit/audit.rules"
+    expect: "-e"
+    assert_type: "contains"
+    severity: "high"
+    tags: { fstec: ["РСБ.1","РСБ.2","РСБ.3","РСБ.7"] }
+
+  - id: check_audit_rules_critical_keys
+    name: "auditd: правила для time-change/identity/access/perm_mod/mounts/modules/sudo"
+    module: "services"
+    command: "missing=0; for key in time-change identity access perm_mod mounts modules sudo; do grep -Rhs \"-k ${key}\" /etc/audit/rules.d/ /etc/audit/audit.rules >/dev/null || missing=1; done; [ $missing -eq 0 ] && echo OK || echo FAIL"
+    expect: "OK"
+    assert_type: "exact"
+    severity: "high"
+    tags: { fstec: ["РСБ.1","РСБ.2","РСБ.3","РСБ.7"] }
+
+  - id: check_journald_forward_syslog
+    name: "journald: ForwardToSyslog=yes"
+    module: "services"
+    command: "grep -E '^[[:space:]]*ForwardToSyslog=yes' /etc/systemd/journald.conf 2>/dev/null || echo missing"
+    expect: "ForwardToSyslog=yes"
+    assert_type: "contains"
+    severity: "medium"
+    tags: { fstec: ["РСБ.7"] }
+
+  # ─────────────── РСБ.7 — Ротация и защита логов ───────────────
+  - id: check_logrotate_installed
+    name: "logrotate установлен и исполняем"
+    module: "services"
+    command: "test -x /usr/sbin/logrotate && echo OK || echo FAIL"
+    expect: "OK"
+    assert_type: "exact"
+    severity: "medium"
+    tags: { fstec: ["РСБ.7"] }
+
+  - id: check_logrotate_rules_exist
+    name: "logrotate: есть правила в /etc/logrotate.d"
+    module: "services"
+    command: "find /etc/logrotate.d -type f 2>/dev/null | head -n1"
+    expect: "^/"
+    assert_type: "regexp"
+    severity: "low"
+    tags: { fstec: ["РСБ.7"] }
+
+  - id: check_var_log_permissions
+    name: "/var/log имеет права ≤ 750"
+    module: "fs"
+    command: "stat -c '%a' /var/log 2>/dev/null || echo 777"
+    expect: 750
+    assert_type: "int_lte"
+    severity: "medium"
+    tags: { fstec: ["РСБ.7"] }
+
+  # ─────────────── ЗНИ.5-7 — Контроль съёмных носителей ───────────────
+  - id: check_usb_storage_blacklist
+    name: "usb-storage занесён в blacklist"
+    module: "fs"
+    command: "grep -RhsE '^[[:space:]]*blacklist[[:space:]]+usb-storage' /etc/modprobe.d/ || true"
+    expect: "usb-storage"
+    assert_type: "contains"
+    severity: "medium"
+    tags: { fstec: ["ЗНИ.5","ЗНИ.6","ЗНИ.7"] }
+
+  - id: check_portable_mount_options
+    name: "Съёмные ФС смонтированы с nodev/nosuid/noexec"
+    module: "fs"
+    command: |
+      findmnt -nr -t vfat,exfat,ntfs --output OPTIONS 2>/dev/null |
+      awk '
+        BEGIN { status = 0 }
+        {
+          opts = tolower($0);
+          if (opts !~ /nodev/ || opts !~ /nosuid/ || opts !~ /noexec/) {
+            status = 1
+          }
+        }
+        END {
+          if (status == 0) {
+            print "OK"
+          } else {
+            print "FAIL"
+          }
+        }'
+    expect: "OK"
+    assert_type: "exact"
+    severity: "medium"
+    tags: { fstec: ["ЗНИ.5","ЗНИ.6","ЗНИ.7"] }
+
+  - id: check_udev_usb_rules
+    name: "Есть udev-правила, ограничивающие USB"
+    module: "fs"
+    command: "grep -RhsE 'SUBSYSTEM==\\"usb\\".*(MODE|ATTR|OPTIONS)' /etc/udev/rules.d/ 2>/dev/null | head -n1"
+    expect: "SUBSYSTEM"
+    assert_type: "contains"
+    severity: "medium"
+    tags: { fstec: ["ЗНИ.5","ЗНИ.6","ЗНИ.7"] }
+
+  # ─────────────── ЗИС.17 — Политика фаервола ───────────────
+  - id: check_firewall_default_deny
+    name: "Фаервол: политика DROP по умолчанию"
+    module: "network"
+    command: |
+      if command -v nft >/dev/null 2>&1; then
+        nft list ruleset | grep -E 'hook (input|forward|output).*policy drop' | sort -u | wc -l
+      elif command -v iptables >/dev/null 2>&1; then
+        iptables -S | grep -E '^-P (INPUT|FORWARD|OUTPUT) DROP' | wc -l
+      else
+        echo 0
+      fi
+    expect: "^([3-9]|[1-9][0-9]+)$"
+    assert_type: "regexp"
+    severity: "high"
+    tags: { fstec: ["ЗИС.17"] }
+
+  # ─────────────── ЗИС.18 — Доверенная загрузка ───────────────
+  - id: check_grub_superusers
+    name: "GRUB: задан superusers"
+    module: "boot"
+    command: "grep -E '^[[:space:]]*set[[:space:]]+superusers' /boot/grub*/grub.cfg 2>/dev/null || true"
+    expect: "superusers"
+    assert_type: "contains"
+    severity: "high"
+    tags: { fstec: ["ЗИС.18"] }
+
+  - id: check_grub_pbkdf2_hash
+    name: "GRUB: присутствует пароль (pbkdf2)"
+    module: "boot"
+    command: "grep -Rhs 'grub.pbkdf2' /etc/grub.d/40_custom /etc/grub.d/* 2>/dev/null | head -n1"
+    expect: "grub.pbkdf2"
+    assert_type: "contains"
+    severity: "high"
+    tags: { fstec: ["ЗИС.18"] }
+
+  - id: check_secure_boot_state
+    name: "Secure Boot включён"
+    module: "boot"
+    command: "mokutil --sb-state 2>/dev/null | grep -iq enabled && echo enabled || echo disabled"
+    expect: "enabled"
+    assert_type: "exact"
+    severity: "medium"
+    tags: { fstec: ["ЗИС.18"] }
+
+  # ─────────────── АНЗ.2 — Автоматизация обновлений ───────────────
+  - id: check_updates_automation
+    name: "Автообновления пакетов настроены"
+    module: "services"
+    command: |
+      if systemctl is-active --quiet unattended-upgrades 2>/dev/null; then
+        echo active
+      elif systemctl is-enabled --quiet dnf-automatic.timer 2>/dev/null; then
+        echo active
+      elif systemctl is-enabled --quiet apt-daily-upgrade.timer 2>/dev/null; then
+        echo active
+      else
+        echo inactive
+      fi
+    expect: "active"
+    assert_type: "exact"
+    severity: "medium"
+    tags: { fstec: ["АНЗ.2"] }
+
+  # ─────────────── УПД.10 — Таймаут TTY ───────────────
+  - id: check_tmout_policy
+    name: "TMOUT задан не менее 300 секунд"
+    module: "users"
+    command: "grep -RhsE '^[[:space:]]*TMOUT=([3-9][0-9]|[1-9][0-9]{2,})' /etc/profile /etc/bash.bashrc /etc/profile.d/* 2>/dev/null | head -n1"
+    expect: "TMOUT"
+    assert_type: "contains"
+    severity: "medium"
+    tags: { fstec: ["УПД.10"] }

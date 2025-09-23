@@ -5,6 +5,8 @@ import yaml
 from pathlib import Path
 from typing import Tuple, List, Dict, Any
 
+from seclib.validator import PROFILE_SCHEMA as STRICT_PROFILE_SCHEMA
+
 # Пытаемся подключить jsonschema, чтобы валидировать профиль.
 # Если библиотека не установлена — работаем без "жёсткой" валидации.
 try:
@@ -15,50 +17,7 @@ except Exception:
     _HAS_JSONSCHEMA = False
 
 
-# ──────────────────────────────────────────────────────────────────────────────
-# Мини-схема профиля (упрощённая, без жесткого перечисления всех полей check)
-# ──────────────────────────────────────────────────────────────────────────────
-_PROFILE_SCHEMA = {
-    "type": "object",
-    "required": ["profile_name", "description", "checks"],
-    "properties": {
-        "profile_name": {"type": "string"},
-        "description": {"type": "string"},
-        "checks": {
-            "type": "array",
-            "items": {
-                "type": "object",
-                "required": ["id", "name", "module", "command", "expect", "assert_type", "severity"],
-                "properties": {
-                    "id": {"type": "string"},
-                    "name": {"type": "string"},
-                    "module": {"type": "string"},
-                    "command": {"type": "string"},
-                    "expect": {"type": "string"},
-                    # Допустимые типы сравнения: exact | contains | not_contains | regexp | exit_code
-                    "assert_type": {
-                        "type": "string",
-                        "enum": [
-                            "exact",
-                            "contains",
-                            "not_contains",
-                            "regexp",
-                            "exit_code",
-                        ],
-                    },
-                    "severity": {"type": "string", "enum": ["low", "medium", "high"]},
-                    # Важно: теги — словарь {строка: строка}. Если у тебя массивы, конверти в строку заранее.
-                    "tags": {
-                        "type": "object",
-                        "additionalProperties": {"type": "string"}
-                    }
-                },
-                "additionalProperties": True
-            }
-        }
-    },
-    "additionalProperties": True
-}
+_PROFILE_SCHEMA = STRICT_PROFILE_SCHEMA
 
 
 # ──────────────────────────────────────────────────────────────────────────────
@@ -71,10 +30,55 @@ def list_modules(profile: Dict[str, Any]) -> None:
         print(m)
 
 
-def list_checks(profile: Dict[str, Any], module: str | None = None) -> None:
-    """Печатает список проверок, опционально фильтруя по модулю."""
+def parse_tag_filters(raw: List[str] | None) -> Dict[str, str]:
+    filters: Dict[str, str] = {}
+    if not raw:
+        return filters
+    for item in raw:
+        if "=" not in item:
+            raise ValueError(f"Неверный формат фильтра по тегам: '{item}' (используйте KEY=VALUE)")
+        key, value = item.split("=", 1)
+        key = key.strip().lower()
+        value = value.strip().lower()
+        if not key or not value:
+            raise ValueError(f"Неверный фильтр по тегам: '{item}'")
+        filters[key] = value
+    return filters
+
+
+def _match_tags(check_tags: Dict[str, Any], filters: Dict[str, str]) -> bool:
+    if not filters:
+        return True
+    if not isinstance(check_tags, dict):
+        return False
+    lowered = {str(k).lower(): v for k, v in check_tags.items()}
+    for key, expected in filters.items():
+        value = lowered.get(key)
+        if value is None:
+            return False
+        if isinstance(value, (list, tuple, set)):
+            haystack = [str(v).lower() for v in value]
+            if expected not in haystack:
+                return False
+        else:
+            if str(value).lower() != expected:
+                return False
+    return True
+
+
+def list_checks(
+    profile: Dict[str, Any],
+    module: str | None = None,
+    tags: Dict[str, str] | None = None,
+) -> None:
+    """Печатает список проверок, опционально фильтруя по модулю и тегам."""
+    tags = tags or {}
+    module_filter = module.lower() if module else None
     for check in profile.get("checks", []):
-        if module and check.get("module") != module:
+        check_module = str(check.get("module", "")).lower()
+        if module_filter and check_module != module_filter:
+            continue
+        if tags and not _match_tags(check.get("tags", {}), tags):
             continue
         cid = check.get("id", "<no_id>")
         name = check.get("name", "<Unnamed Check>")
@@ -124,7 +128,7 @@ def validate_profile(profile: Dict[str, Any]) -> Tuple[bool, List[str]]:
         return False, ["Формат профиля не является YAML-объектом (ожидался mapping)."]
 
     # Базовые проверки без jsonschema
-    required_top = ["profile_name", "description", "checks"]
+    required_top = ["schema_version", "profile_name", "description", "checks"]
     for k in required_top:
         if k not in profile:
             errors.append(f"Отсутствует обязательное поле '{k}'.")
@@ -183,6 +187,12 @@ def parse_args() -> argparse.Namespace:
     # list-checks
     sub_checks = subs.add_parser("list-checks", parents=[parent], help="Показать проверки")
     sub_checks.add_argument("--module", help="Фильтровать проверки по модулю")
+    sub_checks.add_argument(
+        "--tags",
+        action="append",
+        metavar="KEY=VALUE",
+        help="Фильтр по тегам (можно указывать несколько раз)",
+    )
 
     # describe-check
     sub_desc = subs.add_parser("describe-check", parents=[parent], help="Детали проверки по ID")
@@ -209,6 +219,11 @@ def parse_args() -> argparse.Namespace:
         action="store_true",
         help="Return exit code 2 if any check result is UNDEF."
     )
+    sub_audit.add_argument(
+        "--evidence",
+        metavar="DIR",
+        help="Каталог для сохранения выводов команд (улики)."
+    )
 
     return parser.parse_args()
 
@@ -226,7 +241,12 @@ def main() -> None:
         return
 
     if args.command == "list-checks":
-        list_checks(profile, args.module)
+        try:
+            tag_filters = parse_tag_filters(getattr(args, "tags", None))
+        except ValueError as exc:
+            print(str(exc), file=sys.stderr)
+            sys.exit(2)
+        list_checks(profile, args.module, tag_filters)
         return
 
     if args.command == "describe-check":
