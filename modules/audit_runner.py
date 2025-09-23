@@ -1,10 +1,14 @@
 # modules/audit_runner.py
 from __future__ import annotations
 
+import json
 import re
-import yaml
 from pathlib import Path
-from typing import Any, Dict, List, Tuple
+from typing import Any, Dict, List, Tuple, Optional
+
+import yaml
+from json import JSONDecodeError
+from packaging import version
 
 from modules.bash_executor import run_bash, CommandError  # <= используем мягкий исполнитель
 
@@ -26,38 +30,52 @@ def load_profile(path: str | Path) -> Dict[str, Any]:
 
 # ───────────────────────── Исполнение проверок ─────────────────────────
 
-def run_checks(profile: Dict[str, Any], selected_modules: List[str] | None = None) -> List[Dict[str, Any]]:
+def run_checks(
+    profile: Dict[str, Any],
+    selected_modules: List[str] | None = None,
+    evidence_dir: str | Path | None = None,
+) -> List[Dict[str, Any]]:
     """
-    Выполняет проверки из профиля, опционально фильтруя по модулям.
-    Возвращает список результатов (для JSON/отчётов).
+    Выполняет проверки из профиля, опционально фильтруя по модулям и
+    сохраняя выводы команд в каталоге доказательств.
     """
-    selected_modules = selected_modules or []
+
+    module_filters = [m.lower() for m in (selected_modules or [])]
+    evidence_path: Optional[Path] = None
+    if evidence_dir:
+        evidence_path = Path(evidence_dir)
+        evidence_path.mkdir(parents=True, exist_ok=True)
+
     out: List[Dict[str, Any]] = []
 
     for check in profile.get("checks", []):
-        module = check.get("module", "core")
-        if selected_modules and module not in selected_modules:
+        module = str(check.get("module", "core"))
+        if module_filters and module.lower() not in module_filters:
             continue
 
-        res = _execute_check(check)
+        res = _execute_check(check, evidence_path)
         out.append(res)
 
     return out
 
 
-def _execute_check(check: Dict[str, Any]) -> Dict[str, Any]:
+def _execute_check(check: Dict[str, Any], evidence_dir: Optional[Path] = None) -> Dict[str, Any]:
     """
     Запускает одну проверку через run_bash и применяет assert-логику.
-    Поддерживаем assert_type: exact | contains | regexp | exit_code.
+    Поддерживаем assert_type: exact | contains | not_contains | regexp |
+    exit_code | jsonpath | version_gte | int_lte.
     """
-    cmd: str = check["command"]
-    expect: str = str(check.get("expect", ""))
-    assert_type: str = check.get("assert_type", "exact").lower()
-    timeout: int = int(check.get("timeout", 10))
-    # По умолчанию принимаем rc 0/1 как "неошибочные" для аудита (grep no-match = 1)
-    rc_ok = tuple(check.get("rc_ok", (0, 1)))
 
-    # Выполняем
+    cmd: str = check["command"]
+    expect_raw: Any = check.get("expect")
+    assert_type: str = str(check.get("assert_type", "exact")).lower()
+    timeout: int = int(check.get("timeout", 10))
+    rc_ok_raw = check.get("rc_ok", (0, 1))
+    try:
+        rc_ok = tuple(int(x) for x in rc_ok_raw)  # type: ignore[arg-type]
+    except TypeError:
+        rc_ok = (0, 1)
+
     try:
         exec_res = run_bash(cmd, timeout=timeout, rc_ok=rc_ok)
         rc, stdout, stderr = exec_res.returncode, exec_res.stdout, exec_res.stderr
@@ -65,6 +83,7 @@ def _execute_check(check: Dict[str, Any]) -> Dict[str, Any]:
         rc = e.returncode if e.returncode is not None else 1
         stdout = getattr(e, "stdout", "")
         stderr = e.stderr
+        evidence_file = _write_evidence(evidence_dir, check, stdout, stderr or "", rc)
         return {
             "id": check.get("id", ""),
             "name": check.get("name", ""),
@@ -73,22 +92,23 @@ def _execute_check(check: Dict[str, Any]) -> Dict[str, Any]:
             "tags": check.get("tags", {}),
             "command": cmd,
             "assert_type": assert_type,
-            "expect": expect,
+            "expect": expect_raw,
             "rc": rc,
             "output": stdout if stdout else (stderr or "").strip(),
             "stderr": stderr,
-            "result": "FAIL",        # Ошибка выполнения команды
-            "reason": str(e),          # сообщение об ошибке
+            "result": "FAIL",
+            "reason": str(e),
+            "evidence": str(evidence_file) if evidence_file else None,
         }
 
-    # Нормализация результатов
-    status, verdict_detail = _apply_assert(stdout, rc, expect, assert_type, rc_ok)
+    status, verdict_detail = _apply_assert(stdout, rc, expect_raw, assert_type, rc_ok)
 
-    # Таймаут оставляем как UNDEF, чтобы не путать с FAIL
     if rc == 124 and status == "FAIL":
         status = "UNDEF"
         if not verdict_detail:
             verdict_detail = "timeout"
+
+    evidence_file = _write_evidence(evidence_dir, check, stdout, stderr or "", rc)
 
     return {
         "id": check.get("id", ""),
@@ -98,54 +118,262 @@ def _execute_check(check: Dict[str, Any]) -> Dict[str, Any]:
         "tags": check.get("tags", {}),
         "command": cmd,
         "assert_type": assert_type,
-        "expect": expect,
+        "expect": expect_raw,
         "rc": rc,
         "output": stdout if stdout else (stderr or "").strip(),
         "stderr": stderr,
-        "result": status,           # PASS | FAIL | UNDEF
-        "reason": verdict_detail,   # пояснение для отчёта/отладки
+        "result": status,
+        "reason": verdict_detail,
+        "evidence": str(evidence_file) if evidence_file else None,
     }
 
 
-def _apply_assert(stdout: str, rc: int, expect: str, assert_type: str, rc_ok: Tuple[int, ...]) -> Tuple[str, str]:
+def _parse_jsonpath(expr: str) -> List[Any]:
+    """Простейший парсер JSONPath-подобных выражений."""
+
+    if not expr:
+        raise ValueError("empty expression")
+    expr = expr.strip()
+    if not expr.startswith("$"):
+        raise ValueError("expression must start with '$'")
+
+    tokens: List[Any] = []
+    i = 1
+    length = len(expr)
+    while i < length:
+        char = expr[i]
+        if char.isspace():
+            i += 1
+            continue
+        if char == '.':
+            i += 1
+            start = i
+            while i < length and expr[i] not in '.[':
+                i += 1
+            if start == i:
+                raise ValueError("empty attribute name")
+            token = expr[start:i].strip()
+            if not token:
+                raise ValueError("empty attribute name")
+            tokens.append(token)
+            continue
+        if char == '[':
+            i += 1
+            if i >= length:
+                raise ValueError("unterminated '[' segment")
+            if expr[i] in "'\"":
+                quote = expr[i]
+                i += 1
+                start = i
+                while i < length and expr[i] != quote:
+                    if expr[i] == "\\" and i + 1 < length:
+                        i += 2
+                    else:
+                        i += 1
+                if i >= length:
+                    raise ValueError("unterminated quoted token")
+                token = expr[start:i]
+                i += 1
+                while i < length and expr[i].isspace():
+                    i += 1
+                if i >= length or expr[i] != ']':
+                    raise ValueError("missing closing bracket")
+                i += 1
+                tokens.append(token)
+                continue
+            start = i
+            while i < length and expr[i] != ']':
+                i += 1
+            if i >= length:
+                raise ValueError("missing closing bracket")
+            token = expr[start:i].strip()
+            i += 1
+            if not token:
+                raise ValueError("empty bracket token")
+            if token == "*":
+                tokens.append("*")
+            elif re.fullmatch(r"-?\d+", token):
+                tokens.append(int(token))
+            else:
+                tokens.append(token)
+            continue
+        raise ValueError(f"unexpected character '{char}'")
+    return tokens
+
+
+def _jsonpath_values(data: Any, expr: str) -> List[Any]:
+    """Возвращает список значений по упрощённому JSONPath."""
+
+    tokens = _parse_jsonpath(expr)
+    current: List[Any] = [data]
+    for token in tokens:
+        next_values: List[Any] = []
+        for item in current:
+            if token == "*":
+                if isinstance(item, dict):
+                    next_values.extend(item.values())
+                elif isinstance(item, (list, tuple)):
+                    next_values.extend(list(item))
+                continue
+            if isinstance(token, int):
+                if isinstance(item, (list, tuple)):
+                    idx = token
+                    if -len(item) <= idx < len(item):
+                        next_values.append(item[idx])
+                continue
+            if isinstance(item, dict) and token in item:
+                next_values.append(item[token])
+        current = next_values
+    return current
+
+
+def _apply_assert(stdout: str, rc: int, expect: Any, assert_type: str, rc_ok: Tuple[int, ...]) -> Tuple[str, str]:
     """
     Возвращает кортеж (result, reason).
     result: PASS|FAIL по проверке (до обработки таймаута в _execute_check)
     reason: краткое пояснение
     """
+
     out = stdout.strip()
 
-    # Если код возврата "неприемлемый" — это сразу FAIL (кроме таймаута, который позже станет UNDEF)
     if rc not in rc_ok:
         return "FAIL", f"rc={rc} not in {rc_ok}"
 
     if assert_type == "exact":
-        return ("PASS", "exact match") if out == expect else ("FAIL", f"got '{out}' != expect '{expect}'")
+        expected = "" if expect is None else str(expect)
+        return ("PASS", "exact match") if out == expected else ("FAIL", f"got '{out}' != expect '{expected}'")
 
     if assert_type == "contains":
-        return ("PASS", "contains") if expect in out else ("FAIL", f"'{expect}' not found")
+        needle = "" if expect is None else str(expect)
+        return ("PASS", "contains") if needle in out else ("FAIL", f"'{needle}' not found")
+
+    if assert_type == "not_contains":
+        needle = "" if expect is None else str(expect)
+        return ("PASS", "not contains") if needle not in out else ("FAIL", f"'{needle}' unexpectedly found")
 
     if assert_type == "regexp":
+        pattern = "" if expect is None else str(expect)
         try:
-            pat = re.compile(expect, re.MULTILINE)
+            pat = re.compile(pattern, re.MULTILINE)
         except re.error as e:
-            # Некорректный шаблон — отмечаем провал проверки
             return "FAIL", f"bad regexp: {e}"
         return ("PASS", "regexp match") if pat.search(out) else ("FAIL", "regexp no match")
 
     if assert_type == "exit_code":
-        # Проверяем код возврата вместо stdout: exact | regexp, если expect — шаблон ^\d+$
-        if expect == "":
-            # Если не задано — трактуем как rc == 0
+        if expect in (None, ""):
             return ("PASS", "rc==0") if rc == 0 else ("FAIL", f"rc={rc}")
-        if expect.isdigit():
-            return ("PASS", "rc==expect") if int(expect) == rc else ("FAIL", f"rc={rc} != {expect}")
-        # Если в expect не чистое число — разрешим regexp по числу rc (в виде строки)
+        expect_str = str(expect)
+        if expect_str.isdigit():
+            return ("PASS", "rc==expect") if int(expect_str) == rc else ("FAIL", f"rc={rc} != {expect_str}")
         try:
-            pat = re.compile(expect)
-            return ("PASS", "rc~regexp") if pat.fullmatch(str(rc)) else ("FAIL", f"rc={rc} !~ /{expect}/")
+            pat = re.compile(expect_str)
+            return ("PASS", "rc~regexp") if pat.fullmatch(str(rc)) else ("FAIL", f"rc={rc} !~ /{expect_str}/")
         except re.error as e:
             return "FAIL", f"bad rc regexp: {e}"
 
-    # Если тип неизвестен — лучше провалить, чтобы не было ложноположительных
+    if assert_type == "jsonpath":
+        if not isinstance(expect, dict):
+            return "FAIL", "jsonpath expect must be mapping"
+        path_expr = expect.get("path")
+        if not isinstance(path_expr, str) or not path_expr.strip():
+            return "FAIL", "jsonpath requires 'path'"
+        try:
+            data = json.loads(stdout)
+        except JSONDecodeError as exc:
+            return "FAIL", f"json decode error: {exc.msg}"
+        try:
+            matches = _jsonpath_values(data, path_expr)
+        except ValueError as exc:
+            return "FAIL", f"bad jsonpath: {exc}"
+        if "value" in expect:
+            expected_value = expect.get("value")
+            if any(match == expected_value for match in matches):
+                return "PASS", "jsonpath value match"
+            return "FAIL", "jsonpath value mismatch"
+        if "contains" in expect:
+            target = expect.get("contains")
+            for match in matches:
+                if isinstance(match, (list, tuple, set)) and target in match:
+                    return "PASS", "jsonpath contains"
+                if isinstance(match, str) and str(target) in match:
+                    return "PASS", "jsonpath contains"
+            return "FAIL", "jsonpath contains mismatch"
+        exists_flag = expect.get("exists", True)
+        if exists_flag:
+            return ("PASS", "jsonpath exists") if matches else ("FAIL", "jsonpath no match")
+        return ("PASS", "jsonpath absent") if not matches else ("FAIL", "jsonpath should be absent")
+
+    if assert_type == "version_gte":
+        if expect in (None, ""):
+            return "FAIL", "version_gte requires expect"
+        expected_version = str(expect).strip()
+        try:
+            expected_parsed = version.parse(expected_version)
+        except Exception as exc:  # pragma: no cover - defensive
+            return "FAIL", f"bad version expect: {exc}"
+        match = re.search(r"\d+(?:\.\d+)*", out)
+        if not match:
+            return "FAIL", "no version found"
+        actual_str = match.group(0)
+        try:
+            actual_parsed = version.parse(actual_str)
+        except Exception as exc:  # pragma: no cover - defensive
+            return "FAIL", f"bad version output: {exc}"
+        if actual_parsed >= expected_parsed:
+            return "PASS", f"version {actual_str} >= {expected_version}"
+        return "FAIL", f"version {actual_str} < {expected_version}"
+
+    if assert_type == "int_lte":
+        if expect in (None, ""):
+            return "FAIL", "int_lte requires expect"
+        try:
+            threshold = int(expect)
+        except (TypeError, ValueError):
+            return "FAIL", "invalid int expect"
+        match = re.search(r"-?\d+", out)
+        if not match:
+            return "FAIL", "no integer found"
+        actual = int(match.group(0))
+        if actual <= threshold:
+            return "PASS", f"{actual} <= {threshold}"
+        return "FAIL", f"{actual} > {threshold}"
+
     return "FAIL", f"unsupported assert_type '{assert_type}'"
+
+
+def _sanitize_check_id(value: str) -> str:
+    sanitized = re.sub(r"[^A-Za-z0-9_.-]", "_", value or "check")
+    return sanitized[:80] if sanitized else "check"
+
+
+def _write_evidence(
+    evidence_dir: Optional[Path],
+    check: Dict[str, Any],
+    stdout: str,
+    stderr: str,
+    rc: int,
+) -> Optional[Path]:
+    if evidence_dir is None:
+        return None
+
+    base_name = _sanitize_check_id(str(check.get("id") or check.get("name") or "check"))
+    path = evidence_dir / f"{base_name}.txt"
+    counter = 1
+    while path.exists():
+        path = evidence_dir / f"{base_name}_{counter}.txt"
+        counter += 1
+
+    with path.open("w", encoding="utf-8") as handle:
+        handle.write(f"# Check: {check.get('id', '')}\n")
+        handle.write(f"# Name: {check.get('name', '')}\n")
+        handle.write(f"# Module: {check.get('module', 'core')}\n")
+        handle.write(f"# Command: {check.get('command', '')}\n")
+        handle.write(f"# Return code: {rc}\n\n")
+        if stdout:
+            handle.write("[stdout]\n")
+            handle.write(stdout.rstrip("\n") + "\n")
+        if stderr:
+            handle.write("\n[stderr]\n")
+            handle.write(stderr.rstrip("\n") + "\n")
+
+    return path

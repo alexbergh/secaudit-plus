@@ -1,30 +1,38 @@
+schema_version: "1.1"
 profile_name: "ФСТЭК. Базовые проверки"
 description: "Базовый аудит параметров безопасности Linux-систем"
 
 checks:
   - id: check_ssh_root_login
     name: "Запрещен ли root-вход по SSH"
+    module: "system"
     command: "grep -i '^PermitRootLogin' /etc/ssh/sshd_config"
     expect: "no"
     assert_type: "contains"
     severity: "high"
+    tags: { fstec: "ИАФ.1" }
 
   - id: check_sudo_nopasswd
     name: "Есть ли sudo без пароля"
+    module: "system"
     command: "grep -E 'NOPASSWD' /etc/sudoers"
     expect: ""
     assert_type: "not_contains"
     severity: "medium"
+    tags: { fstec: "УПД.5" }
 
   - id: check_pam_lockout
     name: "Настроен ли PAM-блок после 3 неудачных входов"
+    module: "users"
     command: "grep 'pam_tally2' /etc/pam.d/common-auth"
     expect: "deny=3"
     assert_type: "contains"
     severity: "high"
+    tags: { fstec: "УПД.6" }
 
   - id: check_auditd
     name: "Активирован ли auditd"
+    module: "services"
     command: "systemctl is-active auditd"
     expect: "active"
     assert_type: "exact"
@@ -36,6 +44,7 @@ checks:
 
   - id: check_journald_retention
     name: "Настроен лимит хранения журналов (journald)"
+    module: "services"
     command: "grep -i '^SystemMaxUse=' /etc/systemd/journald.conf"
     expect: "SystemMaxUse="
     assert_type: "contains"
@@ -47,6 +56,7 @@ checks:
 
   - id: check_world_writable
     name: "Нет world-writable файлов вне /tmp"
+    module: "fs"
     command: "find / -xdev -type f -perm -0002 ! -path '/tmp/*' 2>/dev/null | head -n 1"
     expect: ""
     assert_type: "exact"
@@ -58,6 +68,7 @@ checks:
 
   - id: check_suid_files
     name: "Количество SUID-бинарников не превышает 30"
+    module: "fs"
     command: "find / -xdev -type f -perm -4000 2>/dev/null | wc -l"
     expect: "30"
     assert_type: "regexp"
@@ -69,6 +80,7 @@ checks:
 
   - id: check_crontab_root
     name: "Нет крон-заданий у root"
+    module: "services"
     command: "crontab -l 2>/dev/null | grep -v '^#' | grep -v '^$'"
     expect: ""
     assert_type: "exact"

@@ -39,6 +39,14 @@
   {%- endif -%}
 {%- endmacro %}
 
+{% macro format_expect(value) -%}
+  {%- if value is mapping or (value is sequence and (value is not string)) -%}
+    {{ value|tojson(ensure_ascii=False) }}
+  {%- else -%}
+    {{ value|default('') }}
+  {%- endif -%}
+{%- endmacro %}
+
 {# Человеческая расшифровка мер №21 (топ-подмножество; можно расширять) #}
 {% set FSTEK21 = {
   'ИАФ.1':'Идентификация/аутентификация работников',
@@ -198,10 +206,10 @@
 {% for check in checks %}
   {% set s = norm_status(check) %}
   {% set fl = fstec_list(check) %}
-| {{ loop.index }} | {{ check.name }} | {{ sev_badge(check.severity) }} | 
+| {{ loop.index }} | {{ check.name }} | {{ sev_badge(check.severity) }} |
   {%- if fl|length > 0 -%} {{ fl|join(', ') }} {%- else -%} — {%- endif -%} |
   `{{ check.assert_type|default('exact') }}` | {{ status_badge(s) }} |
-  `{{ check.expect|default('') }}` |
+  `{{ format_expect(check.expect) }}` |
   `{{ short_output(check.output) }}` |
 {% endfor %}
 
@@ -255,7 +263,7 @@ _Теги ФСТЭК №21 в проверках отсутствуют._
     {%- set fl = fstec_list(r) -%}
     {%- if fl|length > 0 -%} {{ fl|join(', ') }} — {{ fl | map('string') | map('trim') | map('upper') | list | map('attr', FSTEK21) | list | reject('equalto', None) | list | join('; ') }}
     {%- else -%} — {%- endif -%}
-  - Ожидание: `{{ r.expect|default('') }}`
+  - Ожидание: `{{ format_expect(r.expect) }}`
   - Assert: `{{ r.assert_type|default('exact') }}`
   - Команда:
     ```bash

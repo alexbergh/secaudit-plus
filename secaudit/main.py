@@ -3,7 +3,13 @@ from pathlib import Path
 import sys
 import json
 
-from modules.cli import parse_args, list_modules, list_checks, describe_check
+from modules.cli import (
+    parse_args,
+    list_modules,
+    list_checks,
+    describe_check,
+    parse_tag_filters,
+)
 from modules.os_detect import detect_os
 from modules.audit_runner import load_profile, run_checks
 from modules.report_generator import generate_report, generate_json_report
@@ -88,7 +94,12 @@ def main():
             list_modules(profile)
             return
         if args.command == "list-checks":
-            list_checks(profile, getattr(args, "module", None))
+            try:
+                tag_filters = parse_tag_filters(getattr(args, "tags", None))
+            except ValueError as exc:
+                log_fail(str(exc))
+                sys.exit(2)
+            list_checks(profile, getattr(args, "module", None), tag_filters)
             return
         if args.command == "describe-check":
             describe_check(profile, args.check_id)
@@ -119,7 +130,8 @@ def main():
                 log_info(f"Выбраны модули: {selected_modules}")
 
         # Запуск проверок
-        results = run_checks(profile, selected_modules)
+        evidence_dir = getattr(args, "evidence", None)
+        results = run_checks(profile, selected_modules, evidence_dir)
 
         # Директория результатов
         Path("results").mkdir(exist_ok=True)

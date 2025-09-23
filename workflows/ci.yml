@@ -31,11 +31,19 @@ jobs:
         run: |
           python -m pip install --upgrade pip
           pip install -r requirements.txt
-          pip install build flake8 pytest
+          pip install build flake8 pytest mypy yamllint
 
       - name: Lint (flake8)
         run: |
           flake8 modules secaudit utils tests --max-line-length=120 --exclude __init__.py
+
+      - name: Type check (mypy)
+        run: |
+          mypy modules secaudit utils tests --ignore-missing-imports
+
+      - name: Lint YAML
+        run: |
+          yamllint profiles workflows
 
       - name: Tests (pytest)
         run: |

@@ -4,10 +4,13 @@ venv:
 	python3 -m venv venv
 
 deps:
-	. venv/bin/activate && pip install --upgrade pip && pip install -r requirements.txt && pip install build flake8 pytest
+	. venv/bin/activate && pip install --upgrade pip && pip install -r requirements.txt && pip install build flake8 pytest mypy yamllint
 
 lint:
-	. venv/bin/activate && flake8 modules secaudit utils tests --max-line-length=120 --exclude __init__.py
+	. venv/bin/activate && \
+	flake8 modules secaudit utils tests --max-line-length=120 --exclude __init__.py && \
+	mypy modules secaudit utils tests --ignore-missing-imports && \
+	yamllint profiles workflows
 
 test:
 	. venv/bin/activate && pytest -q
