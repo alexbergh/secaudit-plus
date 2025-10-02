@@ -80,12 +80,18 @@ def _extract_fstek_codes(result):
 def generate_report(profile: dict, results: list, template_name: str, output_path: str):
     env = Environment(loader=FileSystemLoader("reports/"))
     env.filters["fstek_codes"] = _extract_fstek_codes
-
     template = env.get_template(template_name)
 
-    pass_count = sum(1 for r in results if r["result"] == "PASS")
-    fail_count = sum(1 for r in results if r["result"] == "FAIL")
-    warn_count = sum(1 for r in results if r["result"] == "WARN")
+    total_count = len(results)
+    pass_count = sum(1 for r in results if _canonical_status(r) == "PASS")
+    fail_count = sum(1 for r in results if _canonical_status(r) == "FAIL")
+    warn_count = sum(1 for r in results if _canonical_status(r) == "WARN")
+    error_count = sum(1 for r in results if _canonical_status(r) == "ERROR")
+    other_count = total_count - pass_count - fail_count - warn_count - error_count
+
+    host_info = _collect_host_metadata(profile, results)
+    fstek_summary = _aggregate_fstek_summary(results)
+    high_findings = _collect_high_findings(results)
 
     host_info = _collect_host_metadata(profile, results)
 
@@ -96,9 +102,12 @@ def generate_report(profile: dict, results: list, template_name: str, output_pat
         host=host_info,
         host_info=host_info,
         FSTEK21=FSTEK21_DESCRIPTIONS,
+
         pass_count=pass_count,
         fail_count=fail_count,
-        warn_count=warn_count
+        warn_count=warn_count,
+        error_count=error_count,
+        other_count=other_count,
     )
 
     Path(output_path).parent.mkdir(parents=True, exist_ok=True)

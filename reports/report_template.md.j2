@@ -81,22 +81,15 @@
 ---
 
 {# ========================= KPI / SUMMARY ======================== #}
-{% set _statuses = results | map('norm_status') if false else [] %}
-{% set total = results|length %}
-{% set passed = results|selectattr('status','equalto','pass')|list|length %}
-{% if passed == 0 %}
-  {# Вход может содержать 'result' вместо 'status' — подстрахуемся: #}
-  {% set passed = results|selectattr('result','equalto','PASS')|list|length %}
-{% endif %}
-{% set failed = results|selectattr('status','equalto','fail')|list|length %}
-{% if failed == 0 %}
-  {% set failed = results|selectattr('result','equalto','FAIL')|list|length %}
-{% endif %}
-{% set errors = results|selectattr('status','equalto','error')|list|length %}
-{% set unknown = total - passed - failed - errors %}
+{% set total = total_count|default(results|length) %}
+{% set passed = pass_count|default(0) %}
+{% set failed = fail_count|default(0) %}
+{% set warns = warn_count|default(0) %}
+{% set errors = error_count|default(0) %}
+{% set other = other_count|default(total - passed - failed - warns - errors) %}
 {% set compliance = (100.0 * passed / total) | round(1) if total > 0 else 0 %}
 
-**Итоги:** всего **{{ total }}**, ✅ пройдено **{{ passed }}**, ❌ не пройдено **{{ failed }}**, ⚠️ ошибок **{{ errors }}**, ❔ прочее **{{ unknown }}**.  
+**Итоги:** всего **{{ total }}**, ✅ пройдено **{{ passed }}**, ❌ не пройдено **{{ failed }}**, 🚨 ошибок **{{ errors }}**, ⚠️ предупреждений **{{ warns }}**, ❔ прочее **{{ other }}**.
 **Индекс соответствия:** **{{ compliance }}%**
 
 ---
@@ -119,25 +112,11 @@
 ---
 
 {# ============== СВОДКА ПО МЕРАМ ФСТЭК №21 (если есть) ============== #}
-{% set seen = {} %}
-{% for r in results %}
-    {% if code != '' %}
-      {% set _ = seen.update({code: (seen.get(code, []) + [r])}) %}
-    {% endif %}
-  {% endfor %}
-{% endfor %}
-
-{% if seen %}
 ## Сводка по мерам ФСТЭК №21
 | Мера | Описание | Всего | ✅ Pass | ❌ Fail | ⚠️ Error |
 |---|---|---:|---:|---:|---:|
-{% for m, rs in seen|dictsort %}
-  {% set p = rs | selectattr('status','equalto','pass')  | list | length %}
-  {% if p == 0 %}{% set p = rs | selectattr('result','equalto','PASS') | list | length %}{% endif %}
-  {% set f = rs | selectattr('status','equalto','fail')  | list | length %}
-  {% if f == 0 %}{% set f = rs | selectattr('result','equalto','FAIL') | list | length %}{% endif %}
-  {% set e = rs | selectattr('status','equalto','error') | list | length %}
-| **{{ m }}** | {{ FSTEK21.get(m, '—') }} | {{ rs|length }} | {{ p }} | {{ f }} | {{ e }} |
+{% for item in fstek_summary %}
+| **{{ item.code }}** | {{ item.description|default('—') }} | {{ item.total }} | {{ item.passed }} | {{ item.failed }} | {{ item.errored }} |
 {% endfor %}
 {% else %}
 _Теги ФСТЭК №21 в проверках отсутствуют._
@@ -146,15 +125,7 @@ _Теги ФСТЭК №21 в проверках отсутствуют._
 ---
 
 {# ============== КРИТИЧЕСКИЕ НЕСООТВЕТСТВИЯ (HIGH) ============== #}
-{% set highs = results
-  | selectattr('severity','equalto','high')
-  | selectattr('status','equalto','fail') | list %}
-{% if highs|length == 0 %}
-  {# fallback на поле result #}
-  {% set highs = results
-    | selectattr('severity','equalto','high')
-    | selectattr('result','equalto','FAIL') | list %}
-{% endif %}
+{% set highs = high_findings|default([], true) %}
 
 ## Критические несоответствия (High)
 {% if highs %}

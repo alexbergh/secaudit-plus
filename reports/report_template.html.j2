@@ -75,13 +75,12 @@
 
 
   {# ======================== KPI / SUMMARY ======================== #}
-  {% set total = results|length %}
-  {% set passed = results|selectattr('status','equalto','pass')|list|length %}
-  {% if passed == 0 %}{% set passed = results|selectattr('result','equalto','PASS')|list|length %}{% endif %}
-  {% set failed = results|selectattr('status','equalto','fail')|list|length %}
-  {% if failed == 0 %}{% set failed = results|selectattr('result','equalto','FAIL')|list|length %}{% endif %}
-  {% set errors = results|selectattr('status','equalto','error')|list|length %}
-  {% set unknown = total - passed - failed - errors %}
+  {% set total = total_count|default(results|length) %}
+  {% set passed = pass_count|default(0) %}
+  {% set failed = fail_count|default(0) %}
+  {% set warnings = warn_count|default(0) %}
+  {% set errors = error_count|default(0) %}
+  {% set other = other_count|default(total - passed - failed - warnings - errors) %}
   {% set compliance = (100.0 * passed / total) | round(1) if total > 0 else 0 %}
 
   <div class="container my-4">
@@ -119,7 +118,7 @@
                 <div class="fs-4 text-danger fw-bold">{{ failed }}</div>
               </div>
               <div class="col">
-                <div class="text-muted small">⚠️ Err</div>
+                <div class="text-muted small">🚨 Errors</div>
                 <div class="fs-4 text-warning fw-bold">{{ errors }}</div>
               </div>
             </div>
@@ -130,6 +129,14 @@
             </div>
             <div class="progress mt-2" role="progressbar" aria-valuenow="{{ compliance }}" aria-valuemin="0" aria-valuemax="100">
               <div class="progress-bar" style="width: {{ compliance }}%"></div>
+            </div>
+            <div class="d-flex justify-content-between align-items-center text-muted small mt-3">
+              <span>⚠️ Предупреждений</span>
+              <span class="fw-semibold">{{ warnings }}</span>
+            </div>
+            <div class="d-flex justify-content-between align-items-center text-muted small">
+              <span>❔ Прочих состояний</span>
+              <span class="fw-semibold">{{ other }}</span>
             </div>
           </div>
         </div>
@@ -289,18 +296,11 @@
     </div>
 
     {# ============== СВОДКА ПО МЕРАМ ФСТЭК №21 ============== #}
-    {% set seen = {} %}
-    {% for r in results %}
-        {% if code != '' %}
-          {% set _ = seen.update({code: (seen.get(code, []) + [r])}) %}
-        {% endif %}
-      {% endfor %}
-    {% endfor %}
-
     <hr class="my-4"/>
 
     <h2 class="h4 mb-3">Сводка по мерам ФСТЭК №21</h2>
-    {% if seen %}
+    {% set fstek_summary = fstek_summary|default([], true) %}
+    {% if fstek_summary %}
       <div class="table-responsive">
         <table class="table table-sm table-hover table-bordered align-middle sticky-header">
           <thead class="table-light">
@@ -314,19 +314,14 @@
             </tr>
           </thead>
           <tbody>
-            {% for m, rs in seen|dictsort %}
-              {% set p = rs | selectattr('status','equalto','pass') | list | length %}
-              {% if p == 0 %}{% set p = rs | selectattr('result','equalto','PASS') | list | length %}{% endif %}
-              {% set f = rs | selectattr('status','equalto','fail') | list | length %}
-              {% if f == 0 %}{% set f = rs | selectattr('result','equalto','FAIL') | list | length %}{% endif %}
-              {% set e = rs | selectattr('status','equalto','error') | list | length %}
+            {% for item in fstek_summary %}
               <tr>
-                <td><span class="badge bg-info text-dark">{{ m }}</span></td>
-                <td>{{ FSTEK21.get(m, '—') }}</td>
-                <td class="text-end">{{ rs|length }}</td>
-                <td class="text-end">{{ p }}</td>
-                <td class="text-end">{{ f }}</td>
-                <td class="text-end">{{ e }}</td>
+                <td><span class="badge bg-info text-dark">{{ item.code }}</span></td>
+                <td>{{ item.description|default('—') }}</td>
+                <td class="text-end">{{ item.total }}</td>
+                <td class="text-end">{{ item.passed }}</td>
+                <td class="text-end">{{ item.failed }}</td>
+                <td class="text-end">{{ item.errored }}</td>
               </tr>
             {% endfor %}
           </tbody>
@@ -337,14 +332,7 @@
     {% endif %}
 
     {# ============== КРИТИЧЕСКИЕ (HIGH) НЕСООТВЕТСТВИЯ ============== #}
-    {% set highs = results
-      | selectattr('severity','equalto','high')
-      | selectattr('status','equalto','fail') | list %}
-    {% if highs|length == 0 %}
-      {% set highs = results
-        | selectattr('severity','equalto','high')
-        | selectattr('result','equalto','FAIL') | list %}
-    {% endif %}
+    {% set highs = high_findings|default([], true) %}
 
     <hr class="my-4"/>
     <h2 class="h4">Критические несоответствия (High)</h2>
