@@ -62,7 +62,6 @@
     {%- endif -%}
   {%- endmacro %}
 
-  {% macro short_output(text) -%}
     {{ (text|default('')|replace('\r','')|trim|truncate(OUTPUT_TRIM, True)) }}
   {%- endmacro %}
 
@@ -74,35 +73,6 @@
     {%- endif -%}
   {%- endmacro %}
 
-  {% set FSTEK21 = FSTEK21 | default({}, true) %}
-
-{% macro fstec_badges(details) -%}
-  {%- if details and details|length > 0 -%}
-    {%- for item in details -%}
-      {%- if not loop.first -%}, {% endif -%}
-      {%- if item.code -%}<span class="badge bg-info text-dark">{{ item.code }}</span>{%- endif -%}
-    {%- endfor -%}
-  {%- else -%}
-    —
-  {%- endif -%}
-{%- endmacro %}
-
-{% macro fstec_summary(details) -%}
-  {%- if details and details|length > 0 -%}
-    {%- for item in details -%}
-      {%- if not loop.first -%}; {% endif -%}
-      {%- set code = item.code|string -%}
-      {%- set desc = item.description -%}
-      {%- if desc -%}
-        <strong>{{ desc }}</strong> <span class="text-muted">({{ code }})</span>
-      {%- else -%}
-        {{ code }}
-      {%- endif -%}
-    {%- endfor -%}
-  {%- else -%}
-    —
-  {%- endif -%}
-{%- endmacro %}
 
   {# ======================== KPI / SUMMARY ======================== #}
   {% set total = results|length %}
@@ -126,23 +96,6 @@
               <div><div class="text-muted small">Описание</div><div>{{ (profile.description if profile is defined and profile.description is defined else profile_description|default('—')) }}</div></div>
               <div><div class="text-muted small">Дата</div><div>{{ (now.strftime("%Y-%m-%d %H:%M:%S") if now is defined else timestamp|default('—')) }}</div></div>
               {% set host_info = host if host is defined else {} %}
-              {% set raw_ip = host_info.ip if host_info.ip is defined else
-                              (host_info.ipv4 if host_info.ipv4 is defined else
-                              (host_info.address if host_info.address is defined else
-                              (host_info.ip_address if host_info.ip_address is defined else
-                              None))) %}
-              {% if raw_ip is sequence and (raw_ip is not string) %}
-                {% set host_ip = raw_ip|join(', ') %}
-              {% elif raw_ip is mapping %}
-                {% set host_ip = raw_ip|tojson(ensure_ascii=False) %}
-              {% else %}
-                {% set host_ip = raw_ip|default('—', true) %}
-              {% endif %}
-              {% if host_ip is not defined or host_ip|string|trim == '' %}
-                {% set host_ip = '—' %}
-              {% endif %}
-              <div><div class="text-muted small">Хост</div><div>{{ host_info.hostname|default('—') }}</div></div>
-              <div><div class="text-muted small">IP-адрес</div><div>{{ host_ip }}</div></div>
               <div><div class="text-muted small">ОС</div><div>{{ host_info.os|default('—') }}</div></div>
               <div><div class="text-muted small">Ядро</div><div>{{ host_info.kernel|default('—') }}</div></div>
             </div>
@@ -258,7 +211,6 @@
                 <tbody>
                 {% for check in checks %}
                   {% set s = norm_status(check) %}
-                  {% set fl = check|fstek_details %}
                   {% set expect_display = format_expect(check.expect) %}
                   {% set tag_strings = [] %}
                   {% if check.tags %}
@@ -339,8 +291,6 @@
     {# ============== СВОДКА ПО МЕРАМ ФСТЭК №21 ============== #}
     {% set seen = {} %}
     {% for r in results %}
-      {% for detail in r|fstek_details %}
-        {% set code = detail.code|string|trim|upper %}
         {% if code != '' %}
           {% set _ = seen.update({code: (seen.get(code, []) + [r])}) %}
         {% endif %}
@@ -407,10 +357,6 @@
             <div>{{ sev_badge(r.severity) }}</div>
           </div>
           <div class="small text-muted mono">ID: {{ r.id }} · Модуль: {{ r.module }}</div>
-          {% set fl = r|fstek_details %}
-          <div class="mt-2">
-            <span class="text-muted small">Меры ФСТЭК №21:</span>
-            <div class="small fw-semibold mt-1">{{ fstec_summary(fl)|safe }}</div>
           </div>
           {% if r.expect %}
           <div class="small mt-2"><span class="text-muted">Ожидание:</span> <span class="mono">{{ format_expect(r.expect)|safe }}</span></div>
