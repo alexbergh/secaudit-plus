@@ -62,7 +62,7 @@
     {%- endif -%}
   {%- endmacro %}
 
-  {% macro short_output(text) -%}
+{% macro short_output(text) -%}
     {{ (text|default('')|replace('\r','')|trim|truncate(OUTPUT_TRIM, True)) }}
   {%- endmacro %}
 
@@ -76,22 +76,6 @@
 
   {% macro fstec_summary(fl) -%}
     {%- if fl and fl|length > 0 -%}
-      {%- set ns = namespace(codes=[], descr=[]) -%}
-      {%- for raw_code in fl -%}
-        {%- set code = raw_code|string|trim|upper -%}
-        {%- if code != '' and code not in ns.codes -%}
-          {%- set ns.codes = ns.codes + [code] -%}
-          {%- set desc = FSTEK21.get(code) -%}
-          {%- if desc is not none and desc not in ns.descr -%}
-            {%- set ns.descr = ns.descr + [desc] -%}
-          {%- endif -%}
-        {%- endif -%}
-      {%- endfor -%}
-      {%- if ns.codes -%}
-        {{ ns.codes|join(', ') }} — {{ ns.descr|length > 0 and ns.descr|join('; ') or '—' }}
-      {%- else -%}
-        —
-      {%- endif -%}
     {%- else -%}
       —
     {%- endif -%}
@@ -221,23 +205,6 @@
               <div><div class="text-muted small">Описание</div><div>{{ (profile.description if profile is defined and profile.description is defined else profile_description|default('—')) }}</div></div>
               <div><div class="text-muted small">Дата</div><div>{{ (now.strftime("%Y-%m-%d %H:%M:%S") if now is defined else timestamp|default('—')) }}</div></div>
               {% set host_info = host if host is defined else {} %}
-              {% set raw_ip = host_info.ip if host_info.ip is defined else
-                              (host_info.ipv4 if host_info.ipv4 is defined else
-                              (host_info.address if host_info.address is defined else
-                              (host_info.ip_address if host_info.ip_address is defined else
-                              None))) %}
-              {% if raw_ip is sequence and (raw_ip is not string) %}
-                {% set host_ip = raw_ip|join(', ') %}
-              {% elif raw_ip is mapping %}
-                {% set host_ip = raw_ip|tojson(ensure_ascii=False) %}
-              {% else %}
-                {% set host_ip = raw_ip|default('—', true) %}
-              {% endif %}
-              {% if host_ip is not defined or host_ip|string|trim == '' %}
-                {% set host_ip = '—' %}
-              {% endif %}
-              <div><div class="text-muted small">Хост</div><div>{{ host_info.hostname|default('—') }}</div></div>
-              <div><div class="text-muted small">IP-адрес</div><div>{{ host_ip }}</div></div>
               <div><div class="text-muted small">ОС</div><div>{{ host_info.os|default('—') }}</div></div>
               <div><div class="text-muted small">Ядро</div><div>{{ host_info.kernel|default('—') }}</div></div>
             </div>

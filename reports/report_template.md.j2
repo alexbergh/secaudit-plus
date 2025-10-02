@@ -41,22 +41,6 @@
 
 {% macro fstec_summary(fl) -%}
   {%- if fl and fl|length > 0 -%}
-    {%- set ns = namespace(codes=[], descr=[]) -%}
-    {%- for raw_code in fl -%}
-      {%- set code = raw_code|string|trim|upper -%}
-      {%- if code != '' and code not in ns.codes -%}
-        {%- set ns.codes = ns.codes + [code] -%}
-        {%- set desc = FSTEK21.get(code) -%}
-        {%- if desc is not none and desc not in ns.descr -%}
-          {%- set ns.descr = ns.descr + [desc] -%}
-        {%- endif -%}
-      {%- endif -%}
-    {%- endfor -%}
-    {%- if ns.codes -%}
-      {{ ns.codes|join(', ') }} — {{ ns.descr|length > 0 and ns.descr|join('; ') or '—' }}
-    {%- else -%}
-      —
-    {%- endif -%}
   {%- else -%}
     —
   {%- endif -%}
@@ -277,7 +261,6 @@ _Теги ФСТЭК №21 в проверках отсутствуют._
 {% for r in highs %}
 - **{{ r.name }}** (`{{ r.id }}`)
   - Модуль: `{{ r.module }}`
-  - **Меры ФСТЭК №21:**{{ ' ' ~ fstec_summary(r|fstek_codes) }}
   - Ожидание: `{{ format_expect(r.expect) }}`
   - Assert: `{{ r.assert_type|default('exact') }}`
   - Команда:
@@ -298,23 +281,6 @@ _Критических несоответствий не выявлено._
 {# ======================== КОНТЕКСТ ХОСТА ======================== #}
 ## Системная информация
 {% set host_info = host if host is defined else {} %}
-{% macro host_value(value) -%}
-  {%- if value is mapping -%}
-    {%- set text = value|tojson(ensure_ascii=False) -%}
-  {%- elif value is sequence and (value is not string) -%}
-    {%- set text = value|join(', ') -%}
-  {%- else -%}
-    {%- set text = value|default('—', true) -%}
-  {%- endif -%}
-  {{ (text|string|trim) if text is defined and (text|string|trim) != '' else '—' }}
-{%- endmacro %}
-{% set raw_ip = (host_info.ip if host_info.ip is defined else
-                 (host_info.ipv4 if host_info.ipv4 is defined else
-                 (host_info.address if host_info.address is defined else
-                 (host_info.ip_address if host_info.ip_address is defined else
-                 None)))) %}
-- Хост: **{{ host_info.hostname|default('—') }}**
-- IP-адрес: **{{ host_value(raw_ip) }}**
 - ОС: **{{ host_info.os|default('—') }}**
 - Ядро: **{{ host_info.kernel|default('—') }}**
 - Архитектура: **{{ host_info.arch|default('—') }}**
