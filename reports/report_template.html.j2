@@ -62,47 +62,7 @@
     {%- endif -%}
   {%- endmacro %}
 
-  {% macro fstec_list(r) -%}
-    {%- if r.tags is not defined or not r.tags or ('fstec' not in r.tags) -%}
-      []
-    {%- else -%}
-      {%- set raw = r.tags.fstec -%}
-      {%- if raw is string -%}
-        {%- set values = [raw] -%}
-      {%- elif raw is sequence -%}
-        {%- set values = raw -%}
-      {%- else -%}
-        {%- set values = [] -%}
-      {%- endif -%}
-      {%- set ns = namespace(items=[]) -%}
-      {%- for item in values -%}
-        {%- if item is mapping -%}
-          {%- if 'code' in item -%}
-            {%- set candidate = item['code'] -%}
-          {%- elif 'id' in item -%}
-            {%- set candidate = item['id'] -%}
-          {%- elif 'name' in item -%}
-            {%- set candidate = item['name'] -%}
-          {%- elif 'value' in item -%}
-            {%- set candidate = item['value'] -%}
-          {%- else -%}
-            {%- set candidate = None -%}
-          {%- endif -%}
-        {%- else -%}
-          {%- set candidate = item -%}
-        {%- endif -%}
-        {%- if candidate is not none -%}
-          {%- set text = candidate|string|trim -%}
-          {%- if text != '' -%}
-            {%- set ns.items = ns.items + [text] -%}
-          {%- endif -%}
-        {%- endif -%}
-      {%- endfor -%}
-      {{ ns.items }}
-    {%- endif -%}
-  {%- endmacro %}
-
-  {% macro short_output(text) -%}
+{% macro short_output(text) -%}
     {{ (text|default('')|replace('\r','')|trim|truncate(OUTPUT_TRIM, True)) }}
   {%- endmacro %}
 
@@ -116,15 +76,6 @@
 
   {% macro fstec_summary(fl) -%}
     {%- if fl and fl|length > 0 -%}
-      {%- set codes = fl | map('string') | map('trim') | reject('equalto','') | map('upper') | list -%}
-      {%- set ns = namespace(descr=[]) -%}
-      {%- for code in codes -%}
-        {%- set desc = FSTEK21.get(code) -%}
-        {%- if desc is not none -%}
-          {%- set ns.descr = ns.descr + [desc] -%}
-        {%- endif -%}
-      {%- endfor -%}
-      {{ codes|join(', ') }} — {{ ns.descr|join('; ') }}
     {%- else -%}
       —
     {%- endif -%}
@@ -254,7 +205,6 @@
               <div><div class="text-muted small">Описание</div><div>{{ (profile.description if profile is defined and profile.description is defined else profile_description|default('—')) }}</div></div>
               <div><div class="text-muted small">Дата</div><div>{{ (now.strftime("%Y-%m-%d %H:%M:%S") if now is defined else timestamp|default('—')) }}</div></div>
               {% set host_info = host if host is defined else {} %}
-              <div><div class="text-muted small">Хост</div><div>{{ host_info.hostname|default('—') }}</div></div>
               <div><div class="text-muted small">ОС</div><div>{{ host_info.os|default('—') }}</div></div>
               <div><div class="text-muted small">Ядро</div><div>{{ host_info.kernel|default('—') }}</div></div>
             </div>
@@ -363,14 +313,14 @@
                     <th style="width:10ch;">Результат</th>
                     <th style="width:12ch;">Assert</th>
                     <th>Ожидание</th>
-                    <th>FSTEK №21</th>
+                    <th>ФСТЭК №21</th>
                     <th style="width:1%"></th>
                   </tr>
                 </thead>
                 <tbody>
                 {% for check in checks %}
                   {% set s = norm_status(check) %}
-                  {% set fl = fstec_list(check) %}
+                  {% set fl = check|fstek_codes %}
                   {% set expect_display = format_expect(check.expect) %}
                   {% set tag_strings = [] %}
                   {% if check.tags %}
@@ -459,8 +409,11 @@
     {# ============== СВОДКА ПО МЕРАМ ФСТЭК №21 ============== #}
     {% set seen = {} %}
     {% for r in results %}
-      {% for m in fstec_list(r) %}
-        {% set _ = seen.update({m: (seen.get(m, []) + [r])}) %}
+      {% for m in r|fstek_codes %}
+        {% set code = m|string|trim|upper %}
+        {% if code != '' %}
+          {% set _ = seen.update({code: (seen.get(code, []) + [r])}) %}
+        {% endif %}
       {% endfor %}
     {% endfor %}
 
@@ -524,16 +477,10 @@
             <div>{{ sev_badge(r.severity) }}</div>
           </div>
           <div class="small text-muted mono">ID: {{ r.id }} · Модуль: {{ r.module }}</div>
+          {% set fl = r|fstek_codes %}
           <div class="mt-2">
-            <span class="text-muted small">Меры №21:</span>
-            {% set fl = fstec_list(r) %}
-            {% if fl|length > 0 %}
-              {% for m in fl %}
-                <span class="badge bg-info text-dark me-1" title="{{ FSTEK21.get(m, '') }}">{{ m }}</span>
-              {% endfor %}
-            {% else %}
-              <span class="text-muted">—</span>
-            {% endif %}
+            <span class="text-muted small">Меры ФСТЭК №21:</span>
+            <strong>{{ fstec_summary(fl) }}</strong>
           </div>
           {% if r.expect %}
           <div class="small mt-2"><span class="text-muted">Ожидание:</span> <span class="mono">{{ format_expect(r.expect)|safe }}</span></div>
