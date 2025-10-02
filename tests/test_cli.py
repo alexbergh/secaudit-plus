@@ -73,3 +73,11 @@ def test_parse_args_list_modules_positional_profile(monkeypatch):
 
     assert args.command == "list-modules"
     assert args.profile == "profiles/alt.yml"
+
+
+def test_parse_args_defaults_to_baseline_profile(monkeypatch):
+    monkeypatch.setattr(cli.sys, "argv", ["secaudit", "list-modules"])
+
+    args = cli.parse_args()
+
+    assert args.profile == cli.DEFAULT_PROFILE_PATH

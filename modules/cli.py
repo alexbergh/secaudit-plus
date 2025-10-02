@@ -19,6 +19,7 @@ except Exception:
 
 _PROFILE_SCHEMA = STRICT_PROFILE_SCHEMA
 DEFAULT_PROFILE_PATH = "profiles/common/baseline.yml"
+PROFILE_ARGUMENT_HELP = "Необязательный путь к профилю."
 
 
 # ──────────────────────────────────────────────────────────────────────────────
@@ -164,6 +165,17 @@ def _parent_parser(default_profile: str) -> argparse.ArgumentParser:
     return parent
 
 
+def _attach_positional_profile(subparser: argparse.ArgumentParser) -> None:
+    """Добавляет опциональный позиционный аргумент для указания профиля."""
+
+    subparser.add_argument(
+        "profile_path",
+        nargs="?",
+        metavar="PROFILE",
+        help=PROFILE_ARGUMENT_HELP,
+    )
+
+
 def parse_args() -> argparse.Namespace:
     """
     Глобальный флаг --profile разрешён и до, и после команды.
@@ -192,9 +204,7 @@ def parse_args() -> argparse.Namespace:
     sub_modules = subs.add_parser(
         "list-modules", parents=[parent], help="Показать все модули в профиле"
     )
-    sub_modules.add_argument(
-        "profile_path", nargs="?", help="Необязательный путь к профилю."
-    )
+    _attach_positional_profile(sub_modules)
 
     # list-checks
     sub_checks = subs.add_parser("list-checks", parents=[parent], help="Показать проверки")
@@ -205,21 +215,17 @@ def parse_args() -> argparse.Namespace:
         metavar="KEY=VALUE",
         help="Фильтр по тегам (можно указывать несколько раз)",
     )
-    sub_checks.add_argument(
-        "profile_path", nargs="?", help="Необязательный путь к профилю."
-    )
+    _attach_positional_profile(sub_checks)
 
     # describe-check
     sub_desc = subs.add_parser("describe-check", parents=[parent], help="Детали проверки по ID")
     sub_desc.add_argument("check_id", help="ID проверки")
-    sub_desc.add_argument(
-        "profile_path", nargs="?", help="Необязательный путь к профилю."
-    )
+    _attach_positional_profile(sub_desc)
 
     # validate
     sub_val = subs.add_parser("validate", parents=[parent], help="Проверить профиль на ошибки")
     sub_val.add_argument("--strict", action="store_true", help="Строгий режим: код возврата 1 при предупреждениях")
-    sub_val.add_argument("profile_path", nargs="?", help="Необязательный путь к профилю.")
+    _attach_positional_profile(sub_val)
 
     # audit
     sub_audit = subs.add_parser("audit", parents=[parent], help="Запустить аудит")
@@ -243,7 +249,7 @@ def parse_args() -> argparse.Namespace:
         metavar="DIR",
         help="Каталог для сохранения выводов команд (улики)."
     )
-    sub_audit.add_argument("profile_path", nargs="?", help="Необязательный путь к профилю.")
+    _attach_positional_profile(sub_audit)
 
     args = parser.parse_args()
     profile_from_position = getattr(args, "profile_path", None)

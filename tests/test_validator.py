@@ -45,10 +45,9 @@ def test_validate_profile_rejects_invalid_schema_version(minimal_check):
     assert any("schema_version" in err for err in errors)
 
 
-@pytest.mark.parametrize("value", [10, 3.14, True, None, ["a"], {"k": "v"}])
-def test_validate_profile_accepts_various_expect_types(minimal_check, value):
+def test_validate_profile_accepts_numeric_expect(minimal_check):
     check = minimal_check.copy()
-    check["expect"] = value
+    check["expect"] = 10
     profile = {
         "schema_version": "1.1",
         "profile_name": "Test",
@@ -58,4 +57,20 @@ def test_validate_profile_accepts_various_expect_types(minimal_check, value):
 
     is_valid, errors = validate_profile(profile)
 
-    assert is_valid, f"Unexpected errors for expect={value!r}: {errors}"
+    assert is_valid, f"Profile unexpectedly invalid: {errors}"
+
+
+def test_validate_profile_rejects_non_string_number_expect(minimal_check):
+    check = minimal_check.copy()
+    check["expect"] = {"unsupported": True}
+    profile = {
+        "schema_version": "1.1",
+        "profile_name": "Test",
+        "description": "Test profile",
+        "checks": [check],
+    }
+
+    is_valid, errors = validate_profile(profile)
+
+    assert not is_valid
+    assert any("expect" in err for err in errors)

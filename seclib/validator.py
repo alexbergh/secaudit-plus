@@ -40,17 +40,7 @@ PROFILE_SCHEMA: Dict[str, Any] = {
                     "name": {"type": "string", "minLength": 1},
                     "module": {"type": "string", "minLength": 1},
                     "command": {"type": "string", "minLength": 1},
-                    "expect": {
-                        "anyOf": [
-                            {"type": "string"},
-                            {"type": "integer"},
-                            {"type": "number"},
-                            {"type": "boolean"},
-                            {"type": "object"},
-                            {"type": "array"},
-                            {"type": "null"},
-                        ]
-                    },
+                    "expect": {"type": ["string", "number"]},
                     "assert_type": {
                         "type": "string",
                         "enum": [
