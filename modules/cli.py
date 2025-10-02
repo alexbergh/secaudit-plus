@@ -19,6 +19,7 @@ except Exception:
 
 _PROFILE_SCHEMA = STRICT_PROFILE_SCHEMA
 DEFAULT_PROFILE_PATH = "profiles/common/baseline.yml"
+PROFILE_ARGUMENT_HELP = "Необязательный путь к профилю."
 
 
 # ──────────────────────────────────────────────────────────────────────────────
@@ -44,90 +45,7 @@ def parse_tag_filters(raw: List[str] | None) -> Dict[str, str]:
         if not key or not value:
             raise ValueError(f"Неверный фильтр по тегам: '{item}'")
         filters[key] = value
-    return filters
-
-
-def _match_tags(check_tags: Dict[str, Any], filters: Dict[str, str]) -> bool:
-    if not filters:
-        return True
-    if not isinstance(check_tags, dict):
-        return False
-    lowered = {str(k).lower(): v for k, v in check_tags.items()}
-    for key, expected in filters.items():
-        value = lowered.get(key)
-        if value is None:
-            return False
-        if isinstance(value, (list, tuple, set)):
-            haystack = [str(v).lower() for v in value]
-            if expected not in haystack:
-                return False
-        else:
-            if str(value).lower() != expected:
-                return False
-    return True
-
-
-def list_checks(
-    profile: Dict[str, Any],
-    module: str | None = None,
-    tags: Dict[str, str] | None = None,
-) -> None:
-    """Печатает список проверок, опционально фильтруя по модулю и тегам."""
-    tags = tags or {}
-    module_filter = module.lower() if module else None
-    for check in profile.get("checks", []):
-        check_module = str(check.get("module", "")).lower()
-        if module_filter and check_module != module_filter:
-            continue
-        if tags and not _match_tags(check.get("tags", {}), tags):
-            continue
-        cid = check.get("id", "<no_id>")
-        name = check.get("name", "<Unnamed Check>")
-        sev = check.get("severity", "-")
-        mod = check.get("module", "-")
-        print(f"{cid}: {name} [{sev}] (module: {mod})")
-
-
-def describe_check(profile: Dict[str, Any], check_id: str) -> None:
-    """Печатает подробную информацию по конкретной проверке по ID."""
-    for check in profile.get("checks", []):
-        if check.get("id") == check_id:
-            print(f"ID: {check.get('id', '<no_id>')}")
-            print(f"Name: {check.get('name', '<Unnamed Check>')}")
-            print(f"Module: {check.get('module', 'core')}")
-            print(f"Severity: {check.get('severity', 'low')}")
-            print(f"Command: {check.get('command', '<no_command>')}")
-            print(f"Expected: {check.get('expect', '')}")
-            print(f"Assert Type: {check.get('assert_type', 'exact')}")
-            print("Tags:")
-            for k, v in check.get("tags", {}).items():
-                print(f"  {k}: {v}")
-            return
-    print(f"Check ID '{check_id}' not found in the profile.")
-
-
-# ──────────────────────────────────────────────────────────────────────────────
-# Загрузка профиля и опциональная валидация
-# ──────────────────────────────────────────────────────────────────────────────
-def load_profile_file(path: str) -> Dict[str, Any]:
-    p = Path(path)
-    if not p.is_file():
-        print(f"Ошибка: Файл профиля не найден: {path}", file=sys.stderr)
-        sys.exit(2)
-    try:
-        return yaml.safe_load(p.read_text(encoding="utf-8")) or {}
-    except yaml.YAMLError as e:
-        print(f"Ошибка: Не удалось прочитать YAML: {e}", file=sys.stderr)
-        sys.exit(2)
-
-
-def validate_profile(profile: Dict[str, Any]) -> Tuple[bool, List[str]]:
-    """Возвращает (is_valid, errors). Если jsonschema нет — мягкая валидация."""
-    errors: List[str] = []
-
-    if not isinstance(profile, dict):
-        return False, ["Формат профиля не является YAML-объектом (ожидался mapping)."]
-
+@@ -130,124 +132,160 @@ def validate_profile(profile: Dict[str, Any]) -> Tuple[bool, List[str]]:
     # Базовые проверки без jsonschema
     required_top = ["schema_version", "profile_name", "description", "checks"]
     for k in required_top:
@@ -153,6 +71,7 @@ def validate_profile(profile: Dict[str, Any]) -> Tuple[bool, List[str]]:
 # ──────────────────────────────────────────────────────────────────────────────
 # Парсинг аргументов
 # ──────────────────────────────────────────────────────────────────────────────
+def _parent_parser() -> argparse.ArgumentParser:
 def _parent_parser(default_profile: str) -> argparse.ArgumentParser:
     """Родительский парсер с общими для подкоманд аргументами (если нужно)."""
     parent = argparse.ArgumentParser(add_help=False)
@@ -164,13 +83,32 @@ def _parent_parser(default_profile: str) -> argparse.ArgumentParser:
     return parent
 
 
+def _attach_positional_profile(subparser: argparse.ArgumentParser) -> None:
+    """Добавляет опциональный позиционный аргумент для указания профиля."""
+
+    subparser.add_argument(
+        "profile_path",
+        nargs="?",
+        metavar="PROFILE",
+        help=PROFILE_ARGUMENT_HELP,
+    )
+
+
 def parse_args() -> argparse.Namespace:
     """
     Глобальный флаг --profile разрешён и до, и после команды.
     Примеры:
       secaudit --profile profiles/alt.yml list-modules
       secaudit list-modules --profile profiles/alt.yml
+    Также можно указать путь к профилю последним позиционным аргументом:
+      secaudit validate profiles/alt.yml
+      secaudit audit profiles/alt.yml --fail-on-undef
+
+    Если флаг и позиционный аргумент переданы одновременно, предпочтение
+    отдаётся позиционному значению, чтобы последняя указанная цель профиля
+    всегда побеждала.
     """
+    parent = _parent_parser()
     default_profile = DEFAULT_PROFILE_PATH
     parent = _parent_parser(default_profile)
 
@@ -182,6 +120,8 @@ def parse_args() -> argparse.Namespace:
     # Глобальный флаг профиля — можно ставить до/после команды
     parser.add_argument(
         "--profile",
+        default="profiles/common/baseline.yml",
+        help="Путь к YAML-профилю (по умолчанию: profiles/common/baseline.yml)",
         default=default_profile,
         help=f"Путь к YAML-профилю (по умолчанию: {default_profile})",
     )
@@ -190,6 +130,10 @@ def parse_args() -> argparse.Namespace:
 
     # list-modules
     subs.add_parser("list-modules", parents=[parent], help="Показать все модули в профиле")
+    sub_modules = subs.add_parser(
+        "list-modules", parents=[parent], help="Показать все модули в профиле"
+    )
+    _attach_positional_profile(sub_modules)
 
     # list-checks
     sub_checks = subs.add_parser("list-checks", parents=[parent], help="Показать проверки")
@@ -200,14 +144,17 @@ def parse_args() -> argparse.Namespace:
         metavar="KEY=VALUE",
         help="Фильтр по тегам (можно указывать несколько раз)",
     )
+    _attach_positional_profile(sub_checks)
 
     # describe-check
     sub_desc = subs.add_parser("describe-check", parents=[parent], help="Детали проверки по ID")
     sub_desc.add_argument("check_id", help="ID проверки")
+    _attach_positional_profile(sub_desc)
 
     # validate
     sub_val = subs.add_parser("validate", parents=[parent], help="Проверить профиль на ошибки")
     sub_val.add_argument("--strict", action="store_true", help="Строгий режим: код возврата 1 при предупреждениях")
+    _attach_positional_profile(sub_val)
 
     # audit
     sub_audit = subs.add_parser("audit", parents=[parent], help="Запустить аудит")
@@ -232,9 +179,17 @@ def parse_args() -> argparse.Namespace:
         help="Каталог для сохранения выводов команд (улики)."
     )
 
+    return parser.parse_args()
+    _attach_positional_profile(sub_audit)
+
     args = parser.parse_args()
-    if not hasattr(args, "profile"):
+    profile_from_position = getattr(args, "profile_path", None)
+    if profile_from_position is not None:
+        args.profile = profile_from_position
+    elif not hasattr(args, "profile"):
         args.profile = default_profile
+    if hasattr(args, "profile_path"):
+        delattr(args, "profile_path")
     return args
 
 
@@ -261,25 +216,3 @@ def main() -> None:
 
     if args.command == "describe-check":
         describe_check(profile, args.check_id)
-        return
-
-    if args.command == "validate":
-        ok, errs = validate_profile(profile)
-        if ok:
-            print("Профиль валиден.")
-            sys.exit(0)
-        print("Профиль невалиден:")
-        for e in errs:
-            print(f"  - {e}")
-        # strict — вернуть 1; без strict — вернуть 0 (предупреждение)
-        sys.exit(1 if args.strict else 0)
-
-    if args.command == "audit":
-        # Здесь ничего не делаем — аудит выполняется в secaudit/main.py
-        # Этот блок оставлен для ясности.
-        print("Используйте основной лаунчер (secaudit/main.py) для запуска аудита.", file=sys.stderr)
-        sys.exit(0)
-
-
-if __name__ == "__main__":
-    main()
