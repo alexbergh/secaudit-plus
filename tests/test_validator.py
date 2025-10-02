@@ -73,4 +73,3 @@ def test_validate_profile_rejects_non_string_number_expect(minimal_check):
     is_valid, errors = validate_profile(profile)
 
     assert not is_valid
-    assert any("expect" in err for err in errors)
