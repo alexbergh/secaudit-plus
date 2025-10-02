@@ -18,6 +18,8 @@ except Exception:
 
 
 _PROFILE_SCHEMA = STRICT_PROFILE_SCHEMA
+DEFAULT_PROFILE_PATH = "profiles/common/baseline.yml"
+PROFILE_ARGUMENT_HELP = "Необязательный путь к профилю."
 
 
 # ──────────────────────────────────────────────────────────────────────────────
@@ -152,21 +154,35 @@ def validate_profile(profile: Dict[str, Any]) -> Tuple[bool, List[str]]:
 # ──────────────────────────────────────────────────────────────────────────────
 # Парсинг аргументов
 # ──────────────────────────────────────────────────────────────────────────────
-def _parent_parser() -> argparse.ArgumentParser:
-    """Родительский парсер с общими для подкоманд аргументами (если нужно)."""
-    parent = argparse.ArgumentParser(add_help=False)
-    return parent
+def _add_profile_arguments(subparser: argparse.ArgumentParser, *, default_profile: str) -> None:
+    """Подключает флаг и позиционный аргумент профиля к подкоманде."""
+
+    subparser.add_argument(
+        "--profile",
+        dest="profile",
+        default=argparse.SUPPRESS,
+        help=f"Путь к YAML-профилю (по умолчанию: {default_profile})",
+    )
+    subparser.add_argument(
+        "profile_path",
+        nargs="?",
+        metavar="PROFILE",
+        help=PROFILE_ARGUMENT_HELP,
+    )
 
 
 def parse_args() -> argparse.Namespace:
     """
     Глобальный флаг --profile разрешён и до, и после команды.
-    Примеры:
-      secaudit --profile profiles/alt.yml list-modules
-      secaudit list-modules --profile profiles/alt.yml
-    """
-    parent = _parent_parser()
+    Также можно указать путь к профилю последним позиционным аргументом:
+      secaudit validate profiles/alt.yml
+      secaudit audit profiles/alt.yml --fail-on-undef
 
+    Если флаг и позиционный аргумент переданы одновременно, предпочтение
+    отдаётся позиционному значению, чтобы последняя указанная цель профиля
+    всегда побеждала.
+    """
+    default_profile = DEFAULT_PROFILE_PATH
     parser = argparse.ArgumentParser(
         prog="secaudit",
         description="SecAudit++ CLI — запуск аудита, валидация профиля и служебные команды.",
@@ -175,17 +191,19 @@ def parse_args() -> argparse.Namespace:
     # Глобальный флаг профиля — можно ставить до/после команды
     parser.add_argument(
         "--profile",
-        default="profiles/common/baseline.yml",
-        help="Путь к YAML-профилю (по умолчанию: profiles/common/baseline.yml)",
+        dest="profile",
+        default=argparse.SUPPRESS,
+        help=f"Путь к YAML-профилю (по умолчанию: {default_profile})",
     )
 
     subs = parser.add_subparsers(dest="command", required=True, help="Доступные команды")
 
     # list-modules
-    subs.add_parser("list-modules", parents=[parent], help="Показать все модули в профиле")
+    sub_modules = subs.add_parser("list-modules", help="Показать все модули в профиле")
+    _add_profile_arguments(sub_modules, default_profile=default_profile)
 
     # list-checks
-    sub_checks = subs.add_parser("list-checks", parents=[parent], help="Показать проверки")
+    sub_checks = subs.add_parser("list-checks", help="Показать проверки")
     sub_checks.add_argument("--module", help="Фильтровать проверки по модулю")
     sub_checks.add_argument(
         "--tags",
@@ -193,17 +211,20 @@ def parse_args() -> argparse.Namespace:
         metavar="KEY=VALUE",
         help="Фильтр по тегам (можно указывать несколько раз)",
     )
+    _add_profile_arguments(sub_checks, default_profile=default_profile)
 
     # describe-check
-    sub_desc = subs.add_parser("describe-check", parents=[parent], help="Детали проверки по ID")
+    sub_desc = subs.add_parser("describe-check", help="Детали проверки по ID")
     sub_desc.add_argument("check_id", help="ID проверки")
+    _add_profile_arguments(sub_desc, default_profile=default_profile)
 
     # validate
-    sub_val = subs.add_parser("validate", parents=[parent], help="Проверить профиль на ошибки")
+    sub_val = subs.add_parser("validate", help="Проверить профиль на ошибки")
     sub_val.add_argument("--strict", action="store_true", help="Строгий режим: код возврата 1 при предупреждениях")
+    _add_profile_arguments(sub_val, default_profile=default_profile)
 
     # audit
-    sub_audit = subs.add_parser("audit", parents=[parent], help="Запустить аудит")
+    sub_audit = subs.add_parser("audit", help="Запустить аудит")
     sub_audit.add_argument(
         "--module",
         help="Список модулей через запятую (например: system,network). По умолчанию — все.",
@@ -224,8 +245,17 @@ def parse_args() -> argparse.Namespace:
         metavar="DIR",
         help="Каталог для сохранения выводов команд (улики)."
     )
+    _add_profile_arguments(sub_audit, default_profile=default_profile)
 
-    return parser.parse_args()
+    args = parser.parse_args()
+    profile_from_position = getattr(args, "profile_path", None)
+    if profile_from_position is not None:
+        args.profile = profile_from_position
+    elif not hasattr(args, "profile"):
+        args.profile = default_profile
+    if hasattr(args, "profile_path"):
+        delattr(args, "profile_path")
+    return args
 
 
 # ──────────────────────────────────────────────────────────────────────────────
