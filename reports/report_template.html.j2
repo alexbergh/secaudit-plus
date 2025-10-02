@@ -62,15 +62,6 @@
     {%- endif -%}
   {%- endmacro %}
 
-  {% macro fstec_list(r) -%}
-    {%- if r.tags is not defined or not r.tags or ('fstec' not in r.tags) -%}
-      []
-    {%- else -%}
-      {%- set raw = r.tags.fstec -%}
-      {%- if raw is string -%}[{{ raw }}]{% elif raw is sequence -%}{{ raw }}{% else -%}[]{% endif -%}
-    {%- endif -%}
-  {%- endmacro %}
-
   {% macro short_output(text) -%}
     {{ (text|default('')|replace('\r','')|trim|truncate(OUTPUT_TRIM, True)) }}
   {%- endmacro %}
@@ -80,6 +71,29 @@
       {{ value|tojson(ensure_ascii=False) }}
     {%- else -%}
       {{ value|default('') }}
+    {%- endif -%}
+  {%- endmacro %}
+
+  {% macro fstec_summary(fl) -%}
+    {%- if fl and fl|length > 0 -%}
+      {%- set ns = namespace(codes=[], descr=[]) -%}
+      {%- for raw_code in fl -%}
+        {%- set code = raw_code|string|trim|upper -%}
+        {%- if code != '' and code not in ns.codes -%}
+          {%- set ns.codes = ns.codes + [code] -%}
+          {%- set desc = FSTEK21.get(code) -%}
+          {%- if desc is not none and desc not in ns.descr -%}
+            {%- set ns.descr = ns.descr + [desc] -%}
+          {%- endif -%}
+        {%- endif -%}
+      {%- endfor -%}
+      {%- if ns.codes -%}
+        {{ ns.codes|join(', ') }} — {{ ns.descr|length > 0 and ns.descr|join('; ') or '—' }}
+      {%- else -%}
+        —
+      {%- endif -%}
+    {%- else -%}
+      —
     {%- endif -%}
   {%- endmacro %}
 
@@ -206,9 +220,26 @@
               <div><div class="text-muted small">Профиль</div><div class="fw-semibold">{{ (profile.profile_name if profile is defined and profile.profile_name is defined else profile_name|default('—')) }}</div></div>
               <div><div class="text-muted small">Описание</div><div>{{ (profile.description if profile is defined and profile.description is defined else profile_description|default('—')) }}</div></div>
               <div><div class="text-muted small">Дата</div><div>{{ (now.strftime("%Y-%m-%d %H:%M:%S") if now is defined else timestamp|default('—')) }}</div></div>
-              <div><div class="text-muted small">Хост</div><div>{{ host.hostname|default('—') }}</div></div>
-              <div><div class="text-muted small">ОС</div><div>{{ host.os|default('—') }}</div></div>
-              <div><div class="text-muted small">Ядро</div><div>{{ host.kernel|default('—') }}</div></div>
+              {% set host_info = host if host is defined else {} %}
+              {% set raw_ip = host_info.ip if host_info.ip is defined else
+                              (host_info.ipv4 if host_info.ipv4 is defined else
+                              (host_info.address if host_info.address is defined else
+                              (host_info.ip_address if host_info.ip_address is defined else
+                              None))) %}
+              {% if raw_ip is sequence and (raw_ip is not string) %}
+                {% set host_ip = raw_ip|join(', ') %}
+              {% elif raw_ip is mapping %}
+                {% set host_ip = raw_ip|tojson(ensure_ascii=False) %}
+              {% else %}
+                {% set host_ip = raw_ip|default('—', true) %}
+              {% endif %}
+              {% if host_ip is not defined or host_ip|string|trim == '' %}
+                {% set host_ip = '—' %}
+              {% endif %}
+              <div><div class="text-muted small">Хост</div><div>{{ host_info.hostname|default('—') }}</div></div>
+              <div><div class="text-muted small">IP-адрес</div><div>{{ host_ip }}</div></div>
+              <div><div class="text-muted small">ОС</div><div>{{ host_info.os|default('—') }}</div></div>
+              <div><div class="text-muted small">Ядро</div><div>{{ host_info.kernel|default('—') }}</div></div>
             </div>
           </div>
         </div>
@@ -304,6 +335,7 @@
              aria-labelledby="heading-{{ loop.index }}" data-bs-parent="#modulesAccordion">
           <div class="accordion-body">
 
+            {% set module_idx = loop.index %}
             <div class="table-responsive">
               <table class="table table-sm table-bordered align-middle sticky-header">
                 <thead class="table-light">
@@ -314,14 +346,14 @@
                     <th style="width:10ch;">Результат</th>
                     <th style="width:12ch;">Assert</th>
                     <th>Ожидание</th>
-                    <th>FSTEK №21</th>
+                    <th>ФСТЭК №21</th>
                     <th style="width:1%"></th>
                   </tr>
                 </thead>
                 <tbody>
                 {% for check in checks %}
                   {% set s = norm_status(check) %}
-                  {% set fl = fstec_list(check) %}
+                  {% set fl = check|fstek_codes %}
                   {% set expect_display = format_expect(check.expect) %}
                   {% set tag_strings = [] %}
                   {% if check.tags %}
@@ -341,16 +373,16 @@
                       data-module="{{ module|string|lower }}"
                       data-severity="{{ check.severity|default('low')|lower }}"
                       data-status="{{ s }}"
-                      data-tags="{{ tag_strings|join(' ')|e('html_attr') }}"
-                      data-search="{{ (check.name ~ ' ' ~ check.id ~ ' ' ~ (check.command or '') ~ ' ' ~ (check.reason or ''))|lower|e('html_attr') }}"
-                      data-id="{{ check.id|default('')|e('html_attr') }}"
-                      data-name="{{ check.name|default('')|e('html_attr') }}"
-                      data-command="{{ check.command|default('')|e('html_attr') }}"
-                      data-assert="{{ check.assert_type|default('exact')|e('html_attr') }}"
-                      data-expect="{{ expect_display|string|e('html_attr') }}"
-                      data-reason="{{ check.reason|default('')|e('html_attr') }}"
-                      data-output="{{ short_output(check.output)|e('html_attr') }}"
-                      data-evidence="{{ check.evidence|default('')|e('html_attr') }}">
+                      data-tags="{{ tag_strings|join(' ')|e }}"
+                      data-search="{{ (check.name ~ ' ' ~ check.id ~ ' ' ~ (check.command or '') ~ ' ' ~ (check.reason or ''))|lower|e }}"
+                      data-id="{{ check.id|default('')|e }}"
+                      data-name="{{ check.name|default('')|e }}"
+                      data-command="{{ check.command|default('')|e }}"
+                      data-assert="{{ check.assert_type|default('exact')|e }}"
+                      data-expect="{{ expect_display|string|e }}"
+                      data-reason="{{ check.reason|default('')|e }}"
+                      data-output="{{ short_output(check.output)|e }}"
+                      data-evidence="{{ check.evidence|default('')|e }}">
                     <td class="text-muted">{{ loop.index }}</td>
                     <td>
                       <div class="fw-semibold">{{ check.name }}</div>
@@ -378,14 +410,14 @@
                     <td class="text-end">
                       <button class="btn btn-sm btn-outline-primary" type="button"
                               data-bs-toggle="collapse"
-                              data-bs-target="#output-{{ loop.parentloop.index }}-{{ loop.index }}"
+                              data-bs-target="#output-{{ module_idx }}-{{ loop.index }}"
                               aria-expanded="false"
-                              aria-controls="output-{{ loop.parentloop.index }}-{{ loop.index }}">
+                              aria-controls="output-{{ module_idx }}-{{ loop.index }}">
                         Вывод
                       </button>
                     </td>
                   </tr>
-                  <tr class="collapse" id="output-{{ loop.parentloop.index }}-{{ loop.index }}">
+                  <tr class="collapse" id="output-{{ module_idx }}-{{ loop.index }}">
                     <td colspan="8">
                       <pre class="code-pre mono mb-0">{{ short_output(check.output)|e }}</pre>
                       {% if check.reason %}
@@ -410,8 +442,11 @@
     {# ============== СВОДКА ПО МЕРАМ ФСТЭК №21 ============== #}
     {% set seen = {} %}
     {% for r in results %}
-      {% for m in fstec_list(r) %}
-        {% set _ = seen.update({m: (seen.get(m, []) + [r])}) %}
+      {% for m in r|fstek_codes %}
+        {% set code = m|string|trim|upper %}
+        {% if code != '' %}
+          {% set _ = seen.update({code: (seen.get(code, []) + [r])}) %}
+        {% endif %}
       {% endfor %}
     {% endfor %}
 
@@ -475,16 +510,10 @@
             <div>{{ sev_badge(r.severity) }}</div>
           </div>
           <div class="small text-muted mono">ID: {{ r.id }} · Модуль: {{ r.module }}</div>
+          {% set fl = r|fstek_codes %}
           <div class="mt-2">
-            <span class="text-muted small">Меры №21:</span>
-            {% set fl = fstec_list(r) %}
-            {% if fl|length > 0 %}
-              {% for m in fl %}
-                <span class="badge bg-info text-dark me-1" title="{{ FSTEK21.get(m, '') }}">{{ m }}</span>
-              {% endfor %}
-            {% else %}
-              <span class="text-muted">—</span>
-            {% endif %}
+            <span class="text-muted small">Меры ФСТЭК №21:</span>
+            <strong>{{ fstec_summary(fl) }}</strong>
           </div>
           {% if r.expect %}
           <div class="small mt-2"><span class="text-muted">Ожидание:</span> <span class="mono">{{ format_expect(r.expect)|safe }}</span></div>

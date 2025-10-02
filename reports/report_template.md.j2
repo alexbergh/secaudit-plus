@@ -31,19 +31,34 @@
   {%- endif -%}
 {%- endmacro %}
 
-{# Преобразуем tags.fstec в список кодов мер №21 #}
-{% macro fstec_list(r) -%}
-  {%- if r.tags is not defined or not r.tags or ('fstec' not in r.tags) -%}[]{% else -%}
-    {%- set raw = r.tags.fstec -%}
-    {%- if raw is string -%}[{{ raw }}]{% elif raw is sequence -%}{{ raw }}{% else -%}[]{% endif -%}
-  {%- endif -%}
-{%- endmacro %}
-
 {% macro format_expect(value) -%}
   {%- if value is mapping or (value is sequence and (value is not string)) -%}
     {{ value|tojson(ensure_ascii=False) }}
   {%- else -%}
     {{ value|default('') }}
+  {%- endif -%}
+{%- endmacro %}
+
+{% macro fstec_summary(fl) -%}
+  {%- if fl and fl|length > 0 -%}
+    {%- set ns = namespace(codes=[], descr=[]) -%}
+    {%- for raw_code in fl -%}
+      {%- set code = raw_code|string|trim|upper -%}
+      {%- if code != '' and code not in ns.codes -%}
+        {%- set ns.codes = ns.codes + [code] -%}
+        {%- set desc = FSTEK21.get(code) -%}
+        {%- if desc is not none and desc not in ns.descr -%}
+          {%- set ns.descr = ns.descr + [desc] -%}
+        {%- endif -%}
+      {%- endif -%}
+    {%- endfor -%}
+    {%- if ns.codes -%}
+      {{ ns.codes|join(', ') }} — {{ ns.descr|length > 0 and ns.descr|join('; ') or '—' }}
+    {%- else -%}
+      —
+    {%- endif -%}
+  {%- else -%}
+    —
   {%- endif -%}
 {%- endmacro %}
 
@@ -201,11 +216,11 @@
 {% for module, checks in results | groupby('module') %}
 ## Модуль: {{ module | capitalize }} ({{ checks | length }} проверок)
 
-| № | Проверка | Severity | FSTEK №21 | Assert | Результат | Ожидание | Факт (фрагмент) |
+| № | Проверка | Severity | ФСТЭК №21 | Assert | Результат | Ожидание | Факт (фрагмент) |
 |---|---|---|---|---|---|---|---|
 {% for check in checks %}
   {% set s = norm_status(check) %}
-  {% set fl = fstec_list(check) %}
+  {% set fl = check|fstek_codes %}
 | {{ loop.index }} | {{ check.name }} | {{ sev_badge(check.severity) }} |
   {%- if fl|length > 0 -%} {{ fl|join(', ') }} {%- else -%} — {%- endif -%} |
   `{{ check.assert_type|default('exact') }}` | {{ status_badge(s) }} |
@@ -220,8 +235,11 @@
 {# ============== СВОДКА ПО МЕРАМ ФСТЭК №21 (если есть) ============== #}
 {% set seen = {} %}
 {% for r in results %}
-  {% for m in fstec_list(r) %}
-    {% set _ = seen.update({m: (seen.get(m, []) + [r])}) %}
+  {% for m in r|fstek_codes %}
+    {% set code = m|string|trim|upper %}
+    {% if code != '' %}
+      {% set _ = seen.update({code: (seen.get(code, []) + [r])}) %}
+    {% endif %}
   {% endfor %}
 {% endfor %}
 
@@ -259,10 +277,7 @@ _Теги ФСТЭК №21 в проверках отсутствуют._
 {% for r in highs %}
 - **{{ r.name }}** (`{{ r.id }}`)
   - Модуль: `{{ r.module }}`
-  - Меры №21: 
-    {%- set fl = fstec_list(r) -%}
-    {%- if fl|length > 0 -%} {{ fl|join(', ') }} — {{ fl | map('string') | map('trim') | map('upper') | list | map('attr', FSTEK21) | list | reject('equalto', None) | list | join('; ') }}
-    {%- else -%} — {%- endif -%}
+  - **Меры ФСТЭК №21:**{{ ' ' ~ fstec_summary(r|fstek_codes) }}
   - Ожидание: `{{ format_expect(r.expect) }}`
   - Assert: `{{ r.assert_type|default('exact') }}`
   - Команда:
@@ -282,10 +297,27 @@ _Критических несоответствий не выявлено._
 
 {# ======================== КОНТЕКСТ ХОСТА ======================== #}
 ## Системная информация
-- Хост: **{{ host.hostname|default('—') }}**
-- ОС: **{{ host.os|default('—') }}**
-- Ядро: **{{ host.kernel|default('—') }}**
-- Архитектура: **{{ host.arch|default('—') }}**
+{% set host_info = host if host is defined else {} %}
+{% macro host_value(value) -%}
+  {%- if value is mapping -%}
+    {%- set text = value|tojson(ensure_ascii=False) -%}
+  {%- elif value is sequence and (value is not string) -%}
+    {%- set text = value|join(', ') -%}
+  {%- else -%}
+    {%- set text = value|default('—', true) -%}
+  {%- endif -%}
+  {{ (text|string|trim) if text is defined and (text|string|trim) != '' else '—' }}
+{%- endmacro %}
+{% set raw_ip = (host_info.ip if host_info.ip is defined else
+                 (host_info.ipv4 if host_info.ipv4 is defined else
+                 (host_info.address if host_info.address is defined else
+                 (host_info.ip_address if host_info.ip_address is defined else
+                 None)))) %}
+- Хост: **{{ host_info.hostname|default('—') }}**
+- IP-адрес: **{{ host_value(raw_ip) }}**
+- ОС: **{{ host_info.os|default('—') }}**
+- Ядро: **{{ host_info.kernel|default('—') }}**
+- Архитектура: **{{ host_info.arch|default('—') }}**
 - Время генерации: **{{ (now.strftime("%Y-%m-%d %H:%M:%S") if now is defined else timestamp|default('—')) }}**
 
 {# ============================= END ============================= #}
