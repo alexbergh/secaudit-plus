@@ -77,6 +77,33 @@ secaudit --profile profiles/alt.yml validate
 # Запуск аудита с порогом FAIL на medium
 secaudit --profile profiles/alt.yml audit --fail-level medium
 ```
+=======
+### Глобальные опции
+- `--profile PATH` — путь к YAML-профилю (по умолчанию `profiles/common/baseline.yml`).
+- `--fail-level {low|medium|high}` — уровень, начиная с которого аудит считается неуспешным (для команды `audit`).
+
+### Основные команды
+1. **Список модулей в профиле**
+   ```bash
+   secaudit --profile profiles/alt.yml list-modules
+   ```
+2. **Список проверок**
+   ```bash
+   secaudit --profile profiles/alt.yml list-checks
+   secaudit --profile profiles/alt.yml list-checks --module system
+   ```
+3. **Описание конкретной проверки**
+   ```bash
+   secaudit --profile profiles/alt.yml describe-check check_ssh_root_login
+   ```
+4. **Валидация профиля**
+   ```bash
+   secaudit --profile profiles/alt.yml validate
+   ```
+5. **Запуск аудита**
+   ```bash
+   secaudit --profile profiles/alt.yml audit --fail-level medium
+   ```
 
 ### Результаты выполнения
 После завершения аудита отчёты сохраняются в каталоге `results/`:
