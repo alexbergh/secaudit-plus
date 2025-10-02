@@ -562,7 +562,8 @@ checks:
   - id: check_udev_usb_rules
     name: "Есть udev-правила, ограничивающие USB"
     module: "fs"
-    command: "grep -RhsE 'SUBSYSTEM==\\"usb\\".*(MODE|ATTR|OPTIONS)' /etc/udev/rules.d/ 2>/dev/null | head -n1"
+    command: >-
+      grep -RhsE 'SUBSYSTEM=="usb".*(MODE|ATTR|OPTIONS)' /etc/udev/rules.d/ 2>/dev/null | head -n1
     expect: "SUBSYSTEM"
     assert_type: "contains"
     severity: "medium"
