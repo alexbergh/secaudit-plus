@@ -67,7 +67,38 @@
       []
     {%- else -%}
       {%- set raw = r.tags.fstec -%}
-      {%- if raw is string -%}[{{ raw }}]{% elif raw is sequence -%}{{ raw }}{% else -%}[]{% endif -%}
+      {%- if raw is string -%}
+        {%- set values = [raw] -%}
+      {%- elif raw is sequence -%}
+        {%- set values = raw -%}
+      {%- else -%}
+        {%- set values = [] -%}
+      {%- endif -%}
+      {%- set ns = namespace(items=[]) -%}
+      {%- for item in values -%}
+        {%- if item is mapping -%}
+          {%- if 'code' in item -%}
+            {%- set candidate = item['code'] -%}
+          {%- elif 'id' in item -%}
+            {%- set candidate = item['id'] -%}
+          {%- elif 'name' in item -%}
+            {%- set candidate = item['name'] -%}
+          {%- elif 'value' in item -%}
+            {%- set candidate = item['value'] -%}
+          {%- else -%}
+            {%- set candidate = None -%}
+          {%- endif -%}
+        {%- else -%}
+          {%- set candidate = item -%}
+        {%- endif -%}
+        {%- if candidate is not none -%}
+          {%- set text = candidate|string|trim -%}
+          {%- if text != '' -%}
+            {%- set ns.items = ns.items + [text] -%}
+          {%- endif -%}
+        {%- endif -%}
+      {%- endfor -%}
+      {{ ns.items }}
     {%- endif -%}
   {%- endmacro %}
 
@@ -80,6 +111,22 @@
       {{ value|tojson(ensure_ascii=False) }}
     {%- else -%}
       {{ value|default('') }}
+    {%- endif -%}
+  {%- endmacro %}
+
+  {% macro fstec_summary(fl) -%}
+    {%- if fl and fl|length > 0 -%}
+      {%- set codes = fl | map('string') | map('trim') | reject('equalto','') | map('upper') | list -%}
+      {%- set ns = namespace(descr=[]) -%}
+      {%- for code in codes -%}
+        {%- set desc = FSTEK21.get(code) -%}
+        {%- if desc is not none -%}
+          {%- set ns.descr = ns.descr + [desc] -%}
+        {%- endif -%}
+      {%- endfor -%}
+      {{ codes|join(', ') }} — {{ ns.descr|join('; ') }}
+    {%- else -%}
+      —
     {%- endif -%}
   {%- endmacro %}
 
@@ -206,9 +253,10 @@
               <div><div class="text-muted small">Профиль</div><div class="fw-semibold">{{ (profile.profile_name if profile is defined and profile.profile_name is defined else profile_name|default('—')) }}</div></div>
               <div><div class="text-muted small">Описание</div><div>{{ (profile.description if profile is defined and profile.description is defined else profile_description|default('—')) }}</div></div>
               <div><div class="text-muted small">Дата</div><div>{{ (now.strftime("%Y-%m-%d %H:%M:%S") if now is defined else timestamp|default('—')) }}</div></div>
-              <div><div class="text-muted small">Хост</div><div>{{ host.hostname|default('—') }}</div></div>
-              <div><div class="text-muted small">ОС</div><div>{{ host.os|default('—') }}</div></div>
-              <div><div class="text-muted small">Ядро</div><div>{{ host.kernel|default('—') }}</div></div>
+              {% set host_info = host if host is defined else {} %}
+              <div><div class="text-muted small">Хост</div><div>{{ host_info.hostname|default('—') }}</div></div>
+              <div><div class="text-muted small">ОС</div><div>{{ host_info.os|default('—') }}</div></div>
+              <div><div class="text-muted small">Ядро</div><div>{{ host_info.kernel|default('—') }}</div></div>
             </div>
           </div>
         </div>
@@ -304,6 +352,7 @@
              aria-labelledby="heading-{{ loop.index }}" data-bs-parent="#modulesAccordion">
           <div class="accordion-body">
 
+            {% set module_idx = loop.index %}
             <div class="table-responsive">
               <table class="table table-sm table-bordered align-middle sticky-header">
                 <thead class="table-light">
@@ -341,16 +390,16 @@
                       data-module="{{ module|string|lower }}"
                       data-severity="{{ check.severity|default('low')|lower }}"
                       data-status="{{ s }}"
-                      data-tags="{{ tag_strings|join(' ')|e('html_attr') }}"
-                      data-search="{{ (check.name ~ ' ' ~ check.id ~ ' ' ~ (check.command or '') ~ ' ' ~ (check.reason or ''))|lower|e('html_attr') }}"
-                      data-id="{{ check.id|default('')|e('html_attr') }}"
-                      data-name="{{ check.name|default('')|e('html_attr') }}"
-                      data-command="{{ check.command|default('')|e('html_attr') }}"
-                      data-assert="{{ check.assert_type|default('exact')|e('html_attr') }}"
-                      data-expect="{{ expect_display|string|e('html_attr') }}"
-                      data-reason="{{ check.reason|default('')|e('html_attr') }}"
-                      data-output="{{ short_output(check.output)|e('html_attr') }}"
-                      data-evidence="{{ check.evidence|default('')|e('html_attr') }}">
+                      data-tags="{{ tag_strings|join(' ')|e }}"
+                      data-search="{{ (check.name ~ ' ' ~ check.id ~ ' ' ~ (check.command or '') ~ ' ' ~ (check.reason or ''))|lower|e }}"
+                      data-id="{{ check.id|default('')|e }}"
+                      data-name="{{ check.name|default('')|e }}"
+                      data-command="{{ check.command|default('')|e }}"
+                      data-assert="{{ check.assert_type|default('exact')|e }}"
+                      data-expect="{{ expect_display|string|e }}"
+                      data-reason="{{ check.reason|default('')|e }}"
+                      data-output="{{ short_output(check.output)|e }}"
+                      data-evidence="{{ check.evidence|default('')|e }}">
                     <td class="text-muted">{{ loop.index }}</td>
                     <td>
                       <div class="fw-semibold">{{ check.name }}</div>
@@ -378,14 +427,14 @@
                     <td class="text-end">
                       <button class="btn btn-sm btn-outline-primary" type="button"
                               data-bs-toggle="collapse"
-                              data-bs-target="#output-{{ loop.parentloop.index }}-{{ loop.index }}"
+                              data-bs-target="#output-{{ module_idx }}-{{ loop.index }}"
                               aria-expanded="false"
-                              aria-controls="output-{{ loop.parentloop.index }}-{{ loop.index }}">
+                              aria-controls="output-{{ module_idx }}-{{ loop.index }}">
                         Вывод
                       </button>
                     </td>
                   </tr>
-                  <tr class="collapse" id="output-{{ loop.parentloop.index }}-{{ loop.index }}">
+                  <tr class="collapse" id="output-{{ module_idx }}-{{ loop.index }}">
                     <td colspan="8">
                       <pre class="code-pre mono mb-0">{{ short_output(check.output)|e }}</pre>
                       {% if check.reason %}
