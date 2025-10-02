@@ -71,7 +71,6 @@ def parse_tag_filters(raw: List[str] | None) -> Dict[str, str]:
 # ──────────────────────────────────────────────────────────────────────────────
 # Парсинг аргументов
 # ──────────────────────────────────────────────────────────────────────────────
-def _parent_parser() -> argparse.ArgumentParser:
 def _parent_parser(default_profile: str) -> argparse.ArgumentParser:
     """Родительский парсер с общими для подкоманд аргументами (если нужно)."""
     parent = argparse.ArgumentParser(add_help=False)
@@ -97,10 +96,7 @@ def _attach_positional_profile(subparser: argparse.ArgumentParser) -> None:
 def parse_args() -> argparse.Namespace:
     """
     Глобальный флаг --profile разрешён и до, и после команды.
-    Примеры:
-      secaudit --profile profiles/alt.yml list-modules
-      secaudit list-modules --profile profiles/alt.yml
-    Также можно указать путь к профилю последним позиционным аргументом:
+      Также можно указать путь к профилю последним позиционным аргументом:
       secaudit validate profiles/alt.yml
       secaudit audit profiles/alt.yml --fail-on-undef
 
@@ -108,8 +104,7 @@ def parse_args() -> argparse.Namespace:
     отдаётся позиционному значению, чтобы последняя указанная цель профиля
     всегда побеждала.
     """
-    parent = _parent_parser()
-    default_profile = DEFAULT_PROFILE_PATH
+        default_profile = DEFAULT_PROFILE_PATH
     parent = _parent_parser(default_profile)
 
     parser = argparse.ArgumentParser(
@@ -120,16 +115,13 @@ def parse_args() -> argparse.Namespace:
     # Глобальный флаг профиля — можно ставить до/после команды
     parser.add_argument(
         "--profile",
-        default="profiles/common/baseline.yml",
-        help="Путь к YAML-профилю (по умолчанию: profiles/common/baseline.yml)",
-        default=default_profile,
+      default=default_profile,
         help=f"Путь к YAML-профилю (по умолчанию: {default_profile})",
     )
 
     subs = parser.add_subparsers(dest="command", required=True, help="Доступные команды")
 
     # list-modules
-    subs.add_parser("list-modules", parents=[parent], help="Показать все модули в профиле")
     sub_modules = subs.add_parser(
         "list-modules", parents=[parent], help="Показать все модули в профиле"
     )
@@ -178,9 +170,7 @@ def parse_args() -> argparse.Namespace:
         metavar="DIR",
         help="Каталог для сохранения выводов команд (улики)."
     )
-
-    return parser.parse_args()
-    _attach_positional_profile(sub_audit)
+      _attach_positional_profile(sub_audit)
 
     args = parser.parse_args()
     profile_from_position = getattr(args, "profile_path", None)

@@ -1,3 +1,5 @@
+import pytest
+
 from seclib.validator import validate_profile
 
 
