@@ -18,6 +18,7 @@ except Exception:
 
 
 _PROFILE_SCHEMA = STRICT_PROFILE_SCHEMA
+DEFAULT_PROFILE_PATH = "profiles/common/baseline.yml"
 
 
 # ──────────────────────────────────────────────────────────────────────────────
@@ -152,9 +153,14 @@ def validate_profile(profile: Dict[str, Any]) -> Tuple[bool, List[str]]:
 # ──────────────────────────────────────────────────────────────────────────────
 # Парсинг аргументов
 # ──────────────────────────────────────────────────────────────────────────────
-def _parent_parser() -> argparse.ArgumentParser:
+def _parent_parser(default_profile: str) -> argparse.ArgumentParser:
     """Родительский парсер с общими для подкоманд аргументами (если нужно)."""
     parent = argparse.ArgumentParser(add_help=False)
+    parent.add_argument(
+        "--profile",
+        default=argparse.SUPPRESS,
+        help=f"Путь к YAML-профилю (по умолчанию: {default_profile})",
+    )
     return parent
 
 
@@ -165,7 +171,8 @@ def parse_args() -> argparse.Namespace:
       secaudit --profile profiles/alt.yml list-modules
       secaudit list-modules --profile profiles/alt.yml
     """
-    parent = _parent_parser()
+    default_profile = DEFAULT_PROFILE_PATH
+    parent = _parent_parser(default_profile)
 
     parser = argparse.ArgumentParser(
         prog="secaudit",
@@ -175,8 +182,8 @@ def parse_args() -> argparse.Namespace:
     # Глобальный флаг профиля — можно ставить до/после команды
     parser.add_argument(
         "--profile",
-        default="profiles/common/baseline.yml",
-        help="Путь к YAML-профилю (по умолчанию: profiles/common/baseline.yml)",
+        default=default_profile,
+        help=f"Путь к YAML-профилю (по умолчанию: {default_profile})",
     )
 
     subs = parser.add_subparsers(dest="command", required=True, help="Доступные команды")
@@ -225,7 +232,10 @@ def parse_args() -> argparse.Namespace:
         help="Каталог для сохранения выводов команд (улики)."
     )
 
-    return parser.parse_args()
+    args = parser.parse_args()
+    if not hasattr(args, "profile"):
+        args.profile = default_profile
+    return args
 
 
 # ──────────────────────────────────────────────────────────────────────────────
