@@ -39,8 +39,6 @@
   {%- endif -%}
 {%- endmacro %}
 
-{% set FSTEK21 = FSTEK21 | default({}, true) %}
-
 {% macro fstec_codes(details) -%}
   {%- if details and details|length > 0 -%}
     {{ details | map(attribute='code') | reject('equalto', None) | list | join(', ') }}
@@ -104,8 +102,6 @@
 |---|---|---|---|---|---|---|---|
 {% for check in checks %}
   {% set s = norm_status(check) %}
-  {% set fl = check|fstek_details %}
-| {{ loop.index }} | {{ check.name }} | {{ sev_badge(check.severity) }} | {{ fstec_codes(fl) }} |
   `{{ check.assert_type|default('exact') }}` | {{ status_badge(s) }} |
   `{{ format_expect(check.expect) }}` |
   `{{ short_output(check.output) }}` |
@@ -116,8 +112,6 @@
 ---
 
 {# ============== СВОДКА ПО МЕРАМ ФСТЭК №21 (если есть) ============== #}
-{% set fstek_summary = fstek_summary|default([], true) %}
-{% if fstek_summary %}
 ## Сводка по мерам ФСТЭК №21
 | Мера | Описание | Всего | ✅ Pass | ❌ Fail | ⚠️ Error |
 |---|---|---:|---:|---:|---:|
@@ -138,7 +132,6 @@ _Теги ФСТЭК №21 в проверках отсутствуют._
 {% for r in highs %}
 - **{{ r.name }}** (`{{ r.id }}`)
   - Модуль: `{{ r.module }}`
-  - **Меры ФСТЭК №21:** {{ fstec_summary(r|fstek_details) }}
   - Ожидание: `{{ format_expect(r.expect) }}`
   - Assert: `{{ r.assert_type|default('exact') }}`
   {% if r.command %}
@@ -161,23 +154,6 @@ _Критических несоответствий не выявлено._
 {# ======================== КОНТЕКСТ ХОСТА ======================== #}
 ## Системная информация
 {% set host_info = host if host is defined else {} %}
-{% macro host_value(value) -%}
-  {%- if value is mapping -%}
-    {%- set text = value|tojson(ensure_ascii=False) -%}
-  {%- elif value is sequence and (value is not string) -%}
-    {%- set text = value|join(', ') -%}
-  {%- else -%}
-    {%- set text = value|default('—', true) -%}
-  {%- endif -%}
-  {{ (text|string|trim) if text is defined and (text|string|trim) != '' else '—' }}
-{%- endmacro %}
-{% set raw_ip = (host_info.ip if host_info.ip is defined else
-                 (host_info.ipv4 if host_info.ipv4 is defined else
-                 (host_info.address if host_info.address is defined else
-                 (host_info.ip_address if host_info.ip_address is defined else
-                 None)))) %}
-- Хост: **{{ host_info.hostname|default('—') }}**
-- IP-адрес: **{{ host_value(raw_ip) }}**
 - ОС: **{{ host_info.os|default('—') }}**
 - Ядро: **{{ host_info.kernel|default('—') }}**
 - Архитектура: **{{ host_info.arch|default('—') }}**
