@@ -17,7 +17,7 @@ PROFILE_SCHEMA: Dict[str, Any] = {
     "type": "object",
     "required": ["schema_version", "profile_name", "description", "checks"],
     "properties": {
-        "schema_version": {"type": "string", "pattern": r"^1\\.\d+$"},
+        "schema_version": {"type": "string", "pattern": r"^1\.\d+$"},
         "profile_name": {"type": "string", "minLength": 1},
         "description": {"type": "string"},
         "checks": {
