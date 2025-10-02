@@ -3,9 +3,10 @@ from jinja2 import Environment, FileSystemLoader
 from datetime import datetime
 from pathlib import Path
 import json
+import platform
+import socket
 from collections import defaultdict
 from collections.abc import Mapping, Sequence
-
 
 def _normalize_fstek_code(value):
     if value is None:
@@ -79,16 +80,22 @@ def _extract_fstek_codes(result):
 def generate_report(profile: dict, results: list, template_name: str, output_path: str):
     env = Environment(loader=FileSystemLoader("reports/"))
     env.filters["fstek_codes"] = _extract_fstek_codes
+
     template = env.get_template(template_name)
 
     pass_count = sum(1 for r in results if r["result"] == "PASS")
     fail_count = sum(1 for r in results if r["result"] == "FAIL")
     warn_count = sum(1 for r in results if r["result"] == "WARN")
 
+    host_info = _collect_host_metadata(profile, results)
+
     rendered = template.render(
         profile=profile,
         results=results,
         date=datetime.now().strftime("%Y-%m-%d %H:%M"),
+        host=host_info,
+        host_info=host_info,
+        FSTEK21=FSTEK21_DESCRIPTIONS,
         pass_count=pass_count,
         fail_count=fail_count,
         warn_count=warn_count
