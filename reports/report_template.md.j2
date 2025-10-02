@@ -33,9 +33,42 @@
 
 {# Преобразуем tags.fstec в список кодов мер №21 #}
 {% macro fstec_list(r) -%}
-  {%- if r.tags is not defined or not r.tags or ('fstec' not in r.tags) -%}[]{% else -%}
+  {%- if r.tags is not defined or not r.tags or ('fstec' not in r.tags) -%}
+    []
+  {%- else -%}
     {%- set raw = r.tags.fstec -%}
-    {%- if raw is string -%}[{{ raw }}]{% elif raw is sequence -%}{{ raw }}{% else -%}[]{% endif -%}
+    {%- if raw is string -%}
+      {%- set values = [raw] -%}
+    {%- elif raw is sequence -%}
+      {%- set values = raw -%}
+    {%- else -%}
+      {%- set values = [] -%}
+    {%- endif -%}
+    {%- set ns = namespace(items=[]) -%}
+    {%- for item in values -%}
+      {%- if item is mapping -%}
+        {%- if 'code' in item -%}
+          {%- set candidate = item['code'] -%}
+        {%- elif 'id' in item -%}
+          {%- set candidate = item['id'] -%}
+        {%- elif 'name' in item -%}
+          {%- set candidate = item['name'] -%}
+        {%- elif 'value' in item -%}
+          {%- set candidate = item['value'] -%}
+        {%- else -%}
+          {%- set candidate = None -%}
+        {%- endif -%}
+      {%- else -%}
+        {%- set candidate = item -%}
+      {%- endif -%}
+      {%- if candidate is not none -%}
+        {%- set text = candidate|string|trim -%}
+        {%- if text != '' -%}
+          {%- set ns.items = ns.items + [text] -%}
+        {%- endif -%}
+      {%- endif -%}
+    {%- endfor -%}
+    {{ ns.items }}
   {%- endif -%}
 {%- endmacro %}
 
@@ -44,6 +77,22 @@
     {{ value|tojson(ensure_ascii=False) }}
   {%- else -%}
     {{ value|default('') }}
+  {%- endif -%}
+{%- endmacro %}
+
+{% macro fstec_summary(fl) -%}
+  {%- if fl and fl|length > 0 -%}
+    {%- set codes = fl | map('string') | map('trim') | reject('equalto','') | map('upper') | list -%}
+    {%- set ns = namespace(descr=[]) -%}
+    {%- for code in codes -%}
+      {%- set desc = FSTEK21.get(code) -%}
+      {%- if desc is not none -%}
+        {%- set ns.descr = ns.descr + [desc] -%}
+      {%- endif -%}
+    {%- endfor -%}
+    {{ codes|join(', ') }} — {{ ns.descr|join('; ') }}
+  {%- else -%}
+    —
   {%- endif -%}
 {%- endmacro %}
 
@@ -259,10 +308,9 @@ _Теги ФСТЭК №21 в проверках отсутствуют._
 {% for r in highs %}
 - **{{ r.name }}** (`{{ r.id }}`)
   - Модуль: `{{ r.module }}`
-  - Меры №21: 
+  - Меры №21:
     {%- set fl = fstec_list(r) -%}
-    {%- if fl|length > 0 -%} {{ fl|join(', ') }} — {{ fl | map('string') | map('trim') | map('upper') | list | map('attr', FSTEK21) | list | reject('equalto', None) | list | join('; ') }}
-    {%- else -%} — {%- endif -%}
+    {{ fstec_summary(fl) }}
   - Ожидание: `{{ format_expect(r.expect) }}`
   - Assert: `{{ r.assert_type|default('exact') }}`
   - Команда:
@@ -282,10 +330,11 @@ _Критических несоответствий не выявлено._
 
 {# ======================== КОНТЕКСТ ХОСТА ======================== #}
 ## Системная информация
-- Хост: **{{ host.hostname|default('—') }}**
-- ОС: **{{ host.os|default('—') }}**
-- Ядро: **{{ host.kernel|default('—') }}**
-- Архитектура: **{{ host.arch|default('—') }}**
+{% set host_info = host if host is defined else {} %}
+- Хост: **{{ host_info.hostname|default('—') }}**
+- ОС: **{{ host_info.os|default('—') }}**
+- Ядро: **{{ host_info.kernel|default('—') }}**
+- Архитектура: **{{ host_info.arch|default('—') }}**
 - Время генерации: **{{ (now.strftime("%Y-%m-%d %H:%M:%S") if now is defined else timestamp|default('—')) }}**
 
 {# ============================= END ============================= #}
