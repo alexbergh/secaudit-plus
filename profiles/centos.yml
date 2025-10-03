@@ -2,6 +2,11 @@ schema_version: "1.1"
 profile_name: "CentOS/RHEL — усиленный профиль"
 description: "Жёсткий аудит безопасности для CentOS/RHEL-подобных систем. Совместим с SecAudit++."
 
+meta:
+  fstec: "https://fstec.ru/normativnye-dokumenty/prikazy/239"
+  cis: "https://www.cisecurity.org/benchmark/red_hat_enterprise_linux/"
+  stig: "https://public.cyber.mil/stigs/downloads/"
+
 checks:
   # ───────────────────────────── SSH: базовая политика доступа ─────────────────────────────
   # ИЗМЕНЕНО: Все проверки SSH заменены на 'sshd -T' для анализа активной, а не файловой конфигурации.
