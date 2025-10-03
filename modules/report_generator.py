@@ -286,8 +286,11 @@ _HOST_FIELD_MAP = {
     "fqdn": "hostname",
     "computername": "hostname",
     "ip": "ip",
+    "ips": "ip",
     "ip_address": "ip",
     "ipaddress": "ip",
+    "ip_addresses": "ip",
+    "addresses": "ip",
     "address": "ip",
     "ipv4": "ipv4",
     "ipv6": "ipv6",
@@ -305,36 +308,79 @@ _HOST_FIELD_MAP = {
 }
 
 
-def _detect_local_ip():
-    try:
-        hostname = socket.gethostname()
-    except OSError:
-        hostname = None
+def _detect_local_ips():
+    seen = []
 
-    candidates = []
-    if hostname:
+    def add(candidate):
+        if not candidate:
+            return
+        ip = str(candidate).strip()
+        if not ip:
+            return
+        if ip in {"0.0.0.0", "::", "::0"}:
+            return
+        if ip not in seen:
+            seen.append(ip)
+
+    hostnames = set()
+    for provider in (platform.node, socket.gethostname, socket.getfqdn):
         try:
-            _, _, host_ips = socket.gethostbyname_ex(hostname)
-            candidates.extend(host_ips)
+            value = provider()
+        except OSError:
+            value = None
+        if value:
+            hostnames.add(value)
+
+    for hostname in hostnames:
+        try:
+            infos = socket.getaddrinfo(hostname, None)
+        except OSError:
+            continue
+        for info in infos:
+            sockaddr = info[4] if len(info) > 4 else None
+            if not sockaddr:
+                continue
+            ip = sockaddr[0]
+            if not ip:
+                continue
+            add(ip)
+
+    # UDP socket trick to determine outbound addresses without sending traffic.
+    udp_targets = (
+        (socket.AF_INET, ("8.8.8.8", 80)),
+        (socket.AF_INET6, ("2001:4860:4860::8888", 80)),
+    )
+
+    for family, target in udp_targets:
+        try:
+            sock = socket.socket(family, socket.SOCK_DGRAM)
+        except OSError:
+            continue
+        try:
+            sock.connect(target)
+            sockaddr = sock.getsockname()
+            if sockaddr:
+                add(sockaddr[0])
         except OSError:
             pass
+        finally:
+            try:
+                sock.close()
+            except OSError:
+                pass
 
-    try:
-        candidates.append(socket.gethostbyname("localhost"))
-    except OSError:
-        pass
+    if not seen:
+        try:
+            localhost_ip = socket.gethostbyname("localhost")
+        except OSError:
+            localhost_ip = None
+        if localhost_ip:
+            add(localhost_ip)
 
-    for ip in candidates:
-        if not ip:
-            continue
-        if ip.startswith("127.") or ip == "::1":
-            continue
-        return ip
-
-    return candidates[0] if candidates else None
+    return seen
 
 
-def _collect_host_metadata(profile, results):
+def collect_host_metadata(profile, results):
     info = {}
 
     def merge_mapping(data):
@@ -390,12 +436,37 @@ def _collect_host_metadata(profile, results):
         if arch_candidate:
             info.setdefault("arch", arch_candidate)
 
-    if "ip" not in info and "ipv4" not in info:
-        detected_ip = _detect_local_ip()
-        if detected_ip:
-            info.setdefault("ip", detected_ip)
+    raw_ip_values = []
+    for key in ("ip", "ips", "ip_address", "ipaddress", "ip_addresses", "addresses", "address"):
+        value = info.get(key)
+        if not value:
+            continue
+        if isinstance(value, (str, bytes)):
+            raw_ip_values.append(value)
+        elif isinstance(value, Sequence) and not isinstance(value, (str, bytes)):
+            raw_ip_values.extend(value)
+
+    detected_ips = _detect_local_ips()
+    merged_ips = []
+    for candidate in list(raw_ip_values) + detected_ips:
+        if not candidate:
+            continue
+        ip = str(candidate).strip()
+        if not ip:
+            continue
+        if ip in {"0.0.0.0", "::", "::0"}:
+            continue
+        if ip not in merged_ips:
+            merged_ips.append(ip)
+
+    if merged_ips:
+        info["ip"] = merged_ips if len(merged_ips) > 1 else merged_ips[0]
 
     return info
+
+
+def _collect_host_metadata(profile, results):
+    return collect_host_metadata(profile, results)
 
 def _json_default(value):
     if isinstance(value, (datetime, date)):
@@ -414,7 +485,13 @@ def _tojson_filter(value, ensure_ascii=False):
     return json.dumps(value, ensure_ascii=ensure_ascii, default=_json_default)
 
 
-def generate_report(profile: dict, results: list, template_name: str, output_path: str):
+def generate_report(
+    profile: dict,
+    results: list,
+    template_name: str,
+    output_path: str,
+    host_info: dict | None = None,
+):
     env = Environment(loader=FileSystemLoader("reports/"))
     env.filters["fstek_codes"] = _extract_fstek_codes
     env.filters["fstek_details"] = _fstek_details
@@ -428,7 +505,7 @@ def generate_report(profile: dict, results: list, template_name: str, output_pat
     error_count = sum(1 for r in results if _canonical_status(r) == "ERROR")
     other_count = total_count - pass_count - fail_count - warn_count - error_count
 
-    host_info = _collect_host_metadata(profile, results)
+    host_info = host_info or collect_host_metadata(profile, results)
     fstek_summary = _aggregate_fstek_summary(results)
     high_findings = _collect_high_findings(results)
 

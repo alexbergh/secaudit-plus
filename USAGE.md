@@ -138,7 +138,7 @@ secaudit --profile profiles/alt.yml audit --fail-level medium
 - `results/report.json` — полный список проверок.
 - `results/report_grouped.json` — сгруппированные результаты.
 - `results/report.md` — Markdown-отчёт.
-- `results/report.html` — HTML-отчёт с аккордеонами по модулям.
+- `results/report_<hostname>_<datetime>.html` — HTML-отчёт с аккордеонами по модулям (имя хоста и дата в названии).
 
 ##  Пример YAML-профиля
 ```yaml

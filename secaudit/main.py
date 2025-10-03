@@ -1,7 +1,9 @@
 # secaudit/main.py
 from pathlib import Path
+from datetime import datetime
 import sys
 import json
+import re
 
 from modules.cli import (
     parse_args,
@@ -12,7 +14,11 @@ from modules.cli import (
 )
 from modules.os_detect import detect_os
 from modules.audit_runner import load_profile, run_checks
-from modules.report_generator import generate_report, generate_json_report
+from modules.report_generator import (
+    generate_report,
+    generate_json_report,
+    collect_host_metadata,
+)
 from utils.logger import log_info, log_warn, log_pass, log_fail
 
 # Валидация профиля по схеме
@@ -38,6 +44,17 @@ def _resolve_profile_path(cli_profile: str | None) -> str:
 
     log_warn(f"Профиль для {os_id} не найден. Использую profiles/common/baseline.yml")
     return "profiles/common/baseline.yml"
+
+
+def _sanitize_filename_component(raw: str | None, fallback: str = "host") -> str:
+    if raw is None:
+        raw = ""
+    text = str(raw).strip()
+    if not text:
+        text = fallback
+    sanitized = re.sub(r"[^A-Za-z0-9._-]+", "_", text)
+    sanitized = sanitized.strip("._-")
+    return sanitized or fallback
 
 
 def _print_and_exit_validation_errors(profile_path: str, errors: list[str], strict_exit_code: int = 2) -> None:
@@ -155,9 +172,27 @@ def main():
             else:
                 log_warn(f"{name} → {out}")
 
+        # Метаданные хоста для отчётов и имени файла
+        host_info = collect_host_metadata(profile, results)
+        hostname_component = _sanitize_filename_component(host_info.get("hostname"))
+        date_component = datetime.now().strftime("%Y%m%d_%H%M%S")
+        html_report_path = Path("results") / f"report_{hostname_component}_{date_component}.html"
+
         # Генерируем отчёты (Markdown и HTML)
-        generate_report(profile, results, "report_template.md.j2", "results/report.md")
-        generate_report(profile, results, "report_template.html.j2", "results/report.html")
+        generate_report(
+            profile,
+            results,
+            "report_template.md.j2",
+            "results/report.md",
+            host_info=host_info,
+        )
+        generate_report(
+            profile,
+            results,
+            "report_template.html.j2",
+            str(html_report_path),
+            host_info=host_info,
+        )
 
         # Политика завершения по --fail-level / --fail-on-undef
         fail_level = getattr(args, "fail_level", "none")
