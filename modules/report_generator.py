@@ -1,6 +1,6 @@
 # modules/report_generator.py
 from jinja2 import Environment, FileSystemLoader
-from datetime import datetime
+from datetime import datetime, date
 from pathlib import Path
 import json
 import platform
@@ -397,10 +397,28 @@ def _collect_host_metadata(profile, results):
 
     return info
 
+def _json_default(value):
+    if isinstance(value, (datetime, date)):
+        return value.isoformat()
+    if isinstance(value, bytes):
+        try:
+            return value.decode("utf-8")
+        except UnicodeDecodeError:
+            return value.hex()
+    if isinstance(value, set):
+        return sorted(value)
+    return str(value)
+
+
+def _tojson_filter(value, ensure_ascii=False):
+    return json.dumps(value, ensure_ascii=ensure_ascii, default=_json_default)
+
+
 def generate_report(profile: dict, results: list, template_name: str, output_path: str):
     env = Environment(loader=FileSystemLoader("reports/"))
     env.filters["fstek_codes"] = _extract_fstek_codes
     env.filters["fstek_details"] = _fstek_details
+    env.filters["tojson"] = _tojson_filter
     template = env.get_template(template_name)
 
     total_count = len(results)
