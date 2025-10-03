@@ -338,6 +338,36 @@ def _apply_assert(stdout: str, rc: int, expect: Any, assert_type: str, rc_ok: Tu
             return "PASS", f"{actual} <= {threshold}"
         return "FAIL", f"{actual} > {threshold}"
 
+    if assert_type == "set_allowlist":
+        if expect in (None, ""):
+            return "FAIL", "set_allowlist requires file path"
+        allowlist_path = Path(str(expect)).expanduser()
+        if not allowlist_path.exists():
+            return "FAIL", f"allowlist not found: {allowlist_path}"
+        try:
+            allowed_raw = allowlist_path.read_text(encoding="utf-8")
+        except OSError as exc:  # pragma: no cover - defensive
+            return "FAIL", f"allowlist read error: {exc}"
+        allowed = {
+            line.strip()
+            for line in allowed_raw.splitlines()
+            if line.strip() and not line.lstrip().startswith("#")
+        }
+        actual = {line.strip() for line in out.splitlines() if line.strip()}
+        unexpected = sorted(actual - allowed)
+        if unexpected:
+            preview = ", ".join(unexpected[:5])
+            if len(unexpected) > 5:
+                preview += ", …"
+            return "FAIL", f"unexpected entries: {preview}"
+        missing = sorted(allowed - actual)
+        if missing:
+            preview = ", ".join(missing[:5])
+            if len(missing) > 5:
+                preview += ", …"
+            return "PASS", f"subset (missing: {preview})"
+        return "PASS", "allowlist match"
+
     return "FAIL", f"unsupported assert_type '{assert_type}'"
 
 

@@ -74,6 +74,21 @@ def test_apply_assert_jsonpath_contains_and_bad_path():
     assert "bad jsonpath" in reason
 
 
+def test_apply_assert_set_allowlist(tmp_path: Path):
+    allowlist = tmp_path / "allow.txt"
+    allowlist.write_text("alpha\nbeta\n#comment\n", encoding="utf-8")
+
+    stdout = "alpha\nbeta\n"
+    status, reason = _apply_assert(stdout, 0, str(allowlist), "set_allowlist", (0,))
+    assert status == "PASS"
+    assert "allowlist" in reason.lower() or "subset" in reason.lower()
+
+    stdout = "alpha\ngamma\n"
+    status, reason = _apply_assert(stdout, 0, str(allowlist), "set_allowlist", (0,))
+    assert status == "FAIL"
+    assert "unexpected" in reason
+
+
 def test_parse_tag_filters_roundtrip():
     filters = parse_tag_filters(["FSTEC=УПД.7", "cis=5.2"])
     assert filters == {"fstec": "упд.7", "cis": "5.2"}
