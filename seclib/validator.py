@@ -56,6 +56,7 @@ PROFILE_SCHEMA: Dict[str, Any] = {
                             "jsonpath",
                             "version_gte",
                             "int_lte",
+                            "set_allowlist",
                         ],
                     },
                     "severity": {
