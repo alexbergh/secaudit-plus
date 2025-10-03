@@ -67,6 +67,10 @@ PROFILE_SCHEMA: Dict[str, Any] = {
                             ]
                         },
                     },
+                    "meta": {
+                        "type": "object",
+                        "additionalProperties": True,
+                    },
                     "timeout": {"type": "integer", "minimum": 1, "maximum": 600},
                     "rc_ok": {
                         "type": "array",
