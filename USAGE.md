@@ -39,6 +39,34 @@ secaudit-core/
 secaudit [GLOBAL OPTIONS] <command> [OPTIONS]
 ```
 
+## Специализированные профили и классы ФСТЭК
+
+SecAudit-core поставляется с готовыми профилями для разных семейств ОС и классов защищённости:
+
+| Профиль | Файл | Основные проверки | Рекомендованный класс |
+|---------|------|-------------------|-----------------------|
+| Базовый Linux | `profiles/base-linux.yml` | PAM, аудит, фаервол | К4–К3 |
+| Astra Linux 1.7 КСЗ/Киоск-2 | `profiles/astra-1.7-ksz.yml` | PAM, КСЗ, Киоск-2 | К1–К2 |
+| ALT 8 СП | `profiles/alt-8sp.yml` | iptables, ГОСТ, dm-secdel | К2 |
+| РЕД ОС 7.3/8 | `profiles/redos-7.3-8.yml` | лимиты, монтирование, firewall | К3 |
+| SN LSP | `profiles/snlsp.yml` | службы, политики, носители | К1 |
+
+Каждый профиль снабжён блоком `meta` с прямыми ссылками на нормативные документы и `tags` с конкретными пунктами требований. Проверки объединены в модули (`system`, `network`, `services`, `integrity`, `media`, `snlsp` и др.) и используют расширенные типы проверок (`regexp`, `jsonpath`, `exit_code`).
+
+### Быстрая проверка профилей
+
+```bash
+# Проверка синтаксиса
+python3 main.py validate --profile profiles/base-linux.yml
+python3 main.py validate --profile profiles/astra-1.7-ksz.yml
+python3 main.py validate --profile profiles/alt-8sp.yml
+python3 main.py validate --profile profiles/redos-7.3-8.yml
+python3 main.py validate --profile profiles/snlsp.yml
+
+# Запуск аудита (пример)
+python3 main.py audit --profile profiles/snlsp.yml --fail-level high
+```
+
 ##  CLI команды SecAudit++
 
 ###  Глобальные опции
