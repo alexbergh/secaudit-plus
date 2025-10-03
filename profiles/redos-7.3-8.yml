@@ -1,0 +1,125 @@
+schema_version: "1.1"
+profile_name: "РЕД ОС 7.3/8 — профиль лимитов и сетевой защиты"
+description: "Контроль лимитов пользователей, параметров монтирования и сетевого экрана для РЕД ОС 7.3/8."
+
+meta:
+  fstec: "https://fstec.ru/normativnye-dokumenty/prikazy/239"
+  vendor: "https://redos.red-soft.ru/product/docs"
+  firewall: "https://docs.red-soft.ru/display/RDOC/RED+OS+7.3+Security"
+
+checks:
+  # ─────────────── Лимиты пользователей ───────────────
+  - id: redos_limits_core
+    name: "limits.conf: * hard core 0"
+    module: "system"
+    command: |
+      grep -RhsE '^\*\s+hard\s+core\s+0' /etc/security/limits.conf /etc/security/limits.d 2>/dev/null || true
+    expect: "* hard core 0"
+    assert_type: "contains"
+    severity: "medium"
+    tags:
+      fstec: ["ИАФ.9"]
+      vendor: "RED OS 7.3 Admin Guide §5.3"
+      firewall: "—"
+
+  - id: redos_limits_nproc
+    name: "limits.conf: ограничение процессов не менее 1024"
+    module: "system"
+    command: |
+      grep -RhsE '^\*\s+hard\s+nproc\s+[1-9][0-9]{3,}' /etc/security/limits.conf /etc/security/limits.d 2>/dev/null || true
+    expect: "nproc"
+    assert_type: "contains"
+    severity: "low"
+    tags:
+      fstec: ["ИАФ.9"]
+      vendor: "RED OS 7.3 Admin Guide §5.3"
+      firewall: "—"
+
+  # ─────────────── Параметры монтирования ───────────────
+  - id: redos_tmp_mount
+    name: "/tmp смонтирован с nodev,nosuid,noexec"
+    module: "fs"
+    command: |
+      python3 - <<'PY'
+      import json, subprocess
+      from shlex import split
+      opts = ""
+      try:
+          opts = subprocess.check_output(split('findmnt -no OPTIONS /tmp'), stderr=subprocess.DEVNULL, text=True).strip().lower()
+      except Exception:
+          opts = ""
+      secure = all(flag in opts.split(',') for flag in ('nodev', 'nosuid', 'noexec'))
+      print(json.dumps({'tmp_secure': secure, 'opts': opts}))
+      PY
+    expect:
+      path: "$.tmp_secure"
+      value: true
+    assert_type: "jsonpath"
+    severity: "high"
+    tags:
+      fstec: ["ЗНИ.4"]
+      vendor: "RED OS 7.3 Security Guide §4.2"
+      firewall: "—"
+
+  - id: redos_var_tmp_bind
+    name: "/var/tmp связан с /tmp"
+    module: "fs"
+    command: "findmnt -no SOURCE /var/tmp 2>/dev/null || true"
+    expect: "^/tmp$"
+    assert_type: "regexp"
+    severity: "medium"
+    tags:
+      fstec: ["ЗНИ.4"]
+      vendor: "RED OS 8 Admin Guide §4.2"
+      firewall: "—"
+
+  # ─────────────── Сетевой экран ───────────────
+  - id: redos_firewall_drop
+    name: "RED Firewall: политика DROP по умолчанию"
+    module: "network"
+    command: |
+      if command -v nft >/dev/null 2>&1; then
+        nft list ruleset | grep -E 'hook (input|forward|output).*policy drop' | sort -u | wc -l
+      elif command -v iptables >/dev/null 2>&1; then
+        iptables -S | grep -E '^-P (INPUT|FORWARD|OUTPUT) DROP' | wc -l
+      else
+        echo 0
+      fi
+    expect: "^([3-9]|[1-9][0-9]+)$"
+    assert_type: "regexp"
+    severity: "high"
+    tags:
+      fstec: ["ЗИС.17"]
+      vendor: "RED OS Firewall Guide §3.1"
+      firewall: "RED OS Firewall Guide §3.1"
+
+  - id: redos_firewall_service
+    name: "redwall или firewalld запущены"
+    module: "network"
+    command: |
+      if systemctl is-active --quiet redwall 2>/dev/null; then
+        echo redwall
+      elif systemctl is-active --quiet firewalld 2>/dev/null; then
+        echo firewalld
+      else
+        echo none
+      fi
+    expect: "^(redwall|firewalld)$"
+    assert_type: "regexp"
+    severity: "medium"
+    tags:
+      fstec: ["ЗИС.17"]
+      vendor: "RED OS Firewall Guide §2.4"
+      firewall: "RED OS Firewall Guide §2.4"
+
+  - id: redos_firewall_rules_backup
+    name: "Конфигурация фаервола сохранена в /etc/redwall"
+    module: "network"
+    command: "test -f /etc/redwall/rules.conf"
+    expect: 0
+    assert_type: "exit_code"
+    severity: "medium"
+    tags:
+      fstec: ["ЗИС.17"]
+      vendor: "RED OS Firewall Guide §4.1"
+      firewall: "RED OS Firewall Guide §4.1"

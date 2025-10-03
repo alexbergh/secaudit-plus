@@ -1,0 +1,164 @@
+schema_version: "1.1"
+profile_name: "Astra Linux 1.7 — профиль КСЗ и Киоск-2"
+description: "Контроль выполнения требований КСЗ Astra Linux 1.7 с акцентом на PAM, комплекс защиты и Киоск-2."
+
+meta:
+  fstec: "https://fstec.ru/normativnye-dokumenty/prikazy/239"
+  vendor: "https://wiki.astralinux.ru/display/AK/Astra+Linux+Special+Edition+1.7"
+  kiosk: "https://downloads.astralinux.ru/documents/ALSE17/ALSE17_Kiosk2_Admin.pdf"
+
+checks:
+  # ─────────────── PAM и аутентификация ───────────────
+  - id: astra17_pam_tally2
+    name: "PAM: pam_tally2 включён для блокировок входа"
+    module: "system"
+    command: "grep -RhsE 'pam_tally2.so.*deny=([3-9]|[1-9][0-9])' /etc/pam.d/system-auth /etc/pam.d/common-auth 2>/dev/null || true"
+    expect: "pam_tally2.so"
+    assert_type: "contains"
+    severity: "high"
+    tags:
+      fstec: ["ИАФ.4", "ИАФ.5"]
+      vendor: "ALSE17 Admin Guide §6.4"
+      kiosk: "—"
+
+  - id: astra17_pam_twofactor
+    name: "PAM: проверка наличия второго фактора (pam_u2f или pam_google_authenticator)"
+    module: "system"
+    command: "grep -RhsE 'pam_(u2f|google_authenticator).so' /etc/pam.d/ 2>/dev/null | head -n1"
+    expect: "pam_"
+    assert_type: "contains"
+    severity: "medium"
+    tags:
+      fstec: ["ИАФ.8"]
+      vendor: "ALSE17 Admin Guide §6.7"
+      kiosk: "—"
+
+  # ─────────────── Контроль КСЗ ───────────────
+  - id: astra17_ksz_packages
+    name: "КСЗ: пакеты astralinux-ksz установлены"
+    module: "integrity"
+    command: "dpkg-query -W -f='${Status}\n' astralinux-ksz-core 2>/dev/null"
+    expect: "install ok installed"
+    assert_type: "contains"
+    severity: "high"
+    tags:
+      fstec: ["ЗИС.1", "ЗИС.5"]
+      vendor: "ALSE17 KSZ §2.1"
+      kiosk: "—"
+
+  - id: astra17_ksz_policy_json
+    name: "КСЗ: базовая политика присутствует"
+    module: "integrity"
+    command: |
+      python3 - <<'PY'
+      import json, os
+      path = "/etc/astralinux/ksz/policy.json"
+      data = {"policy_exists": os.path.isfile(path)}
+      if os.path.isfile(path):
+          data["size"] = os.path.getsize(path)
+      print(json.dumps(data))
+      PY
+    expect:
+      path: "$.policy_exists"
+      value: true
+    assert_type: "jsonpath"
+    severity: "high"
+    tags:
+      fstec: ["ЗИС.5"]
+      vendor: "ALSE17 KSZ §3.2"
+      kiosk: "—"
+
+  - id: astra17_dm_integrity
+    name: "dm-integrity активирован для защищённых томов"
+    module: "integrity"
+    command: "grep -RhsE 'integrity' /etc/crypttab 2>/dev/null || true"
+    expect: "integrity"
+    assert_type: "contains"
+    severity: "medium"
+    tags:
+      fstec: ["ЗИС.8"]
+      vendor: "ALSE17 KSZ §4.1"
+      kiosk: "—"
+
+  # ─────────────── Киоск-2 ───────────────
+  - id: astra17_kiosk_service
+    name: "Киоск-2: сервис kiosk2.service активен"
+    module: "kiosk"
+    command: "systemctl is-active kiosk2.service 2>/dev/null || true"
+    expect: "active"
+    assert_type: "exact"
+    severity: "high"
+    tags:
+      fstec: ["УПД.2"]
+      vendor: "ALSE17 Kiosk2 Admin §3.1"
+      kiosk: "ALSE17 Kiosk2 Admin §3.1"
+
+  - id: astra17_kiosk_profile
+    name: "Киоск-2: профиль заблокирован (Lockdown=true)"
+    module: "kiosk"
+    command: "grep -E '^Lockdown=' /etc/kiosk2/profile.ini 2>/dev/null || true"
+    expect: "Lockdown=true"
+    assert_type: "exact"
+    severity: "medium"
+    tags:
+      fstec: ["УПД.3"]
+      vendor: "ALSE17 Kiosk2 Admin §4.2"
+      kiosk: "ALSE17 Kiosk2 Admin §4.2"
+
+  - id: astra17_kiosk_allowed_apps
+    name: "Киоск-2: список разрешённых приложений не пуст"
+    module: "kiosk"
+    command: |
+      python3 - <<'PY'
+      import configparser, json
+      cfg = configparser.ConfigParser()
+      cfg.read("/etc/kiosk2/profile.ini")
+      apps = []
+      if cfg.has_option("Applications", "Allow"):
+          apps = [a.strip() for a in cfg.get("Applications", "Allow").split(',') if a.strip()]
+      print(json.dumps({"apps": apps, "has_apps": bool(apps)}))
+      PY
+    expect:
+      path: "$.has_apps"
+      value: true
+    assert_type: "jsonpath"
+    severity: "medium"
+    tags:
+      fstec: ["УПД.3"]
+      vendor: "ALSE17 Kiosk2 Admin §4.4"
+      kiosk: "ALSE17 Kiosk2 Admin §4.4"
+
+  # ─────────────── Службы безопасности ───────────────
+  - id: astra17_apparmor_enforced
+    name: "AppArmor профили в режиме enforce"
+    module: "services"
+    command: |
+      if command -v aa-status >/dev/null 2>&1; then
+        aa-status 2>/dev/null | grep -i 'profiles are in enforce mode' || true
+      else
+        echo ""
+      fi
+    expect: "profiles are in enforce mode"
+    assert_type: "contains"
+    severity: "medium"
+    tags:
+      fstec: ["ЗИС.3"]
+      vendor: "ALSE17 Admin Guide §8.2"
+      kiosk: "—"
+
+  - id: astra17_secureboot
+    name: "Secure Boot включён (mokutil)"
+    module: "boot"
+    command: |
+      if command -v mokutil >/dev/null 2>&1; then
+        mokutil --sb-state 2>/dev/null | grep -iq enabled && echo enabled || echo disabled
+      else
+        echo disabled
+      fi
+    expect: "enabled"
+    assert_type: "exact"
+    severity: "medium"
+    tags:
+      fstec: ["ЗИС.18"]
+      vendor: "ALSE17 Admin Guide §9.1"
+      kiosk: "—"

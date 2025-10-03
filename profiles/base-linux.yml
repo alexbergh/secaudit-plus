@@ -1,0 +1,159 @@
+schema_version: "1.1"
+profile_name: "Базовый профиль Linux"
+description: "Минимальный набор проверок для типовых GNU/Linux систем перед сертификацией ФСТЭК."
+
+meta:
+  fstec: "https://fstec.ru/normativnye-dokumenty/prikazy/239"
+  goskz: "https://docs.cntd.ru/document/1200138605"
+  cis: "https://www.cisecurity.org/benchmark/linux"
+
+checks:
+  # ─────────────── Системная политика аутентификации ───────────────
+  - id: base_pam_faillock
+    name: "PAM: faillock активирован и блокирует после 5 попыток"
+    module: "system"
+    command: "grep -RhsE 'deny=([1-9][0-9]*)' /etc/security/faillock.conf /etc/pam.d 2>/dev/null | head -n1"
+    expect: "deny=5"
+    assert_type: "contains"
+    severity: "high"
+    tags:
+      fstec: ["ИАФ.1", "ИАФ.4"]
+      cis: "5.4.2"
+      goskz: "5.3.2"
+
+  - id: base_pam_password_quality
+    name: "PAM: pam_pwquality требует сложные пароли"
+    module: "system"
+    command: "grep -RhsE 'pam_pwquality.so.*(minlen|ucredit|lcredit|dcredit)' /etc/pam.d/ 2>/dev/null | head -n1"
+    expect: "pam_pwquality.so"
+    assert_type: "contains"
+    severity: "medium"
+    tags:
+      fstec: ["ИАФ.6"]
+      cis: "5.4.1"
+      goskz: "5.3.3"
+
+  - id: base_login_defs
+    name: "Политика смены пароля: PASS_MAX_DAYS ≤ 90"
+    module: "system"
+    command: "awk '$1==\"PASS_MAX_DAYS\"{print $2}' /etc/login.defs 2>/dev/null"
+    expect: "^([1-8]?[0-9]|90)$"
+    assert_type: "regexp"
+    severity: "medium"
+    tags:
+      fstec: ["ИАФ.7"]
+      cis: "5.6.1"
+      goskz: "5.3.5"
+
+  # ─────────────── Контроль целостности и аудит ───────────────
+  - id: base_auditd_service
+    name: "auditd включён и активен"
+    module: "integrity"
+    command: "systemctl is-active auditd 2>/dev/null || true"
+    expect: "active"
+    assert_type: "exact"
+    severity: "high"
+    tags:
+      fstec: ["ЗИС.6"]
+      cis: "8.2"
+      goskz: "7.4.1"
+
+  - id: base_audit_rules
+    name: "auditd: контроль попыток изменения /etc/passwd"
+    module: "integrity"
+    command: "auditctl -l 2>/dev/null | grep -E -- '-w /etc/passwd -p wa' || true"
+    expect: "-w /etc/passwd -p wa"
+    assert_type: "contains"
+    severity: "high"
+    tags:
+      fstec: ["ЗИС.6", "УПД.5"]
+      cis: "4.1.3"
+      goskz: "7.4.3"
+
+  - id: base_aide_db
+    name: "AIDE инициализирован (наличие БД)"
+    module: "integrity"
+    command: "test -f /var/lib/aide/aide.db.gz"
+    expect: 0
+    assert_type: "exit_code"
+    severity: "medium"
+    tags:
+      fstec: ["ЗИС.5"]
+      cis: "5.3.1"
+      goskz: "7.3.2"
+
+  # ─────────────── Сетевые политики ───────────────
+  - id: base_firewall_default_deny
+    name: "Брандмауэр: политика DROP по умолчанию"
+    module: "network"
+    command: |
+      if command -v nft >/dev/null 2>&1; then
+        nft list ruleset | grep -E 'hook (input|forward|output).*policy drop' | sort -u | wc -l
+      elif command -v iptables >/dev/null 2>&1; then
+        iptables -S | grep -E '^-P (INPUT|FORWARD|OUTPUT) DROP' | wc -l
+      else
+        echo 0
+      fi
+    expect: "^([3-9]|[1-9][0-9]+)$"
+    assert_type: "regexp"
+    severity: "high"
+    tags:
+      fstec: ["ЗИС.17"]
+      cis: "3.6"
+      goskz: "6.2.1"
+
+  - id: base_firewall_service
+    name: "firewalld/nftables запущен"
+    module: "network"
+    command: |
+      if systemctl is-active --quiet firewalld 2>/dev/null; then
+        echo firewalld
+      elif systemctl is-active --quiet nftables 2>/dev/null; then
+        echo nftables
+      else
+        echo none
+      fi
+    expect: "^(firewalld|nftables)$"
+    assert_type: "regexp"
+    severity: "medium"
+    tags:
+      fstec: ["ЗИС.17"]
+      cis: "3.6.2"
+      goskz: "6.2.3"
+
+  - id: base_sshd_banner
+    name: "SSH баннер предупреждения задан"
+    module: "network"
+    command: "sshd -T 2>/dev/null | grep -i '^banner' | awk '{print $2}'"
+    expect: '^/etc/issue(\.net)?$'
+    assert_type: "regexp"
+    severity: "low"
+    tags:
+      fstec: ["УПД.2"]
+      cis: "5.2.18"
+      goskz: "6.1.4"
+
+  # ─────────────── Мониторинг и журналирование ───────────────
+  - id: base_journald_persistent
+    name: "journald: Storage=persistent"
+    module: "logging"
+    command: "grep -E '^Storage=' /etc/systemd/journald.conf 2>/dev/null"
+    expect: "Storage=persistent"
+    assert_type: "exact"
+    severity: "medium"
+    tags:
+      fstec: ["АНЗ.5"]
+      cis: "4.2.2"
+      goskz: "7.1.4"
+
+  - id: base_logrotate_conf
+    name: "logrotate: политики ротации ≤ 7 дней"
+    module: "logging"
+    command: "grep -RhsE '^[[:space:]]*(daily|weekly)' /etc/logrotate.d/ /etc/logrotate.conf 2>/dev/null | sed -E 's/^[[:space:]]+//' | head -n1"
+    expect: "^(daily|weekly)$"
+    assert_type: "regexp"
+    severity: "low"
+    tags:
+      fstec: ["АНЗ.3"]
+      cis: "4.3"
+      goskz: "7.2.2"
