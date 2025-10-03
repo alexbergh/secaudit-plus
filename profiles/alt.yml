@@ -2,6 +2,11 @@ schema_version: "1.1"
 profile_name: "Alt Linux SP — расширенный профиль (с астра-спецификой)"
 description: "Расширенный аудит безопасности для Alt Linux (СП/Server) с жёсткими SSH, PAM, journald, sysctl и файловыми политиками"
 
+meta:
+  fstec: "https://fstec.ru/normativnye-dokumenty/prikazy/239"
+  cis: "https://www.cisecurity.org/benchmark/linux/"
+  stig: "https://public.cyber.mil/stigs/downloads/"
+
 checks:
   # ─────────────── SSH: базовая политика доступа ───────────────
   # ИЗМЕНЕНО: Все проверки SSH заменены на 'sshd -T' для получения точной активной конфигурации.

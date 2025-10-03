@@ -2,6 +2,11 @@ schema_version: "1.1"
 profile_name: "Debian/Ubuntu — усиленный профиль"
 description: "Жёсткий аудит безопасности для Debian/Ubuntu. Совместим с SecAudit++."
 
+meta:
+  fstec: "https://fstec.ru/normativnye-dokumenty/prikazy/239"
+  cis: "https://www.cisecurity.org/benchmark/debian_linux/"
+  stig: "https://public.cyber.mil/stigs/downloads/"
+
 checks:
   # ───────────────────────────── SSH: базовая политика доступа ─────────────────────────────
   - id: check_ssh_root_login

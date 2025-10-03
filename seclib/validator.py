@@ -20,6 +20,10 @@ PROFILE_SCHEMA: Dict[str, Any] = {
         "schema_version": {"type": "string", "pattern": r"^1\.\d+$"},
         "profile_name": {"type": "string", "minLength": 1},
         "description": {"type": "string"},
+        "meta": {
+            "type": "object",
+            "additionalProperties": {"type": "string"},
+        },
         "checks": {
             "type": "array",
             "minItems": 1,
@@ -40,7 +44,7 @@ PROFILE_SCHEMA: Dict[str, Any] = {
                     "name": {"type": "string", "minLength": 1},
                     "module": {"type": "string", "minLength": 1},
                     "command": {"type": "string", "minLength": 1},
-                    "expect": {"type": ["string", "number"]},
+                    "expect": {},
                     "assert_type": {
                         "type": "string",
                         "enum": [
@@ -75,6 +79,37 @@ PROFILE_SCHEMA: Dict[str, Any] = {
                         "maxItems": 8,
                     },
                 },
+                "allOf": [
+                    {
+                        "if": {
+                            "properties": {
+                                "assert_type": {"const": "jsonpath"}
+                            }
+                        },
+                        "then": {
+                            "properties": {
+                                "expect": {
+                                    "type": "object",
+                                    "properties": {
+                                        "path": {
+                                            "type": "string",
+                                            "minLength": 1,
+                                        },
+                                        "value": {},
+                                        "contains": {},
+                                    },
+                                    "required": ["path"],
+                                    "additionalProperties": False,
+                                }
+                            }
+                        },
+                        "else": {
+                            "properties": {
+                                "expect": {"type": ["string", "number"]}
+                            }
+                        },
+                    }
+                ],
                 "additionalProperties": False,
             },
         },
