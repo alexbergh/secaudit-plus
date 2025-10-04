@@ -20,6 +20,16 @@ PROFILE_SCHEMA: Dict[str, Any] = {
         "schema_version": {"type": "string", "pattern": r"^1\.\d+$"},
         "profile_name": {"type": "string", "minLength": 1},
         "description": {"type": "string"},
+        "extends": {
+            "oneOf": [
+                {"type": "string", "minLength": 1},
+                {
+                    "type": "array",
+                    "minItems": 1,
+                    "items": {"type": "string", "minLength": 1},
+                },
+            ]
+        },
         "meta": {
             "type": "object",
             "additionalProperties": {"type": "string"},
