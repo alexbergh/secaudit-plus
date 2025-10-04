@@ -72,6 +72,6 @@ pip install .
 
 ## Документация
 - [Руководство пользователя](USAGE.md)
-- [Статус доработок](docs/profile_engine_enhancements.md)
-- [План расширения](docs/secondary_tail_coverage.md)
+- [Статус доработок](docs/secondary_tail_coverage.md)
+- [План расширения](docs/profile_engine_enhancements.md)
 
