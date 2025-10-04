@@ -209,7 +209,7 @@ def _add_profile_arguments(subparser: argparse.ArgumentParser, *, default_profil
     )
 
 
-def parse_args() -> argparse.Namespace:
+def parse_args(argv: List[str] | None = None) -> argparse.Namespace:
     """
     Глобальный флаг --profile разрешён и до, и после команды.
     Также можно указать путь к профилю последним позиционным аргументом:
@@ -221,10 +221,28 @@ def parse_args() -> argparse.Namespace:
     всегда побеждала.
     """
 
+    if argv is None:
+        argv = sys.argv[1:]
+
     default_profile = DEFAULT_PROFILE_PATH
+
+    info_flags = {"-i", "--info"}
+    if argv and all(arg in info_flags for arg in argv):
+        # Короткий путь: только флаг --info/ -i без дополнительных аргументов.
+        # Возвращаем минимальный namespace, чтобы избежать жалоб argparse на
+        # отсутствие подкоманды в разных окружениях.
+        return argparse.Namespace(info=True, command=None, profile=default_profile)
+
     parser = argparse.ArgumentParser(
         prog="secaudit",
         description="SecAudit++ CLI — запуск аудита, валидация профиля и служебные команды.",
+    )
+
+    parser.add_argument(
+        "-i",
+        "--info",
+        action="store_true",
+        help="Показать сведения о проекте и завершиться.",
     )
 
     parser.add_argument(
@@ -234,7 +252,7 @@ def parse_args() -> argparse.Namespace:
         help=f"Путь к YAML-профилю (по умолчанию: {default_profile})",
     )
 
-    subs = parser.add_subparsers(dest="command", required=True, help="Доступные команды")
+    subs = parser.add_subparsers(dest="command", required=False, help="Доступные команды")
 
     sub_modules = subs.add_parser("list-modules", help="Показать все модули в профиле")
     _add_profile_arguments(sub_modules, default_profile=default_profile)
@@ -302,7 +320,7 @@ def parse_args() -> argparse.Namespace:
     )
     _add_profile_arguments(sub_audit, default_profile=default_profile)
 
-    args = parser.parse_args()
+    args = parser.parse_args(argv)
     profile_from_position = getattr(args, "profile_path", None)
     if profile_from_position is not None:
         args.profile = profile_from_position
@@ -310,6 +328,15 @@ def parse_args() -> argparse.Namespace:
         args.profile = default_profile
     if hasattr(args, "profile_path"):
         delattr(args, "profile_path")
+
+    if getattr(args, "info", False):
+        if getattr(args, "command", None):
+            parser.error("--info нельзя использовать вместе с командами")
+        return args
+
+    if getattr(args, "command", None) is None:
+        parser.print_help()
+        sys.exit(1)
     if getattr(args, "command", None) == "audit":
         try:
             args.vars = parse_kv_pairs(getattr(args, "var", None), option="--var")

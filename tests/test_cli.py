@@ -97,3 +97,13 @@ def test_parse_args_defaults_to_baseline_profile(monkeypatch):
     args = cli.parse_args()
 
     assert args.profile == cli.DEFAULT_PROFILE_PATH
+
+
+def test_parse_args_info_flag_short_circuit(monkeypatch):
+    monkeypatch.setattr(sys, "argv", ["secaudit", "--info"])
+
+    args = cli.parse_args()
+
+    assert args.info is True
+    assert args.command is None
+    assert args.profile == cli.DEFAULT_PROFILE_PATH
