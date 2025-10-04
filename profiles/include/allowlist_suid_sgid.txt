@@ -1,0 +1,16 @@
+# Разрешённые SUID/SGID бинарники по умолчанию.
+# Дополните список для вашей системы и синхронизируйте с политиками безопасности.
+/usr/bin/passwd
+/usr/bin/sudo
+/usr/bin/chage
+/usr/bin/chfn
+/usr/bin/chsh
+/usr/bin/gpasswd
+/usr/bin/newgrp
+/usr/bin/mount
+/usr/bin/umount
+/usr/bin/pkexec
+/usr/bin/at
+/usr/bin/wall
+/usr/sbin/pppd
+/usr/lib/polkit-1/polkit-agent-helper-1
