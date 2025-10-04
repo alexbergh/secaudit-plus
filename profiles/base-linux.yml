@@ -291,9 +291,13 @@ checks:
     name: "auditd: контроль загрузчика (/boot, EFI)"
     module: "integrity"
     command: |
-      auditctl -l 2>/dev/null | grep -E -- '(-w /boot/(grub2/)?grub.cfg -p wa -k (boot|grub)|-w /boot/(grub2/)?grubenv -p wa -k (boot|grub)|-w /efi -p wa -k efi)' || true
+      auditctl -l 2>/dev/null \
+        | grep -E -- '(-w /boot/(grub2/)?grub.cfg -p wa -k (boot|grub)|-w /boot/(grub2/)?grubenv -p wa -k (boot|grub)|-w /efi -p wa -k efi)' || true
     expect: '(?s)(?=.*grub.cfg)(?=.*grubenv)'
     assert_type: "regexp"
+      auditctl -l 2>/dev/null | grep -E -- '-w /(boot|efi) -p wa -k (boot|efi)' || true
+    expect: "-w /boot"
+    assert_type: "contains"
     severity: "high"
     tags:
       fstec: ["ЗИС.6"]
@@ -304,9 +308,13 @@ checks:
     name: "auditd: контроль sudo/su/passwd"
     module: "integrity"
     command: |
-      auditctl -l 2>/dev/null | grep -E -- '(-w /usr/bin/sudo -p xwa -k (privileged|sudo)|-w /bin/su -p xwa -k (privileged|su)|-w /usr/bin/passwd -p xwa -k (privileged|passwd))' || true
+      auditctl -l 2>/dev/null \
+        | grep -E -- '(-w /usr/bin/sudo -p xwa -k (privileged|sudo)|-w /bin/su -p xwa -k (privileged|su)|-w /usr/bin/passwd -p xwa -k (privileged|passwd))' || true
     expect: '(?s)(?=.*sudo)(?=.*su)(?=.*passwd)'
     assert_type: "regexp"
+      auditctl -l 2>/dev/null | grep -E -- '-w /(usr/bin/sudo|bin/su|usr/bin/passwd) -p xwa' || true
+    expect: "/usr/bin/sudo"
+    assert_type: "contains"
     severity: "high"
     tags:
       fstec: ["ЗИС.6"]
@@ -803,6 +811,7 @@ checks:
         | sed -E 's/#.*$//' \
         | awk -F= '/^SystemMaxUse=/{gsub(/[[:space:]]+/,"",$0); print $1"="$2}' \
         | tail -n1
+
     expect: "SystemMaxUse=([1-9][0-9]*)([KMGTP]B?|%)$"
     assert_type: "regexp"
     severity: "medium"
@@ -1090,6 +1099,12 @@ checks:
     module: "network"
     command: |
       for svc in cups.service avahi-daemon.service bluetooth.service ssh-agent.socket; do
+
+- id: base_services_redundant_disabled
+    name: "Лишние службы (CUPS/Avahi) отключены"
+    module: "network"
+    command: |
+      for svc in cups.service avahi-daemon.service bluetooth.service; do
         if systemctl list-unit-files "$svc" >/dev/null 2>&1; then
           state=$(systemctl is-enabled "$svc" 2>/dev/null || echo unknown)
           if ! echo "$state" | grep -Eq '^(disabled|masked)$'; then
