@@ -203,6 +203,52 @@ checks:
     meta:
       reference: "ФСТЭК ИБ.АУ.О.5"
 
+  - id: check_chage_service_accounts_max_days
+    name: "Сервисные аккаунты: срок действия пароля ≤ 90 дней"
+    module: "users"
+    command: |
+      python3 - <<'PY'
+      import os
+      import pwd
+      import subprocess
+
+      offenders = []
+      env = dict(os.environ, LANG="C", LC_ALL="C")
+      locked_shells = {"/usr/sbin/nologin", "/usr/bin/nologin", "/sbin/nologin", "/bin/false"}
+      for entry in pwd.getpwall():
+          if 100 <= entry.pw_uid < 1000 and entry.pw_shell not in locked_shells:
+              try:
+                  output = subprocess.check_output([
+                      "chage", "-l", entry.pw_name
+                  ], text=True, env=env, stderr=subprocess.DEVNULL)
+              except Exception:
+                  continue
+              max_days = None
+              raw_value = ""
+              for line in output.splitlines():
+                  if line.lower().startswith("maximum"):
+                      raw_value = line.split(":", 1)[1].strip() if ":" in line else ""
+                      if raw_value.lower() == "never" or raw_value == "":
+                          max_days = 99999
+                      else:
+                          try:
+                              max_days = int(raw_value.split()[0])
+                          except ValueError:
+                              max_days = 99999
+                      break
+              if max_days is not None and max_days > 90:
+                  offenders.append(f"{entry.pw_name}:{raw_value or max_days}")
+      if offenders:
+          print("\n".join(sorted(offenders)))
+      PY
+    expect: ""
+    assert_type: "exact"
+    severity: "medium"
+    tags:
+      fstec: ["АНЗ.5"]
+    meta:
+      reference: "ФСТЭК ИБ.АУ.О.5"
+
   - id: check_ssh_password_auth_disabled
     name: "SSH: отключена аутентификация по паролю"
     module: "system"
@@ -341,6 +387,95 @@ checks:
     command: "lsblk -rno FSTYPE 2>/dev/null | grep -m1 crypto_LUKS || echo missing"
     expect: "crypto_LUKS"
     assert_type: "contains"
+    severity: "high"
+    tags:
+      fstec: ["АНЗ.2"]
+    meta:
+      reference: "ФСТЭК ИБ.АУ.О.2"
+
+  - id: check_luks_keyslots_pbkdf
+    name: "LUKS: активные keyslot и надёжный PBKDF"
+    module: "fs"
+    command: |
+      python3 - <<'PY'
+      import os
+      import re
+      import subprocess
+
+      def list_luks_devices():
+          try:
+              lsblk = subprocess.check_output(
+                  ["lsblk", "-rno", "NAME,TYPE"], text=True, stderr=subprocess.DEVNULL
+              )
+          except Exception:
+              return []
+          devices = []
+          for line in lsblk.splitlines():
+              parts = line.split()
+              if len(parts) == 2 and parts[1] == "crypto_LUKS":
+                  devices.append(parts[0])
+          return devices
+
+      env = dict(os.environ, LANG="C", LC_ALL="C")
+      issues = []
+      for dev in list_luks_devices():
+          try:
+              dump = subprocess.check_output(
+                  ["cryptsetup", "luksDump", f"/dev/{dev}"],
+                  text=True,
+                  env=env,
+                  stderr=subprocess.DEVNULL,
+              )
+          except Exception:
+              issues.append(f"{dev}:dump_failed")
+              continue
+
+          enabled_slots = 0
+          weak_slots = []
+          current_slot = None
+          slot_lines = []
+          for line in dump.splitlines():
+              if line.startswith("Keyslot "):
+                  if current_slot is not None:
+                      slot_lines.append((current_slot, slot_buffer))
+                  current_slot = line
+                  slot_buffer = []
+              elif current_slot is not None:
+                  slot_buffer.append(line)
+          if current_slot is not None:
+              slot_lines.append((current_slot, slot_buffer))
+
+          for header, body in slot_lines:
+              status_match = re.search(r"Keyslot\s+(\d+):\s+(ENABLED|DISABLED)", header)
+              if not status_match:
+                  continue
+              slot_id, status = status_match.groups()
+              if status != "ENABLED":
+                  continue
+              enabled_slots += 1
+              joined = "\n".join(body)
+              pbkdf_match = re.search(r"PBKDF:\s*([A-Za-z0-9_-]+)", joined)
+              if not pbkdf_match:
+                  weak_slots.append(f"{dev}:keyslot{slot_id}:pbkdf_missing")
+                  continue
+              pbkdf = pbkdf_match.group(1).lower()
+              if pbkdf not in {"argon2id", "argon2i", "pbkdf2"}:
+                  weak_slots.append(f"{dev}:keyslot{slot_id}:pbkdf_{pbkdf}")
+                  continue
+              if pbkdf == "pbkdf2":
+                  iter_match = re.search(r"Iterations:\s*([0-9]+)", joined)
+                  if not iter_match or int(iter_match.group(1)) < 100000:
+                      weak_slots.append(f"{dev}:keyslot{slot_id}:iterations")
+
+          if enabled_slots == 0:
+              issues.append(f"{dev}:no_enabled_keyslots")
+          issues.extend(weak_slots)
+
+      if issues:
+          print("\n".join(sorted(set(issues))))
+      PY
+    expect: ""
+    assert_type: "exact"
     severity: "high"
     tags:
       fstec: ["АНЗ.2"]

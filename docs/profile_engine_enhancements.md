@@ -18,6 +18,9 @@
   chage -l root
   ```
   Повторите `chage -l` для сервисных учётных записей.
+  ```bash
+  awk -F: '($3>=100 && $3<1000){print $1}' /etc/passwd | xargs -r -I{} sh -c 'echo "[{}]"; chage -l {}'
+  ```
 - Базлайн sudoers: запрет `NOPASSWD`, `requiretty` (при необходимости), включённый аудит
   (`Defaults log_output mail_badpass`).
   ```bash
@@ -62,6 +65,10 @@
   lsblk -o NAME,TYPE,FSTYPE
   cryptsetup luksDump /dev/mapper/<volume>
   ```
+
+  Убедитесь, что ключевые слоты (`Keyslot`) активны, а `PBKDF` установлен на `argon2id`/`pbkdf2` с достаточными
+  `Iterations`, и нет отключённых или пустых слотов, требующих закрытия.
+
 
 ### 1.5 Файловые права и временные каталоги
 
@@ -110,6 +117,12 @@
 ### 1.8 Рабочие станции и GUI
 
 - Запрет автологина, скрытие списка пользователей.
+  ```bash
+  grep -E '^(AutomaticLogin|TimedLogin)Enable' /etc/gdm/custom.conf
+  grep -E '^(IncludeAll|EnableManualLogin|greeter-hide-users|greeter-show-manual-login)' /etc/lightdm/lightdm.conf
+  ```
+  Для GDM требуется `AutomaticLoginEnable=false`, `TimedLoginEnable=false` и `IncludeAll=false` (список пользователей скрыт).
+  Для LightDM ожидайте `greeter-hide-users=true` и `greeter-show-manual-login=true`.
 - Политики браузеров (policies.json, WebUSB/WebBluetooth, прокси, DoH).
 
 ### 1.9 Контейнеры/виртуализация
@@ -118,7 +131,15 @@
   ```bash
   ps aux | grep dockerd
   grep -R '"iptables":' /etc/docker/daemon.json
+  docker info --format '{{json .SecurityOptions}}'
+  docker inspect --format '{{.Name}} {{.HostConfig.Privileged}} {{.HostConfig.CapAdd}} {{.Config.Image}}' $(docker ps -q)
+  docker image ls --format '{{.Repository}}:{{.Tag}}' | grep ':latest'
   ```
+  Проверяйте, что `iptables`/`nftables` не отключены, контейнеры не запускаются в `Privileged`, не добавляют
+  лишних capabilities, а образы не используют плавающие теги `:latest` и подписаны согласно политике.
+=======
+  ```
+
 - Контроль libvirt/KVM: аудит файлов ВМ, ограничения к сокетам, профили AppArmor/SELinux.
 
 ### 1.10 Secret Net LSP

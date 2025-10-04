@@ -1132,6 +1132,73 @@ checks:
       cis: "1.8"
       goskz: "5.3.7"
 
+  - id: base_workstation_hide_user_list
+    name: "Графические менеджеры: список пользователей скрыт"
+    module: "workstation"
+    command: |
+      python3 - <<'PY'
+      from pathlib import Path
+
+      def parse_conf(paths):
+          values = {}
+          for path in paths:
+              p = Path(path)
+              if not p.exists():
+                  continue
+              try:
+                  with p.open("r", encoding="utf-8", errors="ignore") as fh:
+                      for line in fh:
+                          line = line.split("#", 1)[0].strip()
+                          if not line or "=" not in line:
+                              continue
+                          key, val = line.split("=", 1)
+                          key = key.strip().lower()
+                          val = val.strip().lower()
+                          values[key] = val
+              except Exception:
+                  continue
+          return values
+
+      gdm_files = [
+          "/etc/gdm/custom.conf",
+          "/etc/gdm3/daemon.conf",
+      ]
+      gdm_present = any(Path(p).exists() for p in gdm_files)
+      gdm_values = parse_conf(gdm_files)
+      lightdm_paths = ["/etc/lightdm/lightdm.conf"]
+      lightdm_dir = Path("/etc/lightdm/lightdm.conf.d")
+      if lightdm_dir.exists():
+          lightdm_paths.extend(sorted(str(p) for p in lightdm_dir.glob("*.conf")))
+      lightdm_present = any(Path(p).exists() for p in lightdm_paths)
+      lightdm_values = parse_conf(lightdm_paths)
+
+      issues = []
+
+      if gdm_present:
+          if gdm_values.get("automaticloginenable") not in {"false", "0", None}:
+              issues.append("gdm:AutomaticLoginEnable")
+          if gdm_values.get("timedloginenable") not in {"false", "0", None}:
+              issues.append("gdm:TimedLoginEnable")
+          if gdm_values.get("includeall") not in {"false", "0"}:
+              issues.append("gdm:IncludeAll")
+
+      if lightdm_present:
+          if lightdm_values.get("greeter-hide-users") not in {"true", "1"}:
+              issues.append("lightdm:greeter-hide-users")
+          if lightdm_values.get("greeter-show-manual-login") not in {"true", "1"}:
+              issues.append("lightdm:greeter-show-manual-login")
+
+      if issues:
+          print("\n".join(sorted(set(issues))))
+      PY
+    expect: ""
+    assert_type: "exact"
+    severity: "low"
+    tags:
+      fstec: ["ИАФ.9"]
+      cis: "1.8"
+      goskz: "5.3.7"
+
   - id: base_browser_policies_present
     name: "Политики браузеров заданы"
     module: "workstation"
@@ -1197,6 +1264,84 @@ checks:
     expect: "^(ok|skipped)$"
     assert_type: "regexp"
     severity: "high"
+    tags:
+      fstec: ["ЗИС.17"]
+      cis: "5.29"
+      goskz: "6.5.1"
+
+  - id: base_docker_no_extra_capabilities
+    name: "Docker: контейнеры не добавляют лишние CapAdd"
+    module: "containers"
+    command: |
+      if command -v docker >/dev/null 2>&1; then
+        ids=$(docker ps -q 2>/dev/null)
+        if [ -z "$ids" ]; then
+          echo ok
+        else
+          info=$(docker inspect --format '{{.Name}} {{json .HostConfig.CapAdd}}' $ids 2>/dev/null)
+          bad=$(echo "$info" | awk '$2!="null" && $2!="[]" {print $0}')
+          if [ -n "$bad" ]; then
+            echo "$bad"
+          else
+            echo ok
+          fi
+        fi
+      else
+        echo skipped
+      fi
+    expect: "^(ok|skipped)$"
+    assert_type: "regexp"
+    severity: "medium"
+    tags:
+      fstec: ["ЗИС.17"]
+      cis: "5.29"
+      goskz: "6.5.1"
+
+  - id: base_docker_no_latest_images
+    name: "Docker: не используются образы с тегом :latest"
+    module: "containers"
+    command: |
+      if command -v docker >/dev/null 2>&1; then
+        images=$(docker image ls --format '{{.Repository}}:{{.Tag}}' 2>/dev/null | grep -E ':latest$')
+        if [ -n "$images" ]; then
+          echo "$images"
+        else
+          echo ok
+        fi
+      else
+        echo skipped
+      fi
+    expect: "^(ok|skipped)$"
+    assert_type: "regexp"
+    severity: "low"
+    tags:
+      fstec: ["ЗИС.17"]
+      cis: "5.29"
+      goskz: "6.5.1"
+
+  - id: base_docker_iptables_enabled
+    name: "Docker: не отключена интеграция с iptables"
+    module: "containers"
+    command: |
+      python3 - <<'PY'
+      import json
+      from pathlib import Path
+
+      path = Path('/etc/docker/daemon.json')
+      if not path.exists():
+          print('skipped')
+      else:
+          try:
+              data = json.loads(path.read_text(encoding='utf-8'))
+          except Exception:
+              print('daemon.json:invalid')
+          else:
+              if data.get('iptables') is False:
+                  print('iptables=false')
+      PY
+    expect: "^(|skipped)$"
+    assert_type: "regexp"
+    severity: "medium"
     tags:
       fstec: ["ЗИС.17"]
       cis: "5.29"
