@@ -228,13 +228,20 @@ def parse_args() -> argparse.Namespace:
     )
 
     parser.add_argument(
+        "-i",
+        "--info",
+        action="store_true",
+        help="Показать сведения о проекте и завершиться.",
+    )
+
+    parser.add_argument(
         "--profile",
         dest="profile",
         default=argparse.SUPPRESS,
         help=f"Путь к YAML-профилю (по умолчанию: {default_profile})",
     )
 
-    subs = parser.add_subparsers(dest="command", required=True, help="Доступные команды")
+    subs = parser.add_subparsers(dest="command", required=False, help="Доступные команды")
 
     sub_modules = subs.add_parser("list-modules", help="Показать все модули в профиле")
     _add_profile_arguments(sub_modules, default_profile=default_profile)
@@ -310,6 +317,15 @@ def parse_args() -> argparse.Namespace:
         args.profile = default_profile
     if hasattr(args, "profile_path"):
         delattr(args, "profile_path")
+
+    if getattr(args, "info", False):
+        if getattr(args, "command", None):
+            parser.error("--info нельзя использовать вместе с командами")
+        return args
+
+    if getattr(args, "command", None) is None:
+        parser.print_help()
+        sys.exit(1)
     if getattr(args, "command", None) == "audit":
         try:
             args.vars = parse_kv_pairs(getattr(args, "var", None), option="--var")

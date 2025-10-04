@@ -95,8 +95,20 @@ def _apply_exit_policy(results: list[dict], fail_level: str, fail_on_undef: bool
     return exit_code
 
 
+def _print_project_info() -> None:
+    print("SecAudit++")
+    print("Alex Hellberg")
+    print("https://github.com/alexbergh/secaudit-core")
+    print("2025")
+    print("Проект распространяется под лицензией GPL-3.0")
+
+
 def main():
     args = parse_args()
+
+    if getattr(args, "info", False):
+        _print_project_info()
+        return
 
     # Определяем профиль
     profile_path = _resolve_profile_path(getattr(args, "profile", None))
