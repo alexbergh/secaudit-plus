@@ -94,6 +94,20 @@ def test_validate_profile_accepts_meta(minimal_check):
     assert is_valid, f"Profile unexpectedly invalid: {errors}"
 
 
+def test_validate_profile_accepts_extends(minimal_check):
+    profile = {
+        "schema_version": "1.1",
+        "profile_name": "Test",
+        "description": "Test profile",
+        "extends": ["../base/linux.yml", "../base/server.yml"],
+        "checks": [minimal_check],
+    }
+
+    is_valid, errors = validate_profile(profile)
+
+    assert is_valid, f"Profile unexpectedly invalid: {errors}"
+
+
 def test_validate_profile_rejects_object_expect_for_non_jsonpath(minimal_check):
     check = minimal_check.copy()
     check["expect"] = {"unsupported": True}
