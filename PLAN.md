@@ -1,33 +1,33 @@
-# Work Plan
+# План работы
 
-## Goals
-- Expand automated coverage for the refactored audit runner and CLI enhancements.
-- Update documentation to describe new CLI flags and profile layout changes.
-- Validate and adjust profiles after the new directory reorganization.
+## Цели
+- Расширить автоматизированное покрытие для переработанного движка аудита и улучшенного CLI.
+- Обновить документацию, чтобы описать новые флаги CLI и изменения структуры профилей.
+- Провести валидацию и корректировку профилей после новой реорганизации директорий.
 
-## Steps
-1. **Review Engine Changes**
-   - Re-read `modules/audit_runner.py` to confirm expectations for extends, variable resolution, allowlist handling, fact caching, and new status values.
-   - Identify critical code paths lacking tests (parallel execution, variable overrides, allowlist comparison, summary scoring, evidence snippets).
+## Шаги
+1. **Изучение изменений движка**
+   - Перечитать `modules/audit_runner.py`, чтобы подтвердить ожидания по работе `extends`, разрешению переменных, обработке allowlist, кешированию фактов и новым статус-значениям.
+   - Определить критические участки кода без тестов (параллельное выполнение, переопределения переменных, сравнение allowlist, итоговое оценивание, фрагменты доказательств).
 
-2. **Add Targeted Tests**
-   - Extend `tests/test_audit_runner.py` with cases that exercise:
-     - Variable substitution from CLI/environment levels.
-     - Profile inheritance via `extends` including deep nesting and override precedence.
-     - Allowlist comparison for SUID/ports rules.
-     - Fact caching by asserting shell commands invoked once.
-     - Parallel executor behaviour (bounded workers, timeout/UNDEF path where feasible).
-   - Introduce CLI tests for `--level`, `--var`, and `--workers` parsing to ensure they feed the runner correctly.
+2. **Добавление целевых тестов**
+   - Расширить `tests/test_audit_runner.py` кейсами для проверки:
+     - Подстановки переменных с уровня CLI/окружения.
+     - Наследования профилей через `extends`, включая глубокую вложенность и приоритет переопределений.
+     - Сравнения allowlist для правил SUID/портов.
+     - Кеширования фактов с проверкой, что shell-команды вызываются однократно.
+     - Поведения параллельного исполнителя (ограничение числа воркеров, обработка таймаута/UNDEF-пути где применимо).
+   - Добавить CLI-тесты для разбора `--level`, `--var` и `--workers`, чтобы убедиться, что они корректно передаются в движок.
 
-3. **Profile Validation & Docs**
-   - Run `secaudit validate` (or equivalent) against reorganized profiles; patch YAML if schema violations occur.
-   - Update `README.md` and `docs/` to highlight new profiles layout, strictness levels, and CLI options.
-   - Ensure `profiles/include/vars_*.env` contain the intended thresholds and mention them in `profiles/README.md` if needed.
+3. **Валидация профилей и документации**
+   - Запустить `secaudit validate` (или эквивалент) на реорганизованных профилях; исправить YAML при наличии нарушений схемы.
+   - Обновить `README.md` и каталог `docs/`, чтобы отразить новую структуру профилей, уровни строгости и опции CLI.
+   - Убедиться, что `profiles/include/vars_*.env` содержат требуемые пороговые значения и при необходимости упомянуты в `profiles/README.md`.
 
-4. **Reporting & Output**
-   - Adjust report templates or add TODOs in docs if modifications are out of scope for this iteration.
-   - Confirm JSON summary structure matches downstream expectations; document changes in README/CHANGELOG if necessary.
+4. **Отчётность и вывод**
+   - Подкорректировать шаблоны отчётов или добавить TODO в документацию, если модификации выходят за рамки текущей итерации.
+   - Проверить, что структура JSON-сводки соответствует требованиям последующих систем; задокументировать изменения в README/CHANGELOG при необходимости.
 
-5. **Verification**
-   - Execute `pytest` and representative `secaudit audit` commands to verify behaviour and capture sample outputs.
-   - Prepare PR summary referencing new tests/docs.
+5. **Проверка**
+   - Выполнить `pytest` и репрезентативные команды `secaudit audit`, чтобы подтвердить поведение и зафиксировать пример выходных данных.
+   - Подготовить описание PR с упоминанием новых тестов и обновлений документации.
