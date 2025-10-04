@@ -9,6 +9,66 @@ meta:
 
 checks:
   # ─────────────── Системная политика аутентификации ───────────────
+  - id: base_shadow_no_empty_passwords
+    name: "/etc/shadow: отсутствуют пустые пароли"
+    module: "system"
+    command: |
+      awk -F: '($2=="" || $2=="!!"){print $1}' /etc/shadow 2>/dev/null
+    expect: ""
+    assert_type: "exact"
+    severity: "high"
+    tags:
+      fstec: ["ИАФ.2"]
+      cis: "5.4.1"
+      goskz: "5.3.1"
+
+  - id: base_system_accounts_shells
+    name: "Системные аккаунты заблокированы (nologin/false)"
+    module: "system"
+    command: |
+      awk -F: '($3<1000 && $1!="root" && $7!="/usr/sbin/nologin" && $7!="/bin/false"){print $1":"$7}' /etc/passwd 2>/dev/null
+    expect: ""
+    assert_type: "exact"
+    severity: "high"
+    tags:
+      fstec: ["ИАФ.4"]
+      cis: "5.4.2"
+      goskz: "5.3.2"
+
+  - id: base_sudo_no_nopasswd
+    name: "sudo: отсутствуют правила с NOPASSWD"
+    module: "system"
+    command: "grep -R --color=never -h 'NOPASSWD' /etc/sudoers /etc/sudoers.d 2>/dev/null | grep -v '^#' || true"
+    expect: ""
+    assert_type: "exact"
+    severity: "medium"
+    tags:
+      fstec: ["ИАФ.5"]
+      cis: "5.3.4"
+      goskz: "5.3.6"
+
+  - id: base_sudo_requiretty_logging
+    name: "sudo: requiretty и аудит попыток"
+    module: "system"
+    command: |
+      systemd-analyze cat-config sudo/sudoers 2>/dev/null \
+        | sed -E 's/#.*$//' \
+        | awk '{$1=$1};1' \
+        | grep -E '^(Defaults\s+requiretty|Defaults\s+log_output|Defaults\s+mail_badpass)' \
+        | awk '{print $1" "$2}' \
+        | sort -u
+    expect: |-
+      Defaults log_output
+      Defaults mail_badpass
+      Defaults requiretty
+    assert_type: "exact"
+    severity: "medium"
+    tags:
+      fstec: ["ИАФ.5"]
+      cis: "5.3.3"
+      goskz: "5.3.6"
+
+  # ─────────────── Системная политика аутентификации ───────────────
   - id: base_pam_faillock
     name: "PAM: faillock активирован и блокирует после 5 попыток"
     module: "system"
@@ -24,9 +84,53 @@ checks:
   - id: base_pam_password_quality
     name: "PAM: pam_pwquality требует сложные пароли"
     module: "system"
-    command: "grep -RhsE 'pam_pwquality.so.*(minlen|ucredit|lcredit|dcredit)' /etc/pam.d/ 2>/dev/null | head -n1"
-    expect: "pam_pwquality.so"
-    assert_type: "contains"
+    command: |
+      systemd-analyze cat-config pwquality.conf 2>/dev/null \
+        | sed -E 's/#.*$//' \
+        | awk '{$1=$1};1' \
+        | grep -iE '^(minlen|maxrepeat|dcredit|ucredit|lcredit|ocredit|difok|enforce_for_root)' \
+        | awk -F= '{print tolower($1)}' \
+        | sort -u
+    expect: |-
+      dcredit
+      difok
+      enforce_for_root
+      lcredit
+      maxrepeat
+      minlen
+      ocredit
+      ucredit
+    assert_type: "exact"
+    severity: "medium"
+    tags:
+      fstec: ["ИАФ.6"]
+      cis: "5.4.1"
+      goskz: "5.3.3"
+
+  - id: base_pam_pwquality_thresholds
+    name: "pam_pwquality: длина ≥12 и разнообразие символов"
+    module: "system"
+    command: |
+      systemd-analyze cat-config pwquality.conf 2>/dev/null \
+        | sed -E 's/#.*$//' \
+        | awk '{$1=$1};1'
+    expect: "minlen = (1[2-9]|[2-9][0-9])"
+    assert_type: "regexp"
+    severity: "high"
+    tags:
+      fstec: ["ИАФ.6"]
+      cis: "5.4.1"
+      goskz: "5.3.3"
+
+  - id: base_pam_pwquality_difok
+    name: "pam_pwquality: difok ≥ 4"
+    module: "system"
+    command: |
+      systemd-analyze cat-config pwquality.conf 2>/dev/null \
+        | sed -E 's/#.*$//' \
+        | awk '{$1=$1};1'
+    expect: "difok = ([4-9]|[1-9][0-9])"
+    assert_type: "regexp"
     severity: "medium"
     tags:
       fstec: ["ИАФ.6"]
@@ -70,6 +174,82 @@ checks:
       cis: "4.1.3"
       goskz: "7.4.3"
 
+  - id: base_audit_shadow_rule
+    name: "auditd: контроль /etc/shadow"
+    module: "integrity"
+    command: "auditctl -l 2>/dev/null | grep -E -- '-w /etc/shadow -p wa' || true"
+    expect: "-w /etc/shadow -p wa"
+    assert_type: "contains"
+    severity: "high"
+    tags:
+      fstec: ["ЗИС.6"]
+      cis: "4.1.4"
+      goskz: "7.4.3"
+
+  - id: base_audit_gshadow_rule
+    name: "auditd: контроль /etc/gshadow"
+    module: "integrity"
+    command: "auditctl -l 2>/dev/null | grep -E -- '-w /etc/gshadow -p wa' || true"
+    expect: "-w /etc/gshadow -p wa"
+    assert_type: "contains"
+    severity: "medium"
+    tags:
+      fstec: ["ЗИС.6"]
+      cis: "4.1.4"
+      goskz: "7.4.3"
+
+  - id: base_audit_module_load
+    name: "auditd: загрузка/удаление модулей ядра логируется"
+    module: "integrity"
+    command: |
+      auditctl -l 2>/dev/null | grep -E -- '-a always,exit -F arch=b(32|64) -S (init_module|finit_module|delete_module)' || true
+    expect: "init_module"
+    assert_type: "contains"
+    severity: "medium"
+    tags:
+      fstec: ["ЗИС.6"]
+      cis: "4.1.4"
+      goskz: "7.4.3"
+
+  - id: base_audit_time_change
+    name: "auditd: попытки изменения системного времени"
+    module: "integrity"
+    command: |
+      auditctl -l 2>/dev/null | grep -E -- '-a always,exit -F arch=b(32|64) -S (adjtimex|settimeofday|clock_settime)' || true
+    expect: "adjtimex"
+    assert_type: "contains"
+    severity: "medium"
+    tags:
+      fstec: ["АНЗ.1"]
+      cis: "4.1.1"
+      goskz: "7.4.2"
+
+  - id: base_audit_bootloader
+    name: "auditd: контроль загрузчика (/boot, EFI)"
+    module: "integrity"
+    command: |
+      auditctl -l 2>/dev/null | grep -E -- '-w /(boot|efi) -p wa -k (boot|efi)' || true
+    expect: "-w /boot"
+    assert_type: "contains"
+    severity: "high"
+    tags:
+      fstec: ["ЗИС.6"]
+      cis: "4.1.3"
+      goskz: "7.4.3"
+
+  - id: base_audit_privileged_commands
+    name: "auditd: контроль sudo/su/passwd"
+    module: "integrity"
+    command: |
+      auditctl -l 2>/dev/null | grep -E -- '-w /(usr/bin/sudo|bin/su|usr/bin/passwd) -p xwa' || true
+    expect: "/usr/bin/sudo"
+    assert_type: "contains"
+    severity: "high"
+    tags:
+      fstec: ["ЗИС.6"]
+      cis: "4.1.5"
+      goskz: "7.4.3"
+
   - id: base_aide_db
     name: "AIDE инициализирован (наличие БД)"
     module: "integrity"
@@ -81,6 +261,74 @@ checks:
       fstec: ["ЗИС.5"]
       cis: "5.3.1"
       goskz: "7.3.2"
+
+  # ─────────────── Время и синхронизация ───────────────
+  - id: base_ntp_service_active
+    name: "Служба синхронизации времени активна (chronyd/ntpd)"
+    module: "system"
+    command: |
+      if systemctl is-active --quiet chronyd 2>/dev/null; then
+        echo chronyd
+      elif systemctl is-active --quiet ntpd 2>/dev/null; then
+        echo ntpd
+      else
+        echo none
+      fi
+    expect: "^(chronyd|ntpd)$"
+    assert_type: "regexp"
+    severity: "medium"
+    tags:
+      fstec: ["АНЗ.1"]
+      cis: "2.2.1"
+      goskz: "7.5.1"
+
+  - id: base_ntp_synchronized
+    name: "Система синхронизирована по NTP"
+    module: "system"
+    command: "timedatectl show -p NTPSynchronized --value 2>/dev/null || echo no"
+    expect: "^yes$"
+    assert_type: "regexp"
+    severity: "medium"
+    tags:
+      fstec: ["АНЗ.1"]
+      cis: "2.2.1"
+      goskz: "7.5.1"
+
+  - id: base_ntp_sources_reliable
+    name: "NTP: есть активные надёжные источники"
+    module: "system"
+    command: |
+      if systemctl is-active --quiet chronyd 2>/dev/null; then
+        chronyc sources -n 2>/dev/null | awk '/^[\^\*\+#]/ {print $1}'
+      elif systemctl is-active --quiet ntpd 2>/dev/null; then
+        ntpq -np 2>/dev/null | awk '/^[\*\+]/ {print $1}'
+      else
+        echo none
+      fi
+    expect: '^(\^\*|\^\+|\*|\+)'
+    assert_type: "regexp"
+    severity: "medium"
+    tags:
+      fstec: ["АНЗ.1"]
+      cis: "2.2.1"
+      goskz: "7.5.1"
+
+  - id: base_ntp_makestep
+    name: "chrony: makestep настроен для больших сдвигов"
+    module: "system"
+    command: |
+      if [ -f /etc/chrony.conf ]; then
+        sed -E 's/#.*$//' /etc/chrony.conf | awk '{$1=$1};1' | grep -i '^makestep'
+      else
+        echo none
+      fi
+    expect: "makestep"
+    assert_type: "contains"
+    severity: "low"
+    tags:
+      fstec: ["АНЗ.1"]
+      cis: "2.2.1"
+      goskz: "7.5.1"
 
   # ─────────────── Сетевые политики ───────────────
   - id: base_firewall_default_deny
@@ -133,14 +381,317 @@ checks:
       cis: "5.2.18"
       goskz: "6.1.4"
 
+  - id: base_sshd_rootlogin_disabled
+    name: "SSHD: root-вход запрещён"
+    module: "network"
+    command: "sshd -T 2>/dev/null | grep -i '^permitrootlogin ' | awk '{print tolower($2)}'"
+    expect: "no"
+    assert_type: "exact"
+    severity: "high"
+    tags:
+      fstec: ["ИАФ.8"]
+      cis: "5.2.4"
+      goskz: "6.1.2"
+
+  - id: base_listening_ports_allowlist
+    name: "Слушающие TCP/UDP-порты соответствуют allowlist"
+    module: "network"
+    command: "ss -tulpen | awk '{print $1,$5}' | sed -n '2,$p' | sort -u"
+    expect: "profiles/include/allowlist_ports.txt"
+    assert_type: "set_allowlist"
+    severity: "medium"
+    tags:
+      fstec: ["ЗИС.17"]
+      cis: "3.1.1"
+      goskz: "6.2.2"
+
+  # ─────────────── Ядро и системные параметры ───────────────
+  - id: base_sysctl_unprivileged_bpf
+    name: "kernel.unprivileged_bpf_disabled=1"
+    module: "system"
+    command: "sysctl -n kernel.unprivileged_bpf_disabled 2>/dev/null || echo 0"
+    expect: "^1$"
+    assert_type: "regexp"
+    severity: "high"
+    tags:
+      fstec: ["ЗИС.10"]
+      cis: "1.5.1"
+      goskz: "8.1.2"
+
+  - id: base_sysctl_kptr_restrict
+    name: "kernel.kptr_restrict=2"
+    module: "system"
+    command: "sysctl -n kernel.kptr_restrict 2>/dev/null || echo 0"
+    expect: "^2$"
+    assert_type: "regexp"
+    severity: "medium"
+    tags:
+      fstec: ["ЗИС.10"]
+      cis: "1.5.3"
+      goskz: "8.1.2"
+
+  - id: base_sysctl_tcp_syncookies
+    name: "net.ipv4.tcp_syncookies=1"
+    module: "system"
+    command: "sysctl -n net.ipv4.tcp_syncookies 2>/dev/null || echo 0"
+    expect: "^1$"
+    assert_type: "regexp"
+    severity: "medium"
+    tags:
+      fstec: ["ЗИС.11"]
+      cis: "3.3.1"
+      goskz: "6.3.1"
+
+  - id: base_sysctl_disable_ipv6
+    name: "net.ipv6.conf.all.disable_ipv6=1"
+    module: "system"
+    command: "sysctl -n net.ipv6.conf.all.disable_ipv6 2>/dev/null || echo 0"
+    expect: "^1$"
+    assert_type: "regexp"
+    severity: "medium"
+    tags:
+      fstec: ["ЗИС.11"]
+      cis: "3.6.6"
+      goskz: "6.4.2"
+
+  - id: base_sysctl_modules_disabled
+    name: "kernel.modules_disabled=1 после инициализации"
+    module: "system"
+    command: "sysctl -n kernel.modules_disabled 2>/dev/null || echo 0"
+    expect: "^1$"
+    assert_type: "regexp"
+    severity: "medium"
+    tags:
+      fstec: ["ЗИС.10"]
+      cis: "1.5.4"
+      goskz: "8.1.2"
+
+  - id: base_kernel_module_blacklist_fs
+    name: "Запрещены опасные файловые системы (cramfs/freevxfs/squashfs/udf)"
+    module: "system"
+    command: "grep -R --no-color -h 'blacklist ' /etc/modprobe.d 2>/dev/null | grep -E '(cramfs|freevxfs|squashfs|udf)' || true"
+    expect: "blacklist"
+    assert_type: "contains"
+    severity: "medium"
+    tags:
+      fstec: ["ЗИС.10"]
+      cis: "1.1.1"
+      goskz: "8.1.3"
+
+  - id: base_kernel_module_blacklist_peripherals
+    name: "Запрещены Wi-Fi/Bluetooth/камера при политике"
+    module: "system"
+    command: "grep -R --no-color -h 'blacklist ' /etc/modprobe.d 2>/dev/null | grep -E '(ath9k|iwlwifi|btusb|uvcvideo)' || true"
+    expect: "blacklist"
+    assert_type: "contains"
+    severity: "low"
+    tags:
+      fstec: ["ЗИС.10"]
+      cis: "1.1.1"
+      goskz: "8.1.3"
+
+  - id: base_cmdline_no_selinux0
+    name: "Командная строка ядра: нет selinux=0"
+    module: "system"
+    command: "cat /proc/cmdline"
+    expect: "selinux=0"
+    assert_type: "not_contains"
+    severity: "medium"
+    tags:
+      fstec: ["ЗИС.1"]
+      cis: "1.6.1"
+      goskz: "8.1.1"
+
+  - id: base_cmdline_no_apparmor0
+    name: "Командная строка ядра: нет apparmor=0"
+    module: "system"
+    command: "cat /proc/cmdline"
+    expect: "apparmor=0"
+    assert_type: "not_contains"
+    severity: "medium"
+    tags:
+      fstec: ["ЗИС.1"]
+      cis: "1.6.2"
+      goskz: "8.1.1"
+
+  - id: base_cmdline_no_audit0
+    name: "Командная строка ядра: нет audit=0"
+    module: "system"
+    command: "cat /proc/cmdline"
+    expect: "audit=0"
+    assert_type: "not_contains"
+    severity: "medium"
+    tags:
+      fstec: ["ЗИС.6"]
+      cis: "4.1.2"
+      goskz: "7.4.2"
+
+  - id: base_cmdline_no_init_shell
+    name: "Командная строка ядра: нет init=/bin/bash"
+    module: "system"
+    command: "cat /proc/cmdline"
+    expect: "init=/bin/bash"
+    assert_type: "not_contains"
+    severity: "high"
+    tags:
+      fstec: ["ЗИС.1"]
+      cis: "1.4.1"
+      goskz: "8.1.1"
+
+  # ─────────────── Права файлов и точки монтирования ───────────────
+  - id: base_suid_allowlist
+    name: "SUID/SGID-бинарники соответствуют allowlist"
+    module: "system"
+    command: |
+      find / -xdev '(' -perm -4000 -o -perm -2000 ')' -type f 2>/dev/null | sort
+    expect: "profiles/include/allowlist_suid_sgid.txt"
+    assert_type: "set_allowlist"
+    severity: "medium"
+    tags:
+      fstec: ["ЗИС.7"]
+      cis: "6.1.10"
+      goskz: "8.2.1"
+
+  - id: base_world_writable_dirs
+    name: "Нет мировых каталогов без sticky"
+    module: "system"
+    command: "find / -xdev -type d -perm -0002 ! -perm -1000 2>/dev/null"
+    expect: ""
+    assert_type: "exact"
+    severity: "high"
+    tags:
+      fstec: ["ЗИС.7"]
+      cis: "6.1.12"
+      goskz: "8.2.2"
+
+  - id: base_tmp_mount_options
+    name: "/tmp смонтирован с nodev,nosuid,noexec"
+    module: "system"
+    command: "findmnt -no OPTIONS /tmp 2>/dev/null || echo none"
+    expect: "(?=.*nodev)(?=.*nosuid)(?=.*noexec)"
+    assert_type: "regexp"
+    severity: "medium"
+    tags:
+      fstec: ["ЗИС.7"]
+      cis: "1.1.2"
+      goskz: "8.2.3"
+
+  - id: base_vartmp_mount_options
+    name: "/var/tmp смонтирован с nodev,nosuid,noexec"
+    module: "system"
+    command: "findmnt -no OPTIONS /var/tmp 2>/dev/null || echo none"
+    expect: "(?=.*nodev)(?=.*nosuid)(?=.*noexec)"
+    assert_type: "regexp"
+    severity: "medium"
+    tags:
+      fstec: ["ЗИС.7"]
+      cis: "1.1.3"
+      goskz: "8.2.3"
+
+  - id: base_home_mount_options
+    name: "/home смонтирован с nodev"
+    module: "system"
+    command: "findmnt -no OPTIONS /home 2>/dev/null || echo none"
+    expect: "nodev"
+    assert_type: "contains"
+    severity: "low"
+    tags:
+      fstec: ["ЗИС.7"]
+      cis: "1.1.5"
+      goskz: "8.2.3"
+
   # ─────────────── Мониторинг и журналирование ───────────────
   - id: base_journald_persistent
     name: "journald: Storage=persistent"
     module: "logging"
-    command: "grep -E '^Storage=' /etc/systemd/journald.conf 2>/dev/null"
+    command: |
+      systemd-analyze cat-config systemd/journald.conf 2>/dev/null \
+        | sed -E 's/#.*$//' \
+        | awk -F= '/^Storage=/{gsub(/[[:space:]]+/,"",$0); print $1"="$2}' \
+        | tail -n1
     expect: "Storage=persistent"
     assert_type: "exact"
     severity: "medium"
+    tags:
+      fstec: ["АНЗ.5"]
+      cis: "4.2.2"
+      goskz: "7.1.4"
+
+  - id: base_journald_ratelimit
+    name: "journald: RateLimitInterval/Burst заданы"
+    module: "logging"
+    command: |
+      systemd-analyze cat-config systemd/journald.conf 2>/dev/null \
+        | sed -E 's/#.*$//' \
+        | awk -F= '/^RateLimit(Burst|Interval)=/{gsub(/[[:space:]]+/,"",$0); print $1"="$2}' \
+        | sort -u
+    expect: "RateLimitInterval="
+    assert_type: "contains"
+    severity: "medium"
+    tags:
+      fstec: ["АНЗ.5"]
+      cis: "4.2.2"
+      goskz: "7.1.4"
+
+  - id: base_journald_ratelimit_burst
+    name: "journald: RateLimitBurst определён"
+    module: "logging"
+    command: |
+      systemd-analyze cat-config systemd/journald.conf 2>/dev/null \
+        | sed -E 's/#.*$//' \
+        | awk -F= '/^RateLimitBurst=/{gsub(/[[:space:]]+/,"",$0); print $1"="$2}' \
+        | tail -n1
+    expect: "RateLimitBurst="
+    assert_type: "contains"
+    severity: "medium"
+    tags:
+      fstec: ["АНЗ.5"]
+      cis: "4.2.2"
+      goskz: "7.1.4"
+
+  - id: base_journald_forward_syslog
+    name: "journald: ForwardToSyslog включён"
+    module: "logging"
+    command: |
+      systemd-analyze cat-config systemd/journald.conf 2>/dev/null \
+        | sed -E 's/#.*$//' \
+        | awk -F= '/^ForwardToSyslog=/{gsub(/[[:space:]]+/,"",$0); print $1"="$2}' \
+        | tail -n1
+    expect: "ForwardToSyslog=yes"
+    assert_type: "exact"
+    severity: "low"
+    tags:
+      fstec: ["АНЗ.5"]
+      cis: "4.2.1"
+      goskz: "7.1.2"
+
+  - id: base_journald_maxuse
+    name: "journald: ограничение размера журналов настроено"
+    module: "logging"
+    command: |
+      systemd-analyze cat-config systemd/journald.conf 2>/dev/null \
+        | sed -E 's/#.*$//' \
+        | awk -F= '/^SystemMaxUse=/{gsub(/[[:space:]]+/,"",$0); print $1"="$2}' \
+        | tail -n1
+    expect: "SystemMaxUse="
+    assert_type: "contains"
+    severity: "medium"
+    tags:
+      fstec: ["АНЗ.5"]
+      cis: "4.2.2"
+      goskz: "7.1.4"
+
+  - id: base_journald_compress
+    name: "journald: компрессия включена"
+    module: "logging"
+    command: |
+      systemd-analyze cat-config systemd/journald.conf 2>/dev/null \
+        | sed -E 's/#.*$//' \
+        | awk -F= '/^Compress=/{gsub(/[[:space:]]+/,"",$0); print $1"="$2}' \
+        | tail -n1
+    expect: "Compress=yes"
+    assert_type: "exact"
+    severity: "low"
     tags:
       fstec: ["АНЗ.5"]
       cis: "4.2.2"
@@ -157,3 +708,92 @@ checks:
       fstec: ["АНЗ.3"]
       cis: "4.3"
       goskz: "7.2.2"
+
+  # ─────────────── Репозитории и обновления ───────────────
+  - id: base_repo_gpgcheck_enabled
+    name: "Репозитории RPM: gpgcheck не отключён"
+    module: "packages"
+    command: |
+      if command -v rpm >/dev/null 2>&1; then
+        grep -R "gpgcheck=0" /etc/yum.repos.d /etc/dnf/dnf.conf 2>/dev/null
+      else
+        echo
+      fi
+    expect: ""
+    assert_type: "exact"
+    severity: "medium"
+    tags:
+      fstec: ["ЗИС.13"]
+      cis: "1.2.3"
+      goskz: "9.1.1"
+
+  - id: base_repo_apt_signed_by
+    name: "APT: все источники подписаны"
+    module: "packages"
+    command: |
+      if command -v apt-get >/dev/null 2>&1; then
+        grep -R "^deb " /etc/apt/sources.list /etc/apt/sources.list.d 2>/dev/null | grep -v "#" || true
+      else
+        echo
+      fi
+    expect: "Signed-By"
+    assert_type: "contains"
+    severity: "medium"
+    tags:
+      fstec: ["ЗИС.13"]
+      cis: "1.2.1"
+      goskz: "9.1.1"
+
+  - id: base_repo_no_trusted_yes
+    name: "APT: отсутствуют репозитории trusted=yes"
+    module: "packages"
+    command: |
+      if command -v apt-get >/dev/null 2>&1; then
+        grep -R "trusted=yes" /etc/apt/sources.list /etc/apt/sources.list.d 2>/dev/null
+      else
+        echo
+      fi
+    expect: ""
+    assert_type: "exact"
+    severity: "medium"
+    tags:
+      fstec: ["ЗИС.13"]
+      cis: "1.2.3"
+      goskz: "9.1.1"
+
+  - id: base_fail2ban_active
+    name: "fail2ban: служба активна при паролях"
+    module: "network"
+    command: |
+      if systemctl list-unit-files fail2ban.service >/dev/null 2>&1; then
+        systemctl is-active fail2ban 2>/dev/null || echo inactive
+      else
+        echo skipped
+      fi
+    expect: "^(active|skipped)$"
+    assert_type: "regexp"
+    severity: "low"
+    tags:
+      fstec: ["ИАФ.9"]
+      cis: "5.3.3"
+      goskz: "6.1.3"
+
+  - id: base_services_redundant_disabled
+    name: "Лишние службы (CUPS/Avahi) отключены"
+    module: "network"
+    command: |
+      for svc in cups.service avahi-daemon.service bluetooth.service; do
+        if systemctl list-unit-files "$svc" >/dev/null 2>&1; then
+          state=$(systemctl is-enabled "$svc" 2>/dev/null || echo unknown)
+          if ! echo "$state" | grep -Eq '^(disabled|masked)$'; then
+            echo "$svc $state"
+          fi
+        fi
+      done
+    expect: ""
+    assert_type: "exact"
+    severity: "medium"
+    tags:
+      fstec: ["ЗИС.17"]
+      cis: "2.2"
+      goskz: "6.2.4"
