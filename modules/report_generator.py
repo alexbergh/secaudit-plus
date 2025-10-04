@@ -227,6 +227,10 @@ def _canonical_status(record):
         return "ERROR"
     if text in {"WARN", "WARNING"}:
         return "WARN"
+    if text in {"UNDEF", "UNDEFINED"}:
+        return "ERROR"
+    if text in {"SKIP", "SKIPPED"}:
+        return "SKIP"
 
     return text
 
@@ -380,7 +384,7 @@ def _detect_local_ips():
     return seen
 
 
-def collect_host_metadata(profile, results):
+def collect_host_metadata(profile, results, summary: Mapping | None = None):
     info = {}
 
     def merge_mapping(data):
@@ -404,6 +408,18 @@ def collect_host_metadata(profile, results):
             continue
         for key in ("host", "host_info", "system", "metadata", "meta"):
             merge_mapping(item.get(key))
+
+    if isinstance(summary, Mapping):
+        merge_mapping(summary.get("host"))
+        os_info = summary.get("os")
+        if isinstance(os_info, Mapping):
+            merge_mapping(os_info)
+        level = summary.get("level")
+        if level:
+            info.setdefault("audit_level", level)
+        score = summary.get("score")
+        if score is not None:
+            info.setdefault("audit_score", score)
 
     hostname = info.get("hostname")
     if not hostname:
@@ -491,6 +507,7 @@ def generate_report(
     template_name: str,
     output_path: str,
     host_info: dict | None = None,
+    summary: dict | None = None,
 ):
     env = Environment(loader=FileSystemLoader("reports/"))
     env.filters["fstek_codes"] = _extract_fstek_codes
@@ -505,7 +522,7 @@ def generate_report(
     error_count = sum(1 for r in results if _canonical_status(r) == "ERROR")
     other_count = total_count - pass_count - fail_count - warn_count - error_count
 
-    host_info = host_info or collect_host_metadata(profile, results)
+    host_info = host_info or collect_host_metadata(profile, results, summary=summary)
     fstek_summary = _aggregate_fstek_summary(results)
     high_findings = _collect_high_findings(results)
 
@@ -515,6 +532,7 @@ def generate_report(
         date=datetime.now().strftime("%Y-%m-%d %H:%M"),
         host=host_info,
         host_info=host_info,
+        summary=summary or {},
         FSTEK21=FSTEK21_DESCRIPTIONS,
         fstek_summary=fstek_summary,
         high_findings=high_findings,
@@ -530,15 +548,18 @@ def generate_report(
     with open(output_path, "w", encoding="utf-8") as f:
         f.write(rendered)
 
-def generate_json_report(results: list, output_path: str):
+def generate_json_report(results: list, output_path: str, summary: dict | None = None):
     grouped = defaultdict(list)
     for r in results:
         module = r.get("module", "core")
         grouped[module].append(r)
 
     # Преобразуем defaultdict в обычный dict для JSON-сериализации
-    grouped_dict = dict(grouped)
+    payload = {
+        "modules": dict(grouped),
+        "summary": summary or {},
+    }
 
     Path(output_path).parent.mkdir(parents=True, exist_ok=True)
     with open(output_path, "w", encoding="utf-8") as f:
-        json.dump(grouped_dict, f, indent=2, ensure_ascii=False)
+        json.dump(payload, f, indent=2, ensure_ascii=False)

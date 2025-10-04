@@ -1,4 +1,5 @@
 import json
+import textwrap
 from pathlib import Path
 
 import pytest
@@ -113,7 +114,10 @@ def test_run_checks_evidence(tmp_path: Path):
         ]
     }
 
-    results = run_checks(profile, selected_modules=["SYSTEM"], evidence_dir=tmp_path)
+    outcome = run_checks(profile, selected_modules=["SYSTEM"], evidence_dir=tmp_path)
+    results = outcome.results
+    summary = outcome.summary
+
     assert len(results) == 1
 
     result = results[0]
@@ -125,3 +129,108 @@ def test_run_checks_evidence(tmp_path: Path):
     content = evidence_path.read_text(encoding="utf-8")
     assert "Command" in content and "yes" in content
     assert evidence_path.name.startswith("demo_id")
+
+    assert summary["score"] == pytest.approx(100.0)
+    assert summary["status_counts"]["PASS"] == 1
+
+
+def test_run_checks_extends_and_variables(tmp_path: Path):
+    parent_yaml = textwrap.dedent(
+        """
+        schema_version: 1
+        profile_name: parent
+        description: Parent profile
+        vars:
+          defaults:
+            FOO: parent
+            BAR: base
+        checks:
+          - id: parent-check
+            module: system
+            command: "printf '{{ FOO }}'"
+            expect: "{{ FOO }}"
+        """
+    )
+    parent_path = tmp_path / "parent.yml"
+    parent_path.write_text(parent_yaml, encoding="utf-8")
+
+    profile = {
+        "schema_version": 1,
+        "profile_name": "child",
+        "description": "Child profile",
+        "extends": [parent_path.name],
+        "vars": {
+            "levels": {
+                "strict": {"BAR": "strict-value"},
+            }
+        },
+        "checks": [
+            {
+                "id": "child-check",
+                "module": "system",
+                "command": "printf '{{ BAR }}'",
+                "expect": "{{ BAR }}",
+            }
+        ],
+    }
+
+    outcome = run_checks(
+        profile,
+        level="strict",
+        variables_override={"FOO": "override"},
+        profile_path=tmp_path / "child.yml",
+    )
+
+    results = {entry["id"]: entry for entry in outcome.results}
+
+    assert results["parent-check"]["result"] == "PASS"
+    assert results["parent-check"]["output"].strip() == "override"
+
+    assert results["child-check"]["result"] == "PASS"
+    assert results["child-check"]["output"].strip() == "strict-value"
+
+    assert outcome.summary["status_counts"]["PASS"] == 2
+
+
+def test_run_checks_fact_caching(monkeypatch):
+    calls = []
+
+    def fake_run_bash(command: str, timeout: int, rc_ok):  # type: ignore[override]
+        calls.append(command)
+
+        class _Result:
+            returncode = 0
+            stdout = "cached"
+            stderr = ""
+
+        return _Result()
+
+    monkeypatch.setattr("modules.audit_runner.run_bash", fake_run_bash)
+
+    profile = {
+        "schema_version": 1,
+        "profile_name": "cache",
+        "description": "",
+        "facts": [
+            {"id": "shared", "command": "printf 'cached'", "cache": True},
+            {"id": "duplicate", "command": "printf 'cached'", "cache": True},
+        ],
+        "checks": [
+            {
+                "id": "fact-check",
+                "module": "system",
+                "use_fact": "shared",
+                "asserts": [{"contains": "cached"}],
+            }
+        ],
+    }
+
+    outcome = run_checks(profile)
+
+    assert calls == ["printf 'cached'"]
+
+    result = outcome.results[0]
+    assert result["result"] == "PASS"
+    assert result["cached"] is True
+    assert result["fact"] == "shared"
+    assert "cached" in result["output"]

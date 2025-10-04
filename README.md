@@ -8,32 +8,43 @@
 - JSON-отчёт с PASS/FAIL
 - Расширяемая архитектура
 
-## Специализированные профили 2024
+## Профили и уровни строгости
 
-В репозитории появились дополнительные профили с аннотациями на разделы ФСТЭК/КСЗ и отраслевых руководств:
+Каталог `profiles/` реорганизован по ролям и семействам ОС. Базовые проверки, отраслевые роли и требования конкретных дистрибутивов подключаются слоями через `extends`, а параметры подставляются переменными `{{ VAR }}`. Готовые профили:
 
-| Файл профиля | Назначение | Рекомендованный класс ФСТЭК |
-|--------------|------------|-----------------------------|
-| `profiles/base-linux.yml` | Базовый baseline для типовых GNU/Linux (PAM, аудит, фаервол) | К4–К3 |
-| `profiles/astra-1.7-ksz.yml` | Astra Linux 1.7 c модулями КСЗ и режимом Киоск-2 | К1–К2 |
-| `profiles/alt-8sp.yml` | ALT 8 СП с контролем iptables, ГОСТ-криптографии и dm-secdel | К2 |
-| `profiles/redos-7.3-8.yml` | РЕД ОС 7.3/8: лимиты, монтирование, сетевой экран | К3 |
-| `profiles/snlsp.yml` | Комплекс SN LSP: службы безопасности, политики, носители | К1 |
+| Путь профиля | Назначение |
+|--------------|------------|
+| `profiles/base/linux.yml` | Базовый baseline для любых GNU/Linux (PAM, аудит, firewall) |
+| `profiles/base/workstation.yml` | Рабочие станции и ноутбуки |
+| `profiles/base/server.yml` | Серверы общего назначения |
+| `profiles/os/astra-1.7.yml` | Astra Linux 1.7 (КСЗ, режим Киоск-2) |
+| `profiles/os/alt-8sp.yml` | ALT 8 СП с ГОСТ-криптографией |
+| `profiles/os/redos-7.3-8.yml` | РЕД ОС 7.3/8: лимиты, монтирование, сетевой экран |
+| `profiles/roles/kiosk.yml` | Терминалы/киоски с закреплённым приложением |
+| `profiles/roles/db.yml` | Серверы СУБД |
+| `profiles/szi/snlsp.yml` | Средства защиты информации (пример: Secret Net LSP) |
 
-Каждый профиль содержит блок `meta` со ссылками на нормативные документы (приказ 239, руководства вендоров, методички по КСЗ) и `tags` с конкретными пунктами требований. Проверки сгруппированы по модулям (`system`, `network`, `integrity`, `media`, `snlsp` и др.) и используют расширенные типы проверок (`regexp`, `jsonpath`, `exit_code`).
+Дополнительные переменные, allowlist/denylist и пороги строгости лежат в `profiles/include/`. Для переключения порогов используйте флаг `--level baseline|strict|paranoid` (или переменную окружения `SECAUDIT_LEVEL`). Один и тот же YAML может покрывать несколько версий ОС — проверяйте `os_id`, `os_like` и `os_version_id` через условие `when:`.
+
+Каждая проверка содержит `ref` с обоснованием, `remediation` с пошаговым исправлением, а также может сохранять фрагмент вывода в «улики». Итоговый отчёт выводит веса, баллы и топ-несоответствия.
 
 ### Быстрый запуск профилей
 
 ```bash
 # Валидация синтаксиса
-python3 main.py validate --profile profiles/base-linux.yml
-python3 main.py validate --profile profiles/astra-1.7-ksz.yml
-python3 main.py validate --profile profiles/alt-8sp.yml
-python3 main.py validate --profile profiles/redos-7.3-8.yml
-python3 main.py validate --profile profiles/snlsp.yml
+python3 main.py validate --profile profiles/base/linux.yml
+python3 main.py validate --profile profiles/os/astra-1.7.yml
+python3 main.py validate --profile profiles/os/alt-8sp.yml
+python3 main.py validate --profile profiles/os/redos-7.3-8.yml
+python3 main.py validate --profile profiles/szi/snlsp.yml
 
-# Пример аудита с порогом medium
-python3 main.py audit --profile profiles/alt-8sp.yml --fail-level medium
+# Пример аудита: строгий уровень, 4 воркера, кастомный порог блокировок
+python3 main.py audit \
+  --profile profiles/base/server.yml \
+  --level strict \
+  --workers 4 \
+  --var FAILLOCK_DENY=3 \
+  --fail-level medium
 ```
 
 ```bash
@@ -43,8 +54,8 @@ python3 -m venv venv
 source venv/bin/activate
 pip install -r requirements.txt
 python3 main.py
-# Запуск аудита с ошибкой при UNDEF
-python3 main.py audit --fail-on-undef
+# Запуск аудита с уликами и проверкой UNDEF
+python3 main.py audit --profile profiles/base/linux.yml --evidence results/evidence --fail-on-undef
 
 ```
 

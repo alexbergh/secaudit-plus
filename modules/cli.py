@@ -1,5 +1,6 @@
 # modules/cli.py
 import argparse
+import os
 import sys
 from pathlib import Path
 from typing import Tuple, List, Dict, Any
@@ -55,6 +56,27 @@ def parse_tag_filters(raw: List[str] | None) -> Dict[str, str]:
             raise ValueError(f"Неверный фильтр по тегам: '{item}'")
         filters[key] = value
     return filters
+
+
+def parse_kv_pairs(raw: List[str] | None, *, option: str) -> Dict[str, str]:
+    """Парсит список KEY=VALUE в словарь."""
+
+    if not raw:
+        return {}
+
+    parsed: Dict[str, str] = {}
+    for item in raw:
+        if "=" not in item:
+            raise ValueError(
+                f"Неверный формат {option}: '{item}'. Используйте KEY=VALUE."
+            )
+        key, value = item.split("=", 1)
+        key = key.strip()
+        value = value.strip()
+        if not key:
+            raise ValueError(f"Неверный ключ в {option}: '{item}'")
+        parsed[key] = value
+    return parsed
 
 
 def _match_tags(check_tags: Dict[str, Any], filters: Dict[str, str]) -> bool:
@@ -198,13 +220,13 @@ def parse_args() -> argparse.Namespace:
     отдаётся позиционному значению, чтобы последняя указанная цель профиля
     всегда побеждала.
     """
+
     default_profile = DEFAULT_PROFILE_PATH
     parser = argparse.ArgumentParser(
         prog="secaudit",
         description="SecAudit++ CLI — запуск аудита, валидация профиля и служебные команды.",
     )
 
-    # Глобальный флаг профиля — можно ставить до/после команды
     parser.add_argument(
         "--profile",
         dest="profile",
@@ -214,11 +236,9 @@ def parse_args() -> argparse.Namespace:
 
     subs = parser.add_subparsers(dest="command", required=True, help="Доступные команды")
 
-    # list-modules
     sub_modules = subs.add_parser("list-modules", help="Показать все модули в профиле")
     _add_profile_arguments(sub_modules, default_profile=default_profile)
 
-    # list-checks
     sub_checks = subs.add_parser("list-checks", help="Показать проверки")
     sub_checks.add_argument("--module", help="Фильтровать проверки по модулю")
     sub_checks.add_argument(
@@ -229,17 +249,18 @@ def parse_args() -> argparse.Namespace:
     )
     _add_profile_arguments(sub_checks, default_profile=default_profile)
 
-    # describe-check
     sub_desc = subs.add_parser("describe-check", help="Детали проверки по ID")
     sub_desc.add_argument("check_id", help="ID проверки")
     _add_profile_arguments(sub_desc, default_profile=default_profile)
 
-    # validate
     sub_val = subs.add_parser("validate", help="Проверить профиль на ошибки")
-    sub_val.add_argument("--strict", action="store_true", help="Строгий режим: код возврата 1 при предупреждениях")
+    sub_val.add_argument(
+        "--strict",
+        action="store_true",
+        help="Строгий режим: код возврата 1 при предупреждениях",
+    )
     _add_profile_arguments(sub_val, default_profile=default_profile)
 
-    # audit
     sub_audit = subs.add_parser("audit", help="Запустить аудит")
     sub_audit.add_argument(
         "--module",
@@ -254,12 +275,30 @@ def parse_args() -> argparse.Namespace:
     sub_audit.add_argument(
         "--fail-on-undef",
         action="store_true",
-        help="Return exit code 2 if any check result is UNDEF."
+        help="Return exit code 2 if any check result is UNDEF.",
     )
     sub_audit.add_argument(
         "--evidence",
         metavar="DIR",
-        help="Каталог для сохранения выводов команд (улики)."
+        help="Каталог для сохранения выводов команд (улики).",
+    )
+    sub_audit.add_argument(
+        "--level",
+        choices=["baseline", "strict", "paranoid"],
+        default=os.environ.get("SECAUDIT_LEVEL", "baseline"),
+        help="Уровень строгости (можно задать через SECAUDIT_LEVEL).",
+    )
+    sub_audit.add_argument(
+        "--var",
+        action="append",
+        metavar="KEY=VALUE",
+        help="Переопределение переменных профиля (можно указывать несколько раз).",
+    )
+    sub_audit.add_argument(
+        "--workers",
+        type=int,
+        default=int(os.environ.get("SECAUDIT_WORKERS", "0")),
+        help="Количество потоков (0 — авто).",
     )
     _add_profile_arguments(sub_audit, default_profile=default_profile)
 
@@ -271,6 +310,14 @@ def parse_args() -> argparse.Namespace:
         args.profile = default_profile
     if hasattr(args, "profile_path"):
         delattr(args, "profile_path")
+    if getattr(args, "command", None) == "audit":
+        try:
+            args.vars = parse_kv_pairs(getattr(args, "var", None), option="--var")
+        except ValueError as exc:
+            print(str(exc), file=sys.stderr)
+            sys.exit(2)
+        if hasattr(args, "var"):
+            delattr(args, "var")
     return args
 
 
