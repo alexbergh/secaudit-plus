@@ -37,8 +37,10 @@ profiles/
 - Ролевые профили (`roles/*.yml`) добавляют отраслевые или прикладные требования.
 - Профили конкретных ОС (`os/*.yml`) переопределяют параметры под особенности дистрибутива.
 - Уровень строгости задавайте переменной `SECAUDIT_LEVEL=baseline|strict|paranoid`. Пороговые
-  значения (например, `FAILLOCK_DENY`) и списки allowlist/denylist читайте из `vars_*.env` через
-  `include_vars`.
+  значения (например, `FAILLOCK_DENY`) описывайте в `profiles/include/vars_*.env` и
+  используйте в профилях через подстановку `{{ VAR_NAME }}`.
+- Дополнительные слои подключайте через ключ `extends` (пути задаются относительно
+  текущего профиля), после чего в профиле остаётся только специфичная для роли/ОС надстройка.
 
 ## Allowlist/Denylist
 
@@ -82,11 +84,11 @@ profiles/
 
 ```yaml
 - id: suid_sgid_scan
-  desc: "SUID/SGID-бинарники соответствуют allowlist"
+  name: "SUID/SGID-бинарники соответствуют allowlist"
   module: "system"
   command: "find / -xdev \\( -perm -4000 -o -perm -2000 \\) -type f 2>/dev/null | sort"
-  expect: "profiles/include/allowlist_suid_sgid.txt"
-  assert_type: "set_allowlist"
+  asserts:
+    - allowlist: "profiles/include/allowlist_suid_sgid.txt"
   remediation: |
     Обновите эталонный список или удалите лишние биты SUID/SGID.
 ```

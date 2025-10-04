@@ -89,7 +89,7 @@ checks:
     name: "PAM: faillock активирован и блокирует после 5 попыток"
     module: "system"
     command: "grep -RhsE 'deny=([1-9][0-9]*)' /etc/security/faillock.conf /etc/pam.d 2>/dev/null | head -n1"
-    expect: "deny=5"
+    expect: "deny={{ FAILLOCK_DENY }}"
     assert_type: "contains"
     severity: "high"
     tags:
@@ -130,7 +130,7 @@ checks:
       systemd-analyze cat-config pwquality.conf 2>/dev/null \
         | sed -E 's/#.*$//' \
         | awk '{$1=$1};1'
-    expect: "minlen = (1[2-9]|[2-9][0-9])"
+    expect: "minlen\\s*=\\s*{{ PWQUALITY_MINLEN_PATTERN }}"
     assert_type: "regexp"
     severity: "high"
     tags:
@@ -145,7 +145,7 @@ checks:
       systemd-analyze cat-config pwquality.conf 2>/dev/null \
         | sed -E 's/#.*$//' \
         | awk '{$1=$1};1'
-    expect: "difok = ([4-9]|[1-9][0-9])"
+    expect: "difok\\s*=\\s*{{ PWQUALITY_DIFOK_PATTERN }}"
     assert_type: "regexp"
     severity: "medium"
     tags:

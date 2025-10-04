@@ -39,9 +39,13 @@ def _resolve_profile_path(cli_profile: str | None) -> str:
             return str(p)
 
     os_id = detect_os()
-    candidate = Path(f"profiles/{os_id}.yml")
+    candidate = Path(f"profiles/os/{os_id}.yml")
     if candidate.exists():
         return str(candidate)
+
+    fallback_base = Path(f"profiles/base/{os_id}.yml")
+    if fallback_base.exists():
+        return str(fallback_base)
 
     log_warn(f"Профиль для {os_id} не найден. Использую profiles/common/baseline.yml")
     return "profiles/common/baseline.yml"
@@ -153,19 +157,33 @@ def main():
 
         # Запуск проверок
         evidence_dir = getattr(args, "evidence", None)
-        results = run_checks(profile, selected_modules, evidence_dir)
+        outcome = run_checks(
+            profile,
+            selected_modules,
+            evidence_dir,
+            profile_path=profile_path,
+            level=getattr(args, "level", "baseline"),
+            variables_override=getattr(args, "vars", {}),
+            workers=getattr(args, "workers", 0),
+        )
+        results = outcome.results
+        summary = outcome.summary
 
         # Директория результатов
         Path("results").mkdir(exist_ok=True)
 
         # Полный список результатов (плоский)
         with open("results/report.json", "w", encoding="utf-8") as f:
-            json.dump(results, f, indent=2, ensure_ascii=False)
+            json.dump({"results": results, "summary": summary}, f, indent=2, ensure_ascii=False)
 
         # Группировка результатов по модулям
-        generate_json_report(results, "results/report_grouped.json")
+        generate_json_report(results, "results/report_grouped.json", summary=summary)
 
         # Логируем в консоль краткую сводку
+        score = summary.get("score")
+        if score is not None:
+            coverage = summary.get("coverage", 0) * 100
+            log_info(f"Итоговый балл: {score:.1f}% (покрытие {coverage:.1f}%)")
         for r in results:
             name = r.get("name", r.get("id", "<no-name>"))
             out = r.get("output", "")
@@ -174,11 +192,18 @@ def main():
                 log_pass(f"{name} → {out}")
             elif status == "FAIL":
                 log_fail(f"{name} → {out}")
-            else:
+            elif status == "WARN":
                 log_warn(f"{name} → {out}")
+            else:
+                log_warn(f"{name} [{status}] → {out}")
+
+        for failure in summary.get("top_failures", []) or []:
+            log_warn(
+                f"ТОП-провал: {failure.get('id')} ({failure.get('result')}) → {failure.get('reason')}"
+            )
 
         # Метаданные хоста для отчётов и имени файла
-        host_info = collect_host_metadata(profile, results)
+        host_info = collect_host_metadata(profile, results, summary=summary)
         hostname_component = _sanitize_filename_component(host_info.get("hostname"))
         date_component = datetime.now().strftime("%Y%m%d_%H%M%S")
         html_report_path = Path("results") / f"report_{hostname_component}_{date_component}.html"
@@ -190,6 +215,7 @@ def main():
             "report_template.md.j2",
             "results/report.md",
             host_info=host_info,
+            summary=summary,
         )
         generate_report(
             profile,
@@ -197,6 +223,7 @@ def main():
             "report_template.html.j2",
             str(html_report_path),
             host_info=host_info,
+            summary=summary,
         )
 
         # Политика завершения по --fail-level / --fail-on-undef

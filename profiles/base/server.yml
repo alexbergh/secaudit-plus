@@ -1,0 +1,17 @@
+schema_version: "1.1"
+profile_name: "Базовый профиль Linux (сервер)"
+description: "Серверная надстройка поверх общего Linux-профиля."
+extends:
+  - "./linux.yml"
+meta:
+  role: "server"
+checks:
+  - id: server_uname_linux
+    name: "Сервер: ядро Linux активно"
+    module: "server"
+    command: "uname -s"
+    expect: "Linux"
+    assert_type: "exact"
+    severity: "low"
+    tags:
+      role: ["server"]
