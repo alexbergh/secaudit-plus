@@ -107,3 +107,22 @@ def test_validate_profile_rejects_object_expect_for_non_jsonpath(minimal_check):
     is_valid, errors = validate_profile(profile)
 
     assert not is_valid
+
+
+def test_validate_profile_accepts_set_allowlist(minimal_check, tmp_path):
+    allowlist = tmp_path / "allow.txt"
+    allowlist.write_text("entry\n", encoding="utf-8")
+
+    check = minimal_check.copy()
+    check.update({"expect": str(allowlist), "assert_type": "set_allowlist"})
+
+    profile = {
+        "schema_version": "1.1",
+        "profile_name": "Test",
+        "description": "Test profile",
+        "checks": [check],
+    }
+
+    is_valid, errors = validate_profile(profile)
+
+    assert is_valid, f"Profile unexpectedly invalid: {errors}"

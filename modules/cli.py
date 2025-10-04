@@ -1,9 +1,18 @@
 # modules/cli.py
 import argparse
 import sys
-import yaml
 from pathlib import Path
 from typing import Tuple, List, Dict, Any
+
+from secaudit.exceptions import MissingDependencyError
+
+try:
+    import yaml  # type: ignore
+except ModuleNotFoundError as exc:  # pragma: no cover - runtime guard
+    yaml = None  # type: ignore
+    _YAML_IMPORT_ERROR = exc
+else:  # pragma: no cover - exercised indirectly
+    _YAML_IMPORT_ERROR = None
 
 from seclib.validator import PROFILE_SCHEMA as STRICT_PROFILE_SCHEMA
 
@@ -115,9 +124,16 @@ def load_profile_file(path: str) -> Dict[str, Any]:
     if not p.is_file():
         print(f"Ошибка: Файл профиля не найден: {path}", file=sys.stderr)
         sys.exit(2)
+    if yaml is None:
+        raise MissingDependencyError(
+            package="PyYAML",
+            import_name="yaml",
+            instructions="pip install -r requirements.txt",
+            original=_YAML_IMPORT_ERROR,
+        )
     try:
-        return yaml.safe_load(p.read_text(encoding="utf-8")) or {}
-    except yaml.YAMLError as e:
+        return yaml.safe_load(p.read_text(encoding="utf-8")) or {}  # type: ignore[union-attr]
+    except yaml.YAMLError as e:  # type: ignore[union-attr]
         print(f"Ошибка: Не удалось прочитать YAML: {e}", file=sys.stderr)
         sys.exit(2)
 
@@ -264,7 +280,11 @@ def parse_args() -> argparse.Namespace:
 def main() -> None:
     """Небольшой удобный раннер — полезен для отладки самого cli.py."""
     args = parse_args()
-    profile = load_profile_file(args.profile)
+    try:
+        profile = load_profile_file(args.profile)
+    except MissingDependencyError as exc:
+        print(str(exc), file=sys.stderr)
+        sys.exit(3)
 
     if args.command == "list-modules":
         list_modules(profile)
