@@ -6,7 +6,15 @@ import re
 from pathlib import Path
 from typing import Any, Dict, List, Tuple, Optional
 
-import yaml
+from secaudit.exceptions import MissingDependencyError
+
+try:
+    import yaml  # type: ignore
+except ModuleNotFoundError as exc:  # pragma: no cover - runtime guard
+    yaml = None  # type: ignore
+    _YAML_IMPORT_ERROR = exc
+else:  # pragma: no cover - exercised indirectly
+    _YAML_IMPORT_ERROR = None
 from json import JSONDecodeError
 from packaging import version
 
@@ -19,8 +27,15 @@ def load_profile(path: str | Path) -> Dict[str, Any]:
     p = Path(path)
     if not p.exists():
         raise FileNotFoundError(f"Profile not found: {p}")
+    if yaml is None:
+        raise MissingDependencyError(
+            package="PyYAML",
+            import_name="yaml",
+            instructions="pip install -r requirements.txt",
+            original=_YAML_IMPORT_ERROR,
+        )
     with p.open("r", encoding="utf-8") as f:
-        data = yaml.safe_load(f) or {}
+        data = yaml.safe_load(f) or {}  # type: ignore[union-attr]
     # Минимальная нормализация
     data.setdefault("profile_name", str(p.stem))
     data.setdefault("description", "")
@@ -337,6 +352,36 @@ def _apply_assert(stdout: str, rc: int, expect: Any, assert_type: str, rc_ok: Tu
         if actual <= threshold:
             return "PASS", f"{actual} <= {threshold}"
         return "FAIL", f"{actual} > {threshold}"
+
+    if assert_type == "set_allowlist":
+        if expect in (None, ""):
+            return "FAIL", "set_allowlist requires file path"
+        allowlist_path = Path(str(expect)).expanduser()
+        if not allowlist_path.exists():
+            return "FAIL", f"allowlist not found: {allowlist_path}"
+        try:
+            allowed_raw = allowlist_path.read_text(encoding="utf-8")
+        except OSError as exc:  # pragma: no cover - defensive
+            return "FAIL", f"allowlist read error: {exc}"
+        allowed = {
+            line.strip()
+            for line in allowed_raw.splitlines()
+            if line.strip() and not line.lstrip().startswith("#")
+        }
+        actual = {line.strip() for line in out.splitlines() if line.strip()}
+        unexpected = sorted(actual - allowed)
+        if unexpected:
+            preview = ", ".join(unexpected[:5])
+            if len(unexpected) > 5:
+                preview += ", …"
+            return "FAIL", f"unexpected entries: {preview}"
+        missing = sorted(allowed - actual)
+        if missing:
+            preview = ", ".join(missing[:5])
+            if len(missing) > 5:
+                preview += ", …"
+            return "PASS", f"subset (missing: {preview})"
+        return "PASS", "allowlist match"
 
     return "FAIL", f"unsupported assert_type '{assert_type}'"
 

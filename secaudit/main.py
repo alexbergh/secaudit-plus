@@ -23,6 +23,7 @@ from utils.logger import log_info, log_warn, log_pass, log_fail
 
 # Валидация профиля по схеме
 from seclib.validator import validate_profile
+from secaudit.exceptions import MissingDependencyError
 
 
 def _resolve_profile_path(cli_profile: str | None) -> str:
@@ -98,7 +99,11 @@ def main():
     log_info(f"Загрузка профиля: {profile_path}")
 
     # Загружаем профиль (парсинг YAML + базовые проверки структуры внутри load_profile)
-    profile = load_profile(profile_path)
+    try:
+        profile = load_profile(profile_path)
+    except MissingDependencyError as exc:
+        log_fail(str(exc))
+        sys.exit(3)
 
     # Валидация по JSON-схеме перед любыми действиями
     is_valid, val_errors = validate_profile(profile)
