@@ -490,7 +490,7 @@ checks:
       cis: "1.1.1"
       goskz: "8.1.3"
 
-  - id: base_cmdline_no_selinux0
+- id: base_cmdline_no_selinux0
     name: "Командная строка ядра: нет selinux=0"
     module: "system"
     command: "cat /proc/cmdline"
