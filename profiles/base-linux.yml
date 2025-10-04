@@ -761,6 +761,144 @@ checks:
       cis: "1.2.3"
       goskz: "9.1.1"
 
+  - id: base_kernel_min_version
+    name: "Ядро: версия не ниже 4.18"
+    module: "packages"
+    command: |
+      current=$(uname -r 2>/dev/null | cut -d- -f1)
+      min="4.18"
+      if [ -z "$current" ]; then
+        echo unknown
+      else
+        first=$(printf '%s\n%s\n' "$min" "$current" | sort -V | head -n1)
+        if [ "$first" = "$min" ]; then
+          echo ok
+        else
+          echo "$current"
+        fi
+      fi
+    expect: "^ok$"
+    assert_type: "regexp"
+    severity: "medium"
+    tags:
+      fstec: ["ЗИС.12"]
+      cis: "1.5"
+      goskz: "9.1.2"
+
+  - id: base_pkg_sudo_min_version
+    name: "sudo: версия не ниже 1.9.5"
+    module: "packages"
+    command: |
+      min="1.9.5"
+      if command -v rpm >/dev/null 2>&1; then
+        current=$(rpm -q --qf '%{VERSION}' sudo 2>/dev/null || echo)
+      elif command -v dpkg-query >/dev/null 2>&1; then
+        current=$(dpkg-query -W -f='${Version}' sudo 2>/dev/null | cut -d- -f1)
+      else
+        echo skipped
+        exit 0
+      fi
+      if [ -z "$current" ]; then
+        echo missing
+      else
+        first=$(printf '%s\n%s\n' "$min" "$current" | sort -V | head -n1)
+        if [ "$first" = "$min" ]; then
+          echo ok
+        else
+          echo "$current"
+        fi
+      fi
+    expect: "^(ok|skipped)$"
+    assert_type: "regexp"
+    severity: "medium"
+    tags:
+      fstec: ["ЗИС.12"]
+      cis: "1.5"
+      goskz: "9.1.2"
+
+  - id: base_pkg_openssh_min_version
+    name: "OpenSSH: версия сервера не ниже 8.0"
+    module: "packages"
+    command: |
+      min="8.0"
+      if command -v rpm >/dev/null 2>&1; then
+        current=$(rpm -q --qf '%{VERSION}' openssh-server 2>/dev/null || echo)
+      elif command -v dpkg-query >/dev/null 2>&1; then
+        current=$(dpkg-query -W -f='${Version}' openssh-server 2>/dev/null | cut -d- -f1)
+      else
+        echo skipped
+        exit 0
+      fi
+      if [ -z "$current" ]; then
+        echo missing
+      else
+        first=$(printf '%s\n%s\n' "$min" "$current" | sort -V | head -n1)
+        if [ "$first" = "$min" ]; then
+          echo ok
+        else
+          echo "$current"
+        fi
+      fi
+    expect: "^(ok|skipped)$"
+    assert_type: "regexp"
+    severity: "medium"
+    tags:
+      fstec: ["ЗИС.12"]
+      cis: "1.5"
+      goskz: "9.1.2"
+
+  - id: base_pkg_integrity_core
+    name: "Целостность критичных пакетов проверена"
+    module: "packages"
+    command: |
+      if command -v rpm >/dev/null 2>&1; then
+        output=$(rpm -Va shadow-utils passwd sudo 2>/dev/null)
+      elif command -v dpkg-query >/dev/null 2>&1; then
+        output=$(dpkg -V passwd sudo login 2>/dev/null)
+      else
+        echo skipped
+        exit 0
+      fi
+      if [ -z "$output" ]; then
+        echo ok
+      else
+        echo "$output"
+      fi
+    expect: "^(ok|skipped)$"
+    assert_type: "regexp"
+    severity: "medium"
+    tags:
+      fstec: ["ЗИС.13"]
+      cis: "1.5.2"
+      goskz: "9.1.3"
+
+  - id: base_ipv6_ra_guard
+    name: "IPv6: запрещены несанкционированные router advertisement"
+    module: "network"
+    command: |
+      if command -v nft >/dev/null 2>&1; then
+        if nft list ruleset 2>/dev/null | grep -Ei 'icmpv6 type (134|135).*drop' >/dev/null; then
+          echo protected
+        else
+          echo missing
+        fi
+      elif command -v ip6tables >/dev/null 2>&1; then
+        if ip6tables -S 2>/dev/null | grep -Ei 'icmpv6.*(router-advertisement|ra).*(DROP|REJECT)' >/dev/null; then
+          echo protected
+        else
+          echo missing
+        fi
+      else
+        echo skipped
+      fi
+    expect: "^(protected|skipped)$"
+    assert_type: "regexp"
+    severity: "medium"
+    tags:
+      fstec: ["ЗИС.17"]
+      cis: "3.6.6"
+      goskz: "6.4.2"
+
   - id: base_fail2ban_active
     name: "fail2ban: служба активна при паролях"
     module: "network"
@@ -778,7 +916,30 @@ checks:
       cis: "5.3.3"
       goskz: "6.1.3"
 
+  - id: base_fail2ban_jails
+    name: "fail2ban: хотя бы одна jail активна"
+    module: "network"
+    command: |
+      if systemctl is-active --quiet fail2ban 2>/dev/null; then
+        fail2ban-client status 2>/dev/null | awk '/Jail list:/ {count=0; for (i=4;i<=NF;i++){gsub(",","",$i); if($i!=""){count++}}; print count}'
+      else
+        echo skipped
+      fi
+    expect: "^(skipped|[1-9][0-9]*)$"
+    assert_type: "regexp"
+    severity: "low"
+    tags:
+      fstec: ["ИАФ.9"]
+      cis: "5.3.3"
+      goskz: "6.1.3"
+
   - id: base_services_redundant_disabled
+    name: "Лишние службы (CUPS/Avahi/SSH-agent) отключены"
+    module: "network"
+    command: |
+      for svc in cups.service avahi-daemon.service bluetooth.service ssh-agent.socket; do
+
+- id: base_services_redundant_disabled
     name: "Лишние службы (CUPS/Avahi) отключены"
     module: "network"
     command: |
@@ -797,3 +958,131 @@ checks:
       fstec: ["ЗИС.17"]
       cis: "2.2"
       goskz: "6.2.4"
+
+  # ─────────────── Политики рабочих станций ───────────────
+  - id: base_workstation_no_autologin
+    name: "Графические менеджеры: автологон отключён"
+    module: "workstation"
+    command: |
+      found=0
+      for cfg in /etc/gdm/custom.conf /etc/gdm3/daemon.conf /etc/lightdm/lightdm.conf /etc/lightdm/lightdm.conf.d/*.conf /etc/sddm.conf /etc/sddm.conf.d/*.conf; do
+        [ -f "$cfg" ] || continue
+        if grep -Ei '^(AutomaticLogin|AutomaticLoginEnable|autologin-user)\s*(=|true)' "$cfg" 2>/dev/null; then
+          echo "$cfg"
+          found=1
+        fi
+      done
+      if [ $found -eq 0 ]; then
+        echo ok
+      fi
+    expect: "ok"
+    assert_type: "exact"
+    severity: "medium"
+    tags:
+      fstec: ["ИАФ.9"]
+      cis: "1.8"
+      goskz: "5.3.7"
+
+  - id: base_browser_policies_present
+    name: "Политики браузеров заданы"
+    module: "workstation"
+    command: |
+      status=ok
+      if command -v firefox >/dev/null 2>&1; then
+        if [ ! -f /etc/firefox/policies/policies.json ]; then
+          status=firefox-missing
+        fi
+      fi
+      if command -v chromium >/dev/null 2>&1 || command -v chromium-browser >/dev/null 2>&1 || command -v google-chrome >/dev/null 2>&1; then
+        if ! find /etc/chromium/policies/managed /etc/chromium-browser/policies/managed /etc/opt/chrome/policies/managed -maxdepth 1 -name '*.json' 2>/dev/null | head -n1 >/dev/null; then
+          status=chromium-missing
+        fi
+      fi
+      echo "$status"
+    expect: "^ok$"
+    assert_type: "regexp"
+    severity: "low"
+    tags:
+      fstec: ["ЗИС.19"]
+      cis: "1.8.2"
+      goskz: "5.4.2"
+
+  # ─────────────── Контейнеры и виртуализация ───────────────
+  - id: base_docker_no_tcp_listen
+    name: "Docker: демон не слушает TCP-интерфейсы"
+    module: "containers"
+    command: |
+      docker_args=$(ps -eo args | grep -E '\bdockerd\b' | grep -v grep)
+      if [ -n "$docker_args" ]; then
+        echo "$docker_args" | grep -E '(-H|--host)\s*tcp://' || echo ok
+      else
+        echo skipped
+      fi
+    expect: "^(ok|skipped)$"
+    assert_type: "regexp"
+    severity: "medium"
+    tags:
+      fstec: ["ЗИС.17"]
+      cis: "5.29"
+      goskz: "6.5.1"
+
+  - id: base_docker_no_privileged_containers
+    name: "Docker: нет привилегированных контейнеров"
+    module: "containers"
+    command: |
+      if command -v docker >/dev/null 2>&1; then
+        ids=$(docker ps -q 2>/dev/null)
+        if [ -z "$ids" ]; then
+          echo ok
+        else
+          info=$(docker inspect --format '{{.Name}} {{.HostConfig.Privileged}}' $ids 2>/dev/null)
+          if echo "$info" | grep ' true' >/dev/null 2>&1; then
+            echo "$info" | grep ' true'
+          else
+            echo ok
+          fi
+        fi
+      else
+        echo skipped
+      fi
+    expect: "^(ok|skipped)$"
+    assert_type: "regexp"
+    severity: "high"
+    tags:
+      fstec: ["ЗИС.17"]
+      cis: "5.29"
+      goskz: "6.5.1"
+
+  - id: base_podman_socket_disabled
+    name: "Podman: socket не активен постоянно"
+    module: "containers"
+    command: |
+      if systemctl list-unit-files podman.socket >/dev/null 2>&1; then
+        systemctl is-enabled podman.socket 2>/dev/null || echo disabled
+      else
+        echo skipped
+      fi
+    expect: "^(disabled|masked|skipped)$"
+    assert_type: "regexp"
+    severity: "low"
+    tags:
+      fstec: ["ЗИС.17"]
+      cis: "5.28"
+      goskz: "6.5.1"
+
+  - id: base_libvirt_audit
+    name: "Libvirt: auditd контролирует каталоги VM"
+    module: "virtualization"
+    command: |
+      if systemctl is-active --quiet libvirtd 2>/dev/null; then
+        auditctl -l 2>/dev/null | grep -E -- '-w /var/lib/libvirt -p wa' || true
+      else
+        echo skipped
+      fi
+    expect: "-w /var/lib/libvirt -p wa"
+    assert_type: "contains"
+    severity: "medium"
+    tags:
+      fstec: ["ЗИС.6"]
+      cis: "5.10"
+      goskz: "7.4.3"
