@@ -68,6 +68,22 @@ checks:
       cis: "5.3.3"
       goskz: "5.3.6"
 
+  - id: base_sudo_logfile_configured
+    name: "sudo: включён журнал команд (Defaults logfile)"
+    module: "system"
+    command: |
+      systemd-analyze cat-config sudo/sudoers 2>/dev/null \
+        | sed -E 's/#.*$//' \
+        | awk '{$1=$1};1' \
+        | grep -E '^Defaults\s+logfile='
+    expect: "Defaults logfile="
+    assert_type: "contains"
+    severity: "medium"
+    tags:
+      fstec: ["ИАФ.5"]
+      cis: "5.3.3"
+      goskz: "5.3.6"
+
   # ─────────────── Системная политика аутентификации ───────────────
   - id: base_pam_faillock
     name: "PAM: faillock активирован и блокирует после 5 попыток"
@@ -131,6 +147,55 @@ checks:
         | awk '{$1=$1};1'
     expect: "difok = ([4-9]|[1-9][0-9])"
     assert_type: "regexp"
+
+    severity: "medium"
+    tags:
+      fstec: ["ИАФ.6"]
+      cis: "5.4.1"
+      goskz: "5.3.3"
+
+  - id: base_pam_pwquality_credits
+    name: "pam_pwquality: требования к классам символов"
+    module: "system"
+    command: |
+      systemd-analyze cat-config pwquality.conf 2>/dev/null \
+        | sed -E 's/#.*$//' \
+        | awk '{$1=$1};1'
+    expect: '(?s)(?=.*dcredit\s*=\s*-([1-9][0-9]*|1))(?=.*ucredit\s*=\s*-([1-9][0-9]*|1))(?=.*lcredit\s*=\s*-([1-9][0-9]*|1))(?=.*ocredit\s*=\s*-([1-9][0-9]*|1))'
+    assert_type: "regexp"
+    severity: "medium"
+    tags:
+      fstec: ["ИАФ.6"]
+      cis: "5.4.1"
+      goskz: "5.3.3"
+
+  - id: base_pam_pwquality_retry
+    name: "pam_pwquality: ограничение количества попыток ввода"
+    module: "system"
+    command: |
+      systemd-analyze cat-config systemd/pam.d/system-auth 2>/dev/null \
+        | sed -E 's/#.*$//' \
+        | awk '{$1=$1};1' \
+        | grep -i 'pam_pwquality.so'
+    expect: "retry=(1|2|3)"
+    assert_type: "regexp"
+    severity: "medium"
+    tags:
+      fstec: ["ИАФ.6"]
+      cis: "5.4.1"
+      goskz: "5.3.3"
+
+  - id: base_pam_unix_remember
+    name: "pam_unix: история паролей remember ≥5"
+    module: "system"
+    command: |
+      systemd-analyze cat-config systemd/pam.d/system-auth 2>/dev/null \
+        | sed -E 's/#.*$//' \
+        | awk '{$1=$1};1' \
+        | grep -i 'pam_unix.so'
+    expect: "remember=([5-9]|[1-9][0-9])"
+    assert_type: "regexp"
+
     severity: "medium"
     tags:
       fstec: ["ИАФ.6"]
@@ -228,6 +293,11 @@ checks:
     name: "auditd: контроль загрузчика (/boot, EFI)"
     module: "integrity"
     command: |
+
+      auditctl -l 2>/dev/null \
+        | grep -E -- '(-w /boot/(grub2/)?grub.cfg -p wa -k (boot|grub)|-w /boot/(grub2/)?grubenv -p wa -k (boot|grub)|-w /efi -p wa -k efi)' || true
+    expect: '(?s)(?=.*grub.cfg)(?=.*grubenv)'
+    assert_type: "regexp"
       auditctl -l 2>/dev/null | grep -E -- '-w /(boot|efi) -p wa -k (boot|efi)' || true
     expect: "-w /boot"
     assert_type: "contains"
@@ -241,6 +311,11 @@ checks:
     name: "auditd: контроль sudo/su/passwd"
     module: "integrity"
     command: |
+
+      auditctl -l 2>/dev/null \
+        | grep -E -- '(-w /usr/bin/sudo -p xwa -k (privileged|sudo)|-w /bin/su -p xwa -k (privileged|su)|-w /usr/bin/passwd -p xwa -k (privileged|passwd))' || true
+    expect: '(?s)(?=.*sudo)(?=.*su)(?=.*passwd)'
+    assert_type: "regexp"
       auditctl -l 2>/dev/null | grep -E -- '-w /(usr/bin/sudo|bin/su|usr/bin/passwd) -p xwa' || true
     expect: "/usr/bin/sudo"
     assert_type: "contains"
@@ -299,7 +374,8 @@ checks:
     module: "system"
     command: |
       if systemctl is-active --quiet chronyd 2>/dev/null; then
-        chronyc sources -n 2>/dev/null | awk '/^[\^\*\+#]/ {print $1}'
+
+        chronyc sources -v 2>/dev/null | awk '/^[\^\*\+#]/ {print $1}'
       elif systemctl is-active --quiet ntpd 2>/dev/null; then
         ntpq -np 2>/dev/null | awk '/^[\*\+]/ {print $1}'
       else
@@ -324,6 +400,23 @@ checks:
       fi
     expect: "makestep"
     assert_type: "contains"
+    severity: "low"
+    tags:
+      fstec: ["АНЗ.1"]
+      cis: "2.2.1"
+      goskz: "7.5.1"
+
+  - id: base_ntp_minsources
+    name: "chrony: заданы минимальные источники (minsources)"
+    module: "system"
+    command: |
+      if systemctl is-active --quiet chronyd 2>/dev/null && [ -f /etc/chrony.conf ]; then
+        sed -E 's/#.*$//' /etc/chrony.conf | awk '{$1=$1};1' | grep -i '^minsources'
+      else
+        echo skipped
+      fi
+    expect: "^(minsources[[:space:]]+([2-9]|[1-9][0-9])|skipped)$"
+    assert_type: "regexp"
     severity: "low"
     tags:
       fstec: ["АНЗ.1"]
@@ -454,6 +547,30 @@ checks:
       cis: "3.6.6"
       goskz: "6.4.2"
 
+  - id: base_sysctl_disable_ipv6_default
+    name: "net.ipv6.conf.default.disable_ipv6=1"
+    module: "system"
+    command: "sysctl -n net.ipv6.conf.default.disable_ipv6 2>/dev/null || echo 0"
+    expect: "^1$"
+    assert_type: "regexp"
+    severity: "medium"
+    tags:
+      fstec: ["ЗИС.11"]
+      cis: "3.6.6"
+      goskz: "6.4.2"
+
+  - id: base_sysctl_disable_ipv6_lo
+    name: "net.ipv6.conf.lo.disable_ipv6=1"
+    module: "system"
+    command: "sysctl -n net.ipv6.conf.lo.disable_ipv6 2>/dev/null || echo 0"
+    expect: "^1$"
+    assert_type: "regexp"
+    severity: "medium"
+    tags:
+      fstec: ["ЗИС.11"]
+      cis: "3.6.6"
+      goskz: "6.4.2"
+
   - id: base_sysctl_modules_disabled
     name: "kernel.modules_disabled=1 после инициализации"
     module: "system"
@@ -481,7 +598,7 @@ checks:
   - id: base_kernel_module_blacklist_peripherals
     name: "Запрещены Wi-Fi/Bluetooth/камера при политике"
     module: "system"
-    command: "grep -R --no-color -h 'blacklist ' /etc/modprobe.d 2>/dev/null | grep -E '(ath9k|iwlwifi|btusb|uvcvideo)' || true"
+    command: "grep -R --no-color -h 'blacklist ' /etc/modprobe.d 2>/dev/null | grep -E '(ath9k|iwlwifi|btusb|uvcvideo|snd_hda_intel)' || true"
     expect: "blacklist"
     assert_type: "contains"
     severity: "low"
@@ -600,6 +717,30 @@ checks:
       cis: "1.1.5"
       goskz: "8.2.3"
 
+  - id: base_devshm_mount_options
+    name: "/dev/shm смонтирован с nodev,nosuid,noexec"
+    module: "system"
+    command: "findmnt -no OPTIONS /dev/shm 2>/dev/null || echo none"
+    expect: "(?=.*nodev)(?=.*nosuid)(?=.*noexec)"
+    assert_type: "regexp"
+    severity: "medium"
+    tags:
+      fstec: ["ЗИС.7"]
+      cis: "1.1.16"
+      goskz: "8.2.3"
+
+  - id: base_runshm_mount_options
+    name: "/run/shm смонтирован с nodev,nosuid,noexec"
+    module: "system"
+    command: "findmnt -no OPTIONS /run/shm 2>/dev/null || echo none"
+    expect: "(?=.*nodev)(?=.*nosuid)(?=.*noexec)"
+    assert_type: "regexp"
+    severity: "low"
+    tags:
+      fstec: ["ЗИС.7"]
+      cis: "1.1.17"
+      goskz: "8.2.3"
+
   # ─────────────── Мониторинг и журналирование ───────────────
   - id: base_journald_persistent
     name: "journald: Storage=persistent"
@@ -673,8 +814,9 @@ checks:
         | sed -E 's/#.*$//' \
         | awk -F= '/^SystemMaxUse=/{gsub(/[[:space:]]+/,"",$0); print $1"="$2}' \
         | tail -n1
-    expect: "SystemMaxUse="
-    assert_type: "contains"
+
+    expect: "SystemMaxUse=([1-9][0-9]*)([KMGTP]B?|%)$"
+    assert_type: "regexp"
     severity: "medium"
     tags:
       fstec: ["АНЗ.5"]
@@ -892,6 +1034,25 @@ checks:
         echo skipped
       fi
     expect: "^(protected|skipped)$"
+    assert_type: "regexp"
+    severity: "medium"
+    tags:
+      fstec: ["ЗИС.17"]
+      cis: "3.6.6"
+      goskz: "6.4.2"
+
+  - id: base_ipv6_firewall_default_deny
+    name: "IPv6: политика DROP по умолчанию"
+    module: "network"
+    command: |
+      if command -v nft >/dev/null 2>&1; then
+        nft list ruleset 2>/dev/null | grep -E 'family (inet|ip6).*hook (input|forward|output).*policy drop' | sort -u | wc -l
+      elif command -v ip6tables >/dev/null 2>&1; then
+        ip6tables -S | grep -E '^-P (INPUT|FORWARD|OUTPUT) DROP' | wc -l
+      else
+        echo 0
+      fi
+    expect: "^([3-9]|[1-9][0-9]+)$"
     assert_type: "regexp"
     severity: "medium"
     tags:
