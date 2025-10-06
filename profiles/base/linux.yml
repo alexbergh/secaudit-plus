@@ -25,6 +25,18 @@ checks:
       cis: "5.4.1"
       goskz: "5.3.1"
 
+  - id: base_pam_nullok_disabled
+    name: "PAM: опция nullok отключена"
+    module: "system"
+    command: "grep -R --color=never -E '^[[:space:]]*auth[[:space:]]+[^#]*pam_unix\\.so.*nullok' /etc/pam.d 2>/dev/null || true"
+    expect: ""
+    assert_type: "exact"
+    severity: "high"
+    tags:
+      fstec: ["ИАФ.2"]
+      cis: "5.4.1"
+      goskz: "5.3.1"
+
   - id: base_system_accounts_shells
     name: "Системные аккаунты заблокированы (nologin/false)"
     module: "system"
@@ -42,12 +54,24 @@ checks:
     name: "sudo: отсутствуют правила с NOPASSWD"
     module: "system"
     command: "grep -R --color=never -h 'NOPASSWD' /etc/sudoers /etc/sudoers.d 2>/dev/null | grep -v '^#' || true"
-    expect: ""
-    assert_type: "exact"
+    expect: "profiles/include/allowlist_sudo_nopasswd.txt"
+    assert_type: "set_allowlist"
     severity: "medium"
     tags:
       fstec: ["ИАФ.5"]
       cis: "5.3.4"
+      goskz: "5.3.6"
+
+  - id: base_su_pam_wheel
+    name: "su: доступ только членам wheel"
+    module: "system"
+    command: "grep -RhsE '^[[:space:]]*auth[[:space:]]+required[[:space:]]+pam_wheel\\.so.*use_uid' /etc/pam.d/su 2>/dev/null"
+    expect: "pam_wheel.so"
+    assert_type: "contains"
+    severity: "high"
+    tags:
+      fstec: ["ИАФ.5"]
+      cis: "5.3.8"
       goskz: "5.3.6"
 
   - id: base_sudo_requiretty_logging
@@ -493,6 +517,18 @@ checks:
       goskz: "6.2.2"
 
   # ─────────────── Ядро и системные параметры ───────────────
+  - id: base_sysctl_dmesg_restrict
+    name: "kernel.dmesg_restrict=1"
+    module: "system"
+    command: "sysctl -n kernel.dmesg_restrict 2>/dev/null || echo 0"
+    expect: "^1$"
+    assert_type: "regexp"
+    severity: "high"
+    tags:
+      fstec: ["ЗИС.10"]
+      cis: "1.5.2"
+      goskz: "8.1.2"
+
   - id: base_sysctl_unprivileged_bpf
     name: "kernel.unprivileged_bpf_disabled=1"
     module: "system"
@@ -516,6 +552,162 @@ checks:
       fstec: ["ЗИС.10"]
       cis: "1.5.3"
       goskz: "8.1.2"
+
+  - id: base_sysctl_bpf_jit_harden
+    name: "net.core.bpf_jit_harden=2"
+    module: "system"
+    command: "sysctl -n net.core.bpf_jit_harden 2>/dev/null || echo 0"
+    expect: "^2$"
+    assert_type: "regexp"
+    severity: "medium"
+    tags:
+      fstec: ["ЗИС.10"]
+      cis: "1.5.1"
+      goskz: "8.1.2"
+
+  - id: base_sysctl_perf_event_paranoid
+    name: "kernel.perf_event_paranoid ≥ 3"
+    module: "system"
+    command: "sysctl -n kernel.perf_event_paranoid 2>/dev/null || echo 0"
+    expect: "^[3-9]$"
+    assert_type: "regexp"
+    severity: "medium"
+    tags:
+      fstec: ["ЗИС.10"]
+      cis: "1.1.1"
+      goskz: "8.1.2"
+
+  - id: base_sysctl_kexec_disabled
+    name: "kernel.kexec_load_disabled=1"
+    module: "system"
+    command: "sysctl -n kernel.kexec_load_disabled 2>/dev/null || echo 0"
+    expect: "^1$"
+    assert_type: "regexp"
+    severity: "high"
+    tags:
+      fstec: ["ЗИС.10"]
+      cis: "1.5.4"
+      goskz: "8.1.2"
+
+  - id: base_sysctl_userfaultfd_disabled
+    name: "vm.unprivileged_userfaultfd=0"
+    module: "system"
+    command: "sysctl -n vm.unprivileged_userfaultfd 2>/dev/null || echo 1"
+    expect: "^0$"
+    assert_type: "regexp"
+    severity: "medium"
+    tags:
+      fstec: ["ЗИС.10"]
+      cis: "1.5.2"
+      goskz: "8.1.2"
+
+  - id: base_sysctl_tty_ldisc_autoload
+    name: "dev.tty.ldisc_autoload=0"
+    module: "system"
+    command: "sysctl -n dev.tty.ldisc_autoload 2>/dev/null || echo 1"
+    expect: "^0$"
+    assert_type: "regexp"
+    severity: "medium"
+    tags:
+      fstec: ["ЗИС.10"]
+      cis: "1.5.2"
+      goskz: "8.1.2"
+
+  - id: base_sysctl_mmap_min_addr
+    name: "vm.mmap_min_addr ≥ 65536"
+    module: "system"
+    command: "sysctl -n vm.mmap_min_addr 2>/dev/null || echo 0"
+    expect: "^(65536|[1-9][0-9]{5,})$"
+    assert_type: "regexp"
+    severity: "medium"
+    tags:
+      fstec: ["ЗИС.10"]
+      cis: "1.5.3"
+      goskz: "8.1.2"
+
+  - id: base_sysctl_randomize_va_space
+    name: "kernel.randomize_va_space=2"
+    module: "system"
+    command: "sysctl -n kernel.randomize_va_space 2>/dev/null || echo 0"
+    expect: "^2$"
+    assert_type: "regexp"
+    severity: "high"
+    tags:
+      fstec: ["ЗИС.10"]
+      cis: "1.5.3"
+      goskz: "8.1.2"
+
+  - id: base_sysctl_ptrace_scope
+    name: "kernel.yama.ptrace_scope=3"
+    module: "system"
+    command: "sysctl -n kernel.yama.ptrace_scope 2>/dev/null || echo 0"
+    expect: "^3$"
+    assert_type: "regexp"
+    severity: "high"
+    tags:
+      fstec: ["ЗИС.10"]
+      cis: "1.5.3"
+      goskz: "8.1.2"
+
+  - id: base_sysctl_protected_symlinks
+    name: "fs.protected_symlinks=1"
+    module: "system"
+    command: "sysctl -n fs.protected_symlinks 2>/dev/null || echo 0"
+    expect: "^1$"
+    assert_type: "regexp"
+    severity: "medium"
+    tags:
+      fstec: ["ЗИС.7"]
+      cis: "1.5.3"
+      goskz: "8.2.1"
+
+  - id: base_sysctl_protected_hardlinks
+    name: "fs.protected_hardlinks=1"
+    module: "system"
+    command: "sysctl -n fs.protected_hardlinks 2>/dev/null || echo 0"
+    expect: "^1$"
+    assert_type: "regexp"
+    severity: "medium"
+    tags:
+      fstec: ["ЗИС.7"]
+      cis: "1.5.3"
+      goskz: "8.2.1"
+
+  - id: base_sysctl_protected_fifos
+    name: "fs.protected_fifos=2"
+    module: "system"
+    command: "sysctl -n fs.protected_fifos 2>/dev/null || echo 0"
+    expect: "^2$"
+    assert_type: "regexp"
+    severity: "medium"
+    tags:
+      fstec: ["ЗИС.7"]
+      cis: "1.5.3"
+      goskz: "8.2.1"
+
+  - id: base_sysctl_protected_regular
+    name: "fs.protected_regular=2"
+    module: "system"
+    command: "sysctl -n fs.protected_regular 2>/dev/null || echo 0"
+    expect: "^2$"
+    assert_type: "regexp"
+    severity: "medium"
+    tags:
+      fstec: ["ЗИС.7"]
+      cis: "1.5.3"
+      goskz: "8.2.1"
+
+  - id: base_sysctl_suid_dumpable
+    name: "fs.suid_dumpable=0"
+    module: "system"
+    command: "sysctl -n fs.suid_dumpable 2>/dev/null || echo 1"
+    expect: "^0$"
+    assert_type: "regexp"
+    severity: "high"
+    tags:
+      fstec: ["ЗИС.7"]
+      cis: "1.5.3"
+      goskz: "8.2.1"
 
   - id: base_sysctl_tcp_syncookies
     name: "net.ipv4.tcp_syncookies=1"
@@ -601,6 +793,18 @@ checks:
       cis: "1.1.1"
       goskz: "8.1.3"
 
+  - id: base_cmdline_fstec_hardening
+    name: "Командная строка ядра: включены параметры защиты"
+    module: "system"
+    command: "cat /proc/cmdline"
+    expect: "(?s)(?=.*\\binit_on_alloc=1\\b)(?=.*\\bslab_nomerge\\b)(?=.*\\biommu=force\\b)(?=.*\\biommu\\.strict=1\\b)(?=.*\\biommu\\.passthrough=0\\b)(?=.*\\brandomize_kstack_offset=1\\b)(?=.*\\bmitigations=auto,nosmt\\b)(?=.*\\bvsyscall=none\\b)(?=.*\\bdebugfs=(?:no-mount|off)\\b)(?=.*\\btsx=off\\b)"
+    assert_type: "regexp"
+    severity: "high"
+    tags:
+      fstec: ["ЗИС.10"]
+      cis: "1.5.3"
+      goskz: "8.1.1"
+
   - id: base_cmdline_no_selinux0
     name: "Командная строка ядра: нет selinux=0"
     module: "system"
@@ -650,6 +854,19 @@ checks:
       goskz: "8.1.1"
 
   # ─────────────── Права файлов и точки монтирования ───────────────
+  - id: base_system_account_files_modes
+    name: "Права /etc/passwd,/etc/group,/etc/shadow соответствуют политике"
+    module: "system"
+    command: |
+      stat -Lc '%n:%a' /etc/passwd /etc/group /etc/shadow 2>/dev/null
+    expect: "(?s)(?=.*passwd:64[04])(?=.*group:64[04])(?=.*shadow:0?6(40|00))"
+    assert_type: "regexp"
+    severity: "high"
+    tags:
+      fstec: ["ЗИС.7"]
+      cis: "6.1.2"
+      goskz: "8.2.1"
+
   - id: base_suid_allowlist
     name: "SUID/SGID-бинарники соответствуют allowlist"
     module: "system"
@@ -674,6 +891,60 @@ checks:
       fstec: ["ЗИС.7"]
       cis: "6.1.12"
       goskz: "8.2.2"
+
+  - id: base_cron_files_strict_perms
+    name: "Cron-скрипты без group/world-write"
+    module: "system"
+    command: |
+      find /etc/cron* -xtype f -exec stat -Lc '%a %n' {} + 2>/dev/null \
+        | awk '$1 ~ /..[2-7]/ || $1 ~ /.[2-7]./'
+    expect: ""
+    assert_type: "exact"
+    severity: "medium"
+    tags:
+      fstec: ["ЗИС.7"]
+      cis: "6.1.11"
+      goskz: "8.2.2"
+
+  - id: base_home_directories_mode_700
+    name: "Домашние каталоги пользователей имеют права 700"
+    module: "system"
+    command: |
+      awk -F: '($3>=1000 && $1!="nfsnobody" && $7!="/usr/sbin/nologin" && $7!="/bin/false"){print $1":"$6}' /etc/passwd 2>/dev/null \
+        | while IFS=: read user home; do
+            [ -d "$home" ] || continue
+            perm=$(stat -Lc %a "$home" 2>/dev/null || echo unknown)
+            if [ "$perm" != "700" ]; then
+              echo "$user:$perm:$home"
+            fi
+          done
+    expect: ""
+    assert_type: "exact"
+    severity: "medium"
+    tags:
+      fstec: ["ЗИС.7"]
+      cis: "6.2.6"
+      goskz: "8.2.2"
+
+  - id: base_home_shell_rc_permissions
+    name: "История и shell-профили без world-read"
+    module: "system"
+    command: |
+      awk -F: '($3>=1000 && $1!="nfsnobody"){print $6}' /etc/passwd 2>/dev/null \
+        | while read home; do
+            [ -d "$home" ] || continue
+            find "$home" -maxdepth 1 -type f \
+              \( -name '.bash_history' -o -name '.bashrc' -o -name '.profile' -o -name '.bash_login' -o -name '.bash_logout' -o -name '.zshrc' -o -name '.zprofile' -o -name '.zlogin' \) \
+              -exec stat -Lc '%a %n' {} +
+          done 2>/dev/null \
+        | awk '$1 ~ /..[2-7]/ || $1 ~ /.[2-7]./'
+    expect: ""
+    assert_type: "exact"
+    severity: "low"
+    tags:
+      fstec: ["ЗИС.7"]
+      cis: "6.2.7"
+      goskz: "8.2.3"
 
   - id: base_tmp_mount_options
     name: "/tmp смонтирован с nodev,nosuid,noexec"
