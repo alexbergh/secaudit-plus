@@ -6,13 +6,26 @@ from pathlib import Path
 import pytest
 import yaml
 
+from modules.audit_runner import _expand_extends, load_profile as load_profile_data
+
 PROFILES_DIR = Path(__file__).resolve().parent.parent / "profiles"
 BASE_PROFILE = PROFILES_DIR / "base" / "linux.yml"
+DEBIAN_PROFILE = PROFILES_DIR / "os" / "debian.yml"
 
 
 def _load_profile(profile_path: Path) -> dict:
     with profile_path.open(encoding="utf-8") as fh:
         return yaml.safe_load(fh)
+
+
+def _load_expanded_profile(profile_path: Path) -> dict:
+    raw_profile = load_profile_data(str(profile_path))
+    return _expand_extends(raw_profile, profile_path.resolve().parent)
+
+
+def _collect_check_ids(profile: dict) -> list[str]:
+    checks = profile.get("checks", []) or []
+    return [str(check.get("id", "")) for check in checks if isinstance(check, dict)]
 
 
 @pytest.mark.parametrize("profile_path", sorted(PROFILES_DIR.glob("**/*.yml")))
@@ -87,3 +100,26 @@ def test_mount_options_require_expected_flags():
     home_check = _get_check(profile, "base_home_mount_options")
     assert home_check["assert_type"] == "contains"
     assert home_check["expect"] == "nodev"
+
+
+def test_base_profile_has_unique_check_ids_after_expansion():
+    profile = _load_expanded_profile(BASE_PROFILE)
+    check_ids = _collect_check_ids(profile)
+    assert len(check_ids) == len(set(check_ids)), "duplicate check IDs detected in base profile"
+
+
+@pytest.mark.parametrize("profile_path", sorted((PROFILES_DIR / "os").glob("*.yml")))
+def test_os_profiles_have_unique_check_ids(profile_path: Path):
+    profile = _load_expanded_profile(profile_path)
+    check_ids = _collect_check_ids(profile)
+    assert len(check_ids) == len(set(check_ids)), f"duplicate check IDs detected in {profile_path.name}"
+
+
+def test_debian_profile_overrides_shadow_permission_patterns():
+    profile = _load_expanded_profile(DEBIAN_PROFILE)
+    vars_section = profile.get("vars", {}) or {}
+    assert vars_section.get("SHADOW_PERM_PATTERN") == "^(600|640)$"
+    assert vars_section.get("GSHADOW_PERM_PATTERN") == "^(600|640)$"
+    check_ids = _collect_check_ids(profile)
+    assert "check_shadow_perms" in check_ids
+    assert "check_gshadow_perms" in check_ids
