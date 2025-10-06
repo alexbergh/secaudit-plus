@@ -1,0 +1,135 @@
+schema_version: "1.1"
+profile_name: "ALT 8 СП — профиль iptables/ГОСТ/dm-secdel"
+description: "Расширенный контроль для ALT 8 СП: сетевые фильтры iptables, ГОСТ-криптография и безопасное удаление (dm-secdel)."
+
+meta:
+  fstec: "https://fstec.ru/normativnye-dokumenty/prikazy/239"
+  vendor: "https://docs.altlinux.org/ru/ALT8_SP/"
+  gost: "https://www.tc26.ru/standard/gost/"
+
+checks:
+  # ─────────────── Сетевой экран (iptables) ───────────────
+  - id: alt8sp_firewall_policy
+    name: "iptables: политика DROP на INPUT/FORWARD/OUTPUT"
+    module: "network"
+    command: |
+      if command -v iptables >/dev/null 2>&1; then
+        iptables -S | grep -E '^-P (INPUT|FORWARD|OUTPUT) DROP' | wc -l
+      else
+        echo 0
+      fi
+    expect: "^3$"
+    assert_type: "regexp"
+    severity: "high"
+    tags:
+      fstec: ["ЗИС.17"]
+      vendor: "ALT 8 СП Безопасность §5.2"
+      gost: "—"
+
+  - id: alt8sp_firewall_established
+    name: "iptables: разрешён трафик RELATED,ESTABLISHED"
+    module: "network"
+    command: |
+      if command -v iptables >/dev/null 2>&1; then
+        iptables -S INPUT 2>/dev/null | grep -E 'RELATED,ESTABLISHED' || true
+      else
+        echo ""
+      fi
+    expect: "RELATED,ESTABLISHED"
+    assert_type: "contains"
+    severity: "medium"
+    tags:
+      fstec: ["ЗИС.17"]
+      vendor: "ALT 8 СП Безопасность §5.2"
+      gost: "—"
+
+  # ─────────────── ГОСТ криптография ───────────────
+  - id: alt8sp_openssl_gost_engine
+    name: "OpenSSL: подключён движок GOST"
+    module: "crypto"
+    command: "openssl engine -c 2>/dev/null | grep -i gost || true"
+    expect: "gost"
+    assert_type: "contains"
+    severity: "high"
+    tags:
+      fstec: ["ЗИС.11"]
+      vendor: "ALT 8 СП Криптография §4.1"
+      gost: "ГОСТ Р 34.10-2012"
+
+  - id: alt8sp_openssl_config_gost
+    name: "openssl.cnf содержит секцию gost_algorithms"
+    module: "crypto"
+    command: |
+      python3 - <<'PY'
+      import json, pathlib
+      path = pathlib.Path('/etc/ssl/openssl.cnf')
+      enabled = False
+      if path.exists():
+          text = path.read_text(errors='ignore').lower()
+          enabled = 'gost' in text
+      print(json.dumps({'gost_enabled': enabled}))
+      PY
+    expect:
+      path: "$.gost_enabled"
+      value: true
+    assert_type: "jsonpath"
+    severity: "medium"
+    tags:
+      fstec: ["ЗИС.11"]
+      vendor: "ALT 8 СП Криптография §4.3"
+      gost: "ГОСТ Р 34.11-2012"
+
+  # ─────────────── Безопасное удаление (dm-secdel) ───────────────
+  - id: alt8sp_dm_secdel_module
+    name: "dm_secdel модуль ядра загружен"
+    module: "integrity"
+    command: "test -d /sys/module/dm_secdel"
+    expect: 0
+    assert_type: "exit_code"
+    severity: "high"
+    tags:
+      fstec: ["ЗИС.8"]
+      vendor: "ALT 8 СП Руководство администратора §6.4"
+      gost: "—"
+
+  - id: alt8sp_dm_secdel_mapping
+    name: "crypttab: секции с параметром secdel"
+    module: "integrity"
+    command: "grep -RhsE 'secdel' /etc/crypttab 2>/dev/null || true"
+    expect: "secdel"
+    assert_type: "contains"
+    severity: "medium"
+    tags:
+      fstec: ["ЗИС.8"]
+      vendor: "ALT 8 СП Руководство администратора §6.5"
+      gost: "—"
+
+  - id: alt8sp_dmsetup_status
+    name: "dmsetup status показывает secure_delete=1"
+    module: "integrity"
+    command: "dmsetup status 2>/dev/null | grep -E 'secure_delete=1' || true"
+    expect: "secure_delete=1"
+    assert_type: "contains"
+    severity: "medium"
+    tags:
+      fstec: ["ЗИС.8"]
+      vendor: "ALT 8 СП Руководство администратора §6.5"
+      gost: "—"
+
+  # ─────────────── Службы и аудит ───────────────
+  - id: alt8sp_auditd_enabled
+    name: "auditd активирован и включён в автозапуск"
+    module: "services"
+    command: |
+      if systemctl is-enabled auditd 2>/dev/null; then
+        systemctl is-active auditd 2>/dev/null
+      else
+        echo inactive
+      fi
+    expect: "active"
+    assert_type: "exact"
+    severity: "medium"
+    tags:
+      fstec: ["ЗИС.6"]
+      vendor: "ALT 8 СП Безопасность §7.2"
+      gost: "—"

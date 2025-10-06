@@ -1,0 +1,3 @@
+# Допустимые правила sudo NOPASSWD.
+# Укажите строки в формате, который выводит проверка, например:
+# %admins ALL=(ALL) NOPASSWD: /usr/bin/systemctl restart httpd

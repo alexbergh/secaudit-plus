@@ -1,9 +1,21 @@
 # modules/cli.py
 import argparse
+import os
 import sys
-import yaml
 from pathlib import Path
 from typing import Tuple, List, Dict, Any
+
+from secaudit.exceptions import MissingDependencyError
+
+try:
+    import yaml  # type: ignore
+except ModuleNotFoundError as exc:  # pragma: no cover - runtime guard
+    yaml = None  # type: ignore
+    _YAML_IMPORT_ERROR = exc
+else:  # pragma: no cover - exercised indirectly
+    _YAML_IMPORT_ERROR = None
+
+from seclib.validator import PROFILE_SCHEMA as STRICT_PROFILE_SCHEMA
 
 # Пытаемся подключить jsonschema, чтобы валидировать профиль.
 # Если библиотека не установлена — работаем без "жёсткой" валидации.
@@ -15,50 +27,9 @@ except Exception:
     _HAS_JSONSCHEMA = False
 
 
-# ──────────────────────────────────────────────────────────────────────────────
-# Мини-схема профиля (упрощённая, без жесткого перечисления всех полей check)
-# ──────────────────────────────────────────────────────────────────────────────
-_PROFILE_SCHEMA = {
-    "type": "object",
-    "required": ["profile_name", "description", "checks"],
-    "properties": {
-        "profile_name": {"type": "string"},
-        "description": {"type": "string"},
-        "checks": {
-            "type": "array",
-            "items": {
-                "type": "object",
-                "required": ["id", "name", "module", "command", "expect", "assert_type", "severity"],
-                "properties": {
-                    "id": {"type": "string"},
-                    "name": {"type": "string"},
-                    "module": {"type": "string"},
-                    "command": {"type": "string"},
-                    "expect": {"type": "string"},
-                    # Допустимые типы сравнения: exact | contains | not_contains | regexp | exit_code
-                    "assert_type": {
-                        "type": "string",
-                        "enum": [
-                            "exact",
-                            "contains",
-                            "not_contains",
-                            "regexp",
-                            "exit_code",
-                        ],
-                    },
-                    "severity": {"type": "string", "enum": ["low", "medium", "high"]},
-                    # Важно: теги — словарь {строка: строка}. Если у тебя массивы, конверти в строку заранее.
-                    "tags": {
-                        "type": "object",
-                        "additionalProperties": {"type": "string"}
-                    }
-                },
-                "additionalProperties": True
-            }
-        }
-    },
-    "additionalProperties": True
-}
+_PROFILE_SCHEMA = STRICT_PROFILE_SCHEMA
+DEFAULT_PROFILE_PATH = "profiles/common/baseline.yml"
+PROFILE_ARGUMENT_HELP = "Необязательный путь к профилю."
 
 
 # ──────────────────────────────────────────────────────────────────────────────
@@ -71,10 +42,76 @@ def list_modules(profile: Dict[str, Any]) -> None:
         print(m)
 
 
-def list_checks(profile: Dict[str, Any], module: str | None = None) -> None:
-    """Печатает список проверок, опционально фильтруя по модулю."""
+def parse_tag_filters(raw: List[str] | None) -> Dict[str, str]:
+    filters: Dict[str, str] = {}
+    if not raw:
+        return filters
+    for item in raw:
+        if "=" not in item:
+            raise ValueError(f"Неверный формат фильтра по тегам: '{item}' (используйте KEY=VALUE)")
+        key, value = item.split("=", 1)
+        key = key.strip().lower()
+        value = value.strip().lower()
+        if not key or not value:
+            raise ValueError(f"Неверный фильтр по тегам: '{item}'")
+        filters[key] = value
+    return filters
+
+
+def parse_kv_pairs(raw: List[str] | None, *, option: str) -> Dict[str, str]:
+    """Парсит список KEY=VALUE в словарь."""
+
+    if not raw:
+        return {}
+
+    parsed: Dict[str, str] = {}
+    for item in raw:
+        if "=" not in item:
+            raise ValueError(
+                f"Неверный формат {option}: '{item}'. Используйте KEY=VALUE."
+            )
+        key, value = item.split("=", 1)
+        key = key.strip()
+        value = value.strip()
+        if not key:
+            raise ValueError(f"Неверный ключ в {option}: '{item}'")
+        parsed[key] = value
+    return parsed
+
+
+def _match_tags(check_tags: Dict[str, Any], filters: Dict[str, str]) -> bool:
+    if not filters:
+        return True
+    if not isinstance(check_tags, dict):
+        return False
+    lowered = {str(k).lower(): v for k, v in check_tags.items()}
+    for key, expected in filters.items():
+        value = lowered.get(key)
+        if value is None:
+            return False
+        if isinstance(value, (list, tuple, set)):
+            haystack = [str(v).lower() for v in value]
+            if expected not in haystack:
+                return False
+        else:
+            if str(value).lower() != expected:
+                return False
+    return True
+
+
+def list_checks(
+    profile: Dict[str, Any],
+    module: str | None = None,
+    tags: Dict[str, str] | None = None,
+) -> None:
+    """Печатает список проверок, опционально фильтруя по модулю и тегам."""
+    tags = tags or {}
+    module_filter = module.lower() if module else None
     for check in profile.get("checks", []):
-        if module and check.get("module") != module:
+        check_module = str(check.get("module", "")).lower()
+        if module_filter and check_module != module_filter:
+            continue
+        if tags and not _match_tags(check.get("tags", {}), tags):
             continue
         cid = check.get("id", "<no_id>")
         name = check.get("name", "<Unnamed Check>")
@@ -109,9 +146,16 @@ def load_profile_file(path: str) -> Dict[str, Any]:
     if not p.is_file():
         print(f"Ошибка: Файл профиля не найден: {path}", file=sys.stderr)
         sys.exit(2)
+    if yaml is None:
+        raise MissingDependencyError(
+            package="PyYAML",
+            import_name="yaml",
+            instructions="pip install -r requirements.txt",
+            original=_YAML_IMPORT_ERROR,
+        )
     try:
-        return yaml.safe_load(p.read_text(encoding="utf-8")) or {}
-    except yaml.YAMLError as e:
+        return yaml.safe_load(p.read_text(encoding="utf-8")) or {}  # type: ignore[union-attr]
+    except yaml.YAMLError as e:  # type: ignore[union-attr]
         print(f"Ошибка: Не удалось прочитать YAML: {e}", file=sys.stderr)
         sys.exit(2)
 
@@ -124,7 +168,7 @@ def validate_profile(profile: Dict[str, Any]) -> Tuple[bool, List[str]]:
         return False, ["Формат профиля не является YAML-объектом (ожидался mapping)."]
 
     # Базовые проверки без jsonschema
-    required_top = ["profile_name", "description", "checks"]
+    required_top = ["schema_version", "profile_name", "description", "checks"]
     for k in required_top:
         if k not in profile:
             errors.append(f"Отсутствует обязательное поле '{k}'.")
@@ -148,52 +192,94 @@ def validate_profile(profile: Dict[str, Any]) -> Tuple[bool, List[str]]:
 # ──────────────────────────────────────────────────────────────────────────────
 # Парсинг аргументов
 # ──────────────────────────────────────────────────────────────────────────────
-def _parent_parser() -> argparse.ArgumentParser:
-    """Родительский парсер с общими для подкоманд аргументами (если нужно)."""
-    parent = argparse.ArgumentParser(add_help=False)
-    return parent
+def _add_profile_arguments(subparser: argparse.ArgumentParser, *, default_profile: str) -> None:
+    """Подключает флаг и позиционный аргумент профиля к подкоманде."""
+
+    subparser.add_argument(
+        "--profile",
+        dest="profile",
+        default=argparse.SUPPRESS,
+        help=f"Путь к YAML-профилю (по умолчанию: {default_profile})",
+    )
+    subparser.add_argument(
+        "profile_path",
+        nargs="?",
+        metavar="PROFILE",
+        help=PROFILE_ARGUMENT_HELP,
+    )
 
 
-def parse_args() -> argparse.Namespace:
+def parse_args(argv: List[str] | None = None) -> argparse.Namespace:
     """
     Глобальный флаг --profile разрешён и до, и после команды.
-    Примеры:
-      secaudit --profile profiles/alt.yml list-modules
-      secaudit list-modules --profile profiles/alt.yml
+    Также можно указать путь к профилю последним позиционным аргументом:
+      secaudit validate profiles/alt.yml
+      secaudit audit profiles/alt.yml --fail-on-undef
+
+    Если флаг и позиционный аргумент переданы одновременно, предпочтение
+    отдаётся позиционному значению, чтобы последняя указанная цель профиля
+    всегда побеждала.
     """
-    parent = _parent_parser()
+
+    if argv is None:
+        argv = sys.argv[1:]
+
+    default_profile = DEFAULT_PROFILE_PATH
+
+    info_flags = {"-i", "--info"}
+    if argv and all(arg in info_flags for arg in argv):
+        # Короткий путь: только флаг --info/ -i без дополнительных аргументов.
+        # Возвращаем минимальный namespace, чтобы избежать жалоб argparse на
+        # отсутствие подкоманды в разных окружениях.
+        return argparse.Namespace(info=True, command=None, profile=default_profile)
 
     parser = argparse.ArgumentParser(
         prog="secaudit",
         description="SecAudit++ CLI — запуск аудита, валидация профиля и служебные команды.",
     )
 
-    # Глобальный флаг профиля — можно ставить до/после команды
     parser.add_argument(
-        "--profile",
-        default="profiles/common/baseline.yml",
-        help="Путь к YAML-профилю (по умолчанию: profiles/common/baseline.yml)",
+        "-i",
+        "--info",
+        action="store_true",
+        help="Показать сведения о проекте и завершиться.",
     )
 
-    subs = parser.add_subparsers(dest="command", required=True, help="Доступные команды")
+    parser.add_argument(
+        "--profile",
+        dest="profile",
+        default=argparse.SUPPRESS,
+        help=f"Путь к YAML-профилю (по умолчанию: {default_profile})",
+    )
 
-    # list-modules
-    subs.add_parser("list-modules", parents=[parent], help="Показать все модули в профиле")
+    subs = parser.add_subparsers(dest="command", required=False, help="Доступные команды")
 
-    # list-checks
-    sub_checks = subs.add_parser("list-checks", parents=[parent], help="Показать проверки")
+    sub_modules = subs.add_parser("list-modules", help="Показать все модули в профиле")
+    _add_profile_arguments(sub_modules, default_profile=default_profile)
+
+    sub_checks = subs.add_parser("list-checks", help="Показать проверки")
     sub_checks.add_argument("--module", help="Фильтровать проверки по модулю")
+    sub_checks.add_argument(
+        "--tags",
+        action="append",
+        metavar="KEY=VALUE",
+        help="Фильтр по тегам (можно указывать несколько раз)",
+    )
+    _add_profile_arguments(sub_checks, default_profile=default_profile)
 
-    # describe-check
-    sub_desc = subs.add_parser("describe-check", parents=[parent], help="Детали проверки по ID")
+    sub_desc = subs.add_parser("describe-check", help="Детали проверки по ID")
     sub_desc.add_argument("check_id", help="ID проверки")
+    _add_profile_arguments(sub_desc, default_profile=default_profile)
 
-    # validate
-    sub_val = subs.add_parser("validate", parents=[parent], help="Проверить профиль на ошибки")
-    sub_val.add_argument("--strict", action="store_true", help="Строгий режим: код возврата 1 при предупреждениях")
+    sub_val = subs.add_parser("validate", help="Проверить профиль на ошибки")
+    sub_val.add_argument(
+        "--strict",
+        action="store_true",
+        help="Строгий режим: код возврата 1 при предупреждениях",
+    )
+    _add_profile_arguments(sub_val, default_profile=default_profile)
 
-    # audit
-    sub_audit = subs.add_parser("audit", parents=[parent], help="Запустить аудит")
+    sub_audit = subs.add_parser("audit", help="Запустить аудит")
     sub_audit.add_argument(
         "--module",
         help="Список модулей через запятую (например: system,network). По умолчанию — все.",
@@ -207,10 +293,59 @@ def parse_args() -> argparse.Namespace:
     sub_audit.add_argument(
         "--fail-on-undef",
         action="store_true",
-        help="Return exit code 2 if any check result is UNDEF."
+        help="Return exit code 2 if any check result is UNDEF.",
     )
+    sub_audit.add_argument(
+        "--evidence",
+        metavar="DIR",
+        help="Каталог для сохранения выводов команд (улики).",
+    )
+    sub_audit.add_argument(
+        "--level",
+        choices=["baseline", "strict", "paranoid"],
+        default=os.environ.get("SECAUDIT_LEVEL", "baseline"),
+        help="Уровень строгости (можно задать через SECAUDIT_LEVEL).",
+    )
+    sub_audit.add_argument(
+        "--var",
+        action="append",
+        metavar="KEY=VALUE",
+        help="Переопределение переменных профиля (можно указывать несколько раз).",
+    )
+    sub_audit.add_argument(
+        "--workers",
+        type=int,
+        default=int(os.environ.get("SECAUDIT_WORKERS", "0")),
+        help="Количество потоков (0 — авто).",
+    )
+    _add_profile_arguments(sub_audit, default_profile=default_profile)
 
-    return parser.parse_args()
+    args = parser.parse_args(argv)
+    profile_from_position = getattr(args, "profile_path", None)
+    if profile_from_position is not None:
+        args.profile = profile_from_position
+    elif not hasattr(args, "profile"):
+        args.profile = default_profile
+    if hasattr(args, "profile_path"):
+        delattr(args, "profile_path")
+
+    if getattr(args, "info", False):
+        if getattr(args, "command", None):
+            parser.error("--info нельзя использовать вместе с командами")
+        return args
+
+    if getattr(args, "command", None) is None:
+        parser.print_help()
+        sys.exit(1)
+    if getattr(args, "command", None) == "audit":
+        try:
+            args.vars = parse_kv_pairs(getattr(args, "var", None), option="--var")
+        except ValueError as exc:
+            print(str(exc), file=sys.stderr)
+            sys.exit(2)
+        if hasattr(args, "var"):
+            delattr(args, "var")
+    return args
 
 
 # ──────────────────────────────────────────────────────────────────────────────
@@ -219,14 +354,23 @@ def parse_args() -> argparse.Namespace:
 def main() -> None:
     """Небольшой удобный раннер — полезен для отладки самого cli.py."""
     args = parse_args()
-    profile = load_profile_file(args.profile)
+    try:
+        profile = load_profile_file(args.profile)
+    except MissingDependencyError as exc:
+        print(str(exc), file=sys.stderr)
+        sys.exit(3)
 
     if args.command == "list-modules":
         list_modules(profile)
         return
 
     if args.command == "list-checks":
-        list_checks(profile, args.module)
+        try:
+            tag_filters = parse_tag_filters(getattr(args, "tags", None))
+        except ValueError as exc:
+            print(str(exc), file=sys.stderr)
+            sys.exit(2)
+        list_checks(profile, args.module, tag_filters)
         return
 
     if args.command == "describe-check":

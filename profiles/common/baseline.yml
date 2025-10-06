@@ -1,30 +1,54 @@
+schema_version: "1.1"
 profile_name: "ФСТЭК. Базовые проверки"
 description: "Базовый аудит параметров безопасности Linux-систем"
+
+meta:
+  fstec: "https://fstec.ru/normativnye-dokumenty/prikazy/239"
+  cis: "https://www.cisecurity.org/cis-benchmarks/"
+  stig: "https://public.cyber.mil/stigs/downloads/"
 
 checks:
   - id: check_ssh_root_login
     name: "Запрещен ли root-вход по SSH"
-    command: "grep -i '^PermitRootLogin' /etc/ssh/sshd_config"
+    module: "system"
+    command: "sshd -T 2>/dev/null | awk '/^permitrootlogin / {print $2}'"
     expect: "no"
-    assert_type: "contains"
+    assert_type: "exact"
     severity: "high"
+    tags:
+      fstec: ["ИАФ.1"]
+    meta:
+      reference: "ФСТЭК ИБ.УП.О.1"
 
   - id: check_sudo_nopasswd
     name: "Есть ли sudo без пароля"
+    module: "system"
     command: "grep -E 'NOPASSWD' /etc/sudoers"
     expect: ""
     assert_type: "not_contains"
     severity: "medium"
+    tags:
+      fstec: "УПД.5"
+      cis: "5.4.5"
+    meta:
+      reference: "ФСТЭК ИБ.УП.О.5"
 
   - id: check_pam_lockout
     name: "Настроен ли PAM-блок после 3 неудачных входов"
-    command: "grep 'pam_tally2' /etc/pam.d/common-auth"
-    expect: "deny=3"
+    module: "users"
+    command: |
+      grep -RhsE '^[[:space:]]*auth.*pam_(faillock|tally2)\.so.*deny=[1-5]' /etc/pam.d/ | head -n1
+    expect: "pam_"
     assert_type: "contains"
     severity: "high"
+    tags:
+      fstec: ["УПД.6"]
+    meta:
+      reference: "ФСТЭК ИБ.УП.О.6"
 
   - id: check_auditd
     name: "Активирован ли auditd"
+    module: "services"
     command: "systemctl is-active auditd"
     expect: "active"
     assert_type: "exact"
@@ -33,9 +57,12 @@ checks:
       fstec: "IAF.1"
       cis: "5.3.2"
       stig: "V-71985"
+    meta:
+      reference: "ФСТЭК ИБ.ЖЛ.О.1"
 
   - id: check_journald_retention
     name: "Настроен лимит хранения журналов (journald)"
+    module: "services"
     command: "grep -i '^SystemMaxUse=' /etc/systemd/journald.conf"
     expect: "SystemMaxUse="
     assert_type: "contains"
@@ -44,9 +71,12 @@ checks:
       fstec: "RSB.4"
       cis: "5.3.3"
       stig: "V-71989"
+    meta:
+      reference: "ФСТЭК ИБ.ЖЛ.О.3"
 
   - id: check_world_writable
     name: "Нет world-writable файлов вне /tmp"
+    module: "fs"
     command: "find / -xdev -type f -perm -0002 ! -path '/tmp/*' 2>/dev/null | head -n 1"
     expect: ""
     assert_type: "exact"
@@ -55,9 +85,12 @@ checks:
       fstec: "ZNI.2"
       cis: "1.1.1"
       stig: "V-72229"
+    meta:
+      reference: "ФСТЭК ИБ.ЗНИ.О.2"
 
   - id: check_suid_files
     name: "Количество SUID-бинарников не превышает 30"
+    module: "fs"
     command: "find / -xdev -type f -perm -4000 2>/dev/null | wc -l"
     expect: "30"
     assert_type: "regexp"
@@ -66,9 +99,12 @@ checks:
       fstec: "OPS.3"
       cis: "5.4.3"
       stig: "V-72235"
+    meta:
+      reference: "ФСТЭК ИБ.ОПС.О.3"
 
   - id: check_crontab_root
     name: "Нет крон-заданий у root"
+    module: "services"
     command: "crontab -l 2>/dev/null | grep -v '^#' | grep -v '^$'"
     expect: ""
     assert_type: "exact"
@@ -77,3 +113,455 @@ checks:
       fstec: "UPD.1"
       cis: "2.2.2"
       stig: "V-71999"
+    meta:
+      reference: "ФСТЭК ИБ.УП.О.1"
+
+  - id: check_login_defs_pass_max_days
+    name: "PASS_MAX_DAYS ≤ 90 в login.defs"
+    module: "users"
+    command: "awk '/^PASS_MAX_DAYS/{print $2}' /etc/login.defs || echo 999"
+    expect: 90
+    assert_type: "int_lte"
+    severity: "high"
+    tags:
+      fstec: ["АНЗ.5"]
+    meta:
+      reference: "ФСТЭК ИБ.АУ.О.5"
+
+  - id: check_login_defs_pass_min_days
+    name: "PASS_MIN_DAYS ≥ 1 в login.defs"
+    module: "users"
+    command: "awk '/^PASS_MIN_DAYS/{print $2}' /etc/login.defs || echo 0"
+    expect: "^([1-9][0-9]*)$"
+    assert_type: "regexp"
+    severity: "high"
+    tags:
+      fstec: ["АНЗ.5"]
+    meta:
+      reference: "ФСТЭК ИБ.АУ.О.5"
+
+  - id: check_login_defs_pass_min_len
+    name: "PASS_MIN_LEN ≥ 12 в login.defs"
+    module: "users"
+    command: "awk '/^PASS_MIN_LEN/{print $2}' /etc/login.defs || echo 0"
+    expect: "^(1[2-9]|[2-9][0-9]+)$"
+    assert_type: "regexp"
+    severity: "medium"
+    tags:
+      fstec: ["АНЗ.5"]
+    meta:
+      reference: "ФСТЭК ИБ.АУ.О.5"
+
+  - id: check_login_defs_encrypt_method
+    name: "ENCRYPT_METHOD=SHA512 в login.defs"
+    module: "users"
+    command: "awk '/^ENCRYPT_METHOD/{print $2}' /etc/login.defs || echo DES"
+    expect: "SHA512"
+    assert_type: "exact"
+    severity: "high"
+    tags:
+      fstec: ["АНЗ.5"]
+    meta:
+      reference: "ФСТЭК ИБ.АУ.О.5"
+
+  - id: check_pam_quality_module
+    name: "Используется pam_pwquality или pam_passwdqc"
+    module: "users"
+    command: |
+      grep -RhsE 'pam_(pwquality|passwdqc)\.so' /etc/pam.d/ | head -n1
+    expect: "pam_(pwquality|passwdqc)"
+    assert_type: "regexp"
+    severity: "high"
+    tags:
+      fstec: ["АНЗ.5"]
+    meta:
+      reference: "ФСТЭК ИБ.АУ.О.5"
+
+  - id: check_chage_root_max_days
+    name: "chage: максимальный возраст пароля root ≤ 90"
+    module: "users"
+    command: |
+      LANG=C chage -l root | awk -F: '/Maximum/ {gsub(/^[[:space:]]+/, "", $2); if($2=="never") print 99999; else print $2}'
+    expect: 90
+    assert_type: "int_lte"
+    severity: "high"
+    tags:
+      fstec: ["АНЗ.5"]
+    meta:
+      reference: "ФСТЭК ИБ.АУ.О.5"
+
+  - id: check_chage_root_min_days
+    name: "chage: минимальный возраст пароля root ≥ 1"
+    module: "users"
+    command: |
+      LANG=C chage -l root | awk -F: '/Minimum/ {gsub(/^[[:space:]]+/, "", $2); if($2=="never") print 0; else print $2}'
+    expect: "^([1-9][0-9]*)$"
+    assert_type: "regexp"
+    severity: "medium"
+    tags:
+      fstec: ["АНЗ.5"]
+    meta:
+      reference: "ФСТЭК ИБ.АУ.О.5"
+
+  - id: check_chage_service_accounts_max_days
+    name: "Сервисные аккаунты: срок действия пароля ≤ 90 дней"
+    module: "users"
+    command: |
+      python3 - <<'PY'
+      import os
+      import pwd
+      import subprocess
+
+      offenders = []
+      env = dict(os.environ, LANG="C", LC_ALL="C")
+      locked_shells = {"/usr/sbin/nologin", "/usr/bin/nologin", "/sbin/nologin", "/bin/false"}
+      for entry in pwd.getpwall():
+          if 100 <= entry.pw_uid < 1000 and entry.pw_shell not in locked_shells:
+              try:
+                  output = subprocess.check_output([
+                      "chage", "-l", entry.pw_name
+                  ], text=True, env=env, stderr=subprocess.DEVNULL)
+              except Exception:
+                  continue
+              max_days = None
+              raw_value = ""
+              for line in output.splitlines():
+                  if line.lower().startswith("maximum"):
+                      raw_value = line.split(":", 1)[1].strip() if ":" in line else ""
+                      if raw_value.lower() == "never" or raw_value == "":
+                          max_days = 99999
+                      else:
+                          try:
+                              max_days = int(raw_value.split()[0])
+                          except ValueError:
+                              max_days = 99999
+                      break
+              if max_days is not None and max_days > 90:
+                  offenders.append(f"{entry.pw_name}:{raw_value or max_days}")
+      if offenders:
+          print("\n".join(sorted(offenders)))
+      PY
+    expect: ""
+    assert_type: "exact"
+    severity: "medium"
+    tags:
+      fstec: ["АНЗ.5"]
+    meta:
+      reference: "ФСТЭК ИБ.АУ.О.5"
+
+  - id: check_ssh_password_auth_disabled
+    name: "SSH: отключена аутентификация по паролю"
+    module: "system"
+    command: "sshd -T 2>/dev/null | awk '/^passwordauthentication / {print $2}'"
+    expect: "no"
+    assert_type: "exact"
+    severity: "high"
+    tags:
+      fstec: ["ЗИС.1"]
+    meta:
+      reference: "ФСТЭК ИБ.ЗС.О.1"
+
+  - id: check_auditctl_required_rules
+    name: "auditctl: обязательные правила активны"
+    module: "services"
+    command: |
+      missing=0
+      for key in time-change identity access perm_mod mounts modules sudo; do
+        auditctl -l 2>/dev/null | grep -q "-k ${key}" || missing=1
+      done
+      if [ $missing -eq 0 ]; then
+        echo OK
+      else
+        echo FAIL
+      fi
+    expect: "OK"
+    assert_type: "exact"
+    severity: "high"
+    tags:
+      fstec: ["РСБ.1","РСБ.2","РСБ.3","РСБ.7"]
+    meta:
+      reference: "ФСТЭК ИБ.ЖЛ.О.1"
+
+  - id: check_journald_forward_syslog
+    name: "journald: включена пересылка в syslog"
+    module: "services"
+    command: "grep -RhsE '^[[:space:]]*ForwardToSyslog=yes' /etc/systemd/journald.conf /etc/systemd/journald.conf.d/*.conf 2>/dev/null | head -n1"
+    expect: "ForwardToSyslog=yes"
+    assert_type: "contains"
+    severity: "medium"
+    tags:
+      fstec: ["РСБ.7"]
+    meta:
+      reference: "ФСТЭК ИБ.ЖЛ.О.3"
+
+  - id: check_firewall_policy_drop
+    name: "Межсетевой экран: политика DROP и блок NEW без SYN"
+    module: "network"
+    command: |
+      bash -c '
+      check_drop=0
+      check_newsyn=0
+      if command -v nft >/dev/null 2>&1; then
+        rules=$(nft list ruleset 2>/dev/null || true)
+        if [ -n "$rules" ]; then
+          echo "$rules" | tr -s " " | grep -qiE "chain (input|INPUT).*(policy drop)" && check_drop=1
+          echo "$rules" | grep -qiE "ct state new.*tcp flags" && echo "$rules" | grep -qiE "tcp flags.*drop" && check_newsyn=1
+        fi
+      fi
+      if command -v iptables >/dev/null 2>&1; then
+        rules=$(iptables -S INPUT 2>/dev/null || true)
+        echo "$rules" | grep -q "-P INPUT DROP" && check_drop=1
+        echo "$rules" | grep -qE "--ctstate NEW.*-m tcp ! --syn.*-j DROP" && check_newsyn=1
+        echo "$rules" | grep -qE "--tcp-flags SYN,RST,ACK SYN.*-j DROP" && check_newsyn=1
+      fi
+      if [ $check_drop -eq 1 ] && [ $check_newsyn -eq 1 ]; then
+        echo OK
+      else
+        echo FAIL
+      fi'
+    expect: "OK"
+    assert_type: "exact"
+    severity: "high"
+    tags:
+      fstec: ["ЗИС.2"]
+    meta:
+      reference: "ФСТЭК ИБ.ЗС.О.5"
+
+  - id: check_removable_media_control
+    name: "Контроль съёмных носителей (usbguard или эквивалент)"
+    module: "fs"
+    command: |
+      bash -c '
+      if systemctl is-enabled usbguard >/dev/null 2>&1 || systemctl is-active usbguard >/dev/null 2>&1; then
+        echo usbguard
+      elif grep -RqsE "^[[:space:]]*blacklist[[:space:]]+usb-storage" /etc/modprobe.d/; then
+        echo blacklist
+      elif ls /etc/udev/rules.d/*usb* >/dev/null 2>&1; then
+        echo udev
+      else
+        echo missing
+      fi'
+    expect: "^(usbguard|blacklist|udev)$"
+    assert_type: "regexp"
+    severity: "high"
+    tags:
+      fstec: ["ЗНИ.5"]
+    meta:
+      reference: "ФСТЭК ИБ.ЗНИ.О.5"
+
+  - id: check_aide_installed
+    name: "AIDE установлен"
+    module: "services"
+    command: "command -v aide >/dev/null 2>&1 && echo OK || echo FAIL"
+    expect: "OK"
+    assert_type: "exact"
+    severity: "medium"
+    tags:
+      fstec: ["РСБ.4"]
+    meta:
+      reference: "ФСТЭК ИБ.ЖЛ.О.4"
+
+  - id: check_aide_scheduled
+    name: "AIDE запускается по расписанию"
+    module: "services"
+    command: |
+      bash -c '
+      if systemctl list-timers --all 2>/dev/null | grep -q aide; then
+        echo systemd
+      elif grep -Rqs "aide" /etc/cron.d /etc/cron.daily /etc/cron.weekly 2>/dev/null; then
+        echo cron
+      else
+        echo missing
+      fi'
+    expect: "^(systemd|cron)$"
+    assert_type: "regexp"
+    severity: "medium"
+    tags:
+      fstec: ["РСБ.4"]
+    meta:
+      reference: "ФСТЭК ИБ.ЖЛ.О.4"
+
+  - id: check_disk_encryption_luks
+    name: "Используется шифрование дисков (crypto_LUKS)"
+    module: "fs"
+    command: "lsblk -rno FSTYPE 2>/dev/null | grep -m1 crypto_LUKS || echo missing"
+    expect: "crypto_LUKS"
+    assert_type: "contains"
+    severity: "high"
+    tags:
+      fstec: ["АНЗ.2"]
+    meta:
+      reference: "ФСТЭК ИБ.АУ.О.2"
+
+  - id: check_luks_keyslots_pbkdf
+    name: "LUKS: активные keyslot и надёжный PBKDF"
+    module: "fs"
+    command: |
+      python3 - <<'PY'
+      import os
+      import re
+      import subprocess
+
+      def list_luks_devices():
+          try:
+              lsblk = subprocess.check_output(
+                  ["lsblk", "-rno", "NAME,TYPE"], text=True, stderr=subprocess.DEVNULL
+              )
+          except Exception:
+              return []
+          devices = []
+          for line in lsblk.splitlines():
+              parts = line.split()
+              if len(parts) == 2 and parts[1] == "crypto_LUKS":
+                  devices.append(parts[0])
+          return devices
+
+      env = dict(os.environ, LANG="C", LC_ALL="C")
+      issues = []
+      for dev in list_luks_devices():
+          try:
+              dump = subprocess.check_output(
+                  ["cryptsetup", "luksDump", f"/dev/{dev}"],
+                  text=True,
+                  env=env,
+                  stderr=subprocess.DEVNULL,
+              )
+          except Exception:
+              issues.append(f"{dev}:dump_failed")
+              continue
+
+          enabled_slots = 0
+          weak_slots = []
+          current_slot = None
+          slot_lines = []
+          for line in dump.splitlines():
+              if line.startswith("Keyslot "):
+                  if current_slot is not None:
+                      slot_lines.append((current_slot, slot_buffer))
+                  current_slot = line
+                  slot_buffer = []
+              elif current_slot is not None:
+                  slot_buffer.append(line)
+          if current_slot is not None:
+              slot_lines.append((current_slot, slot_buffer))
+
+          for header, body in slot_lines:
+              status_match = re.search(r"Keyslot\s+(\d+):\s+(ENABLED|DISABLED)", header)
+              if not status_match:
+                  continue
+              slot_id, status = status_match.groups()
+              if status != "ENABLED":
+                  continue
+              enabled_slots += 1
+              joined = "\n".join(body)
+              pbkdf_match = re.search(r"PBKDF:\s*([A-Za-z0-9_-]+)", joined)
+              if not pbkdf_match:
+                  weak_slots.append(f"{dev}:keyslot{slot_id}:pbkdf_missing")
+                  continue
+              pbkdf = pbkdf_match.group(1).lower()
+              if pbkdf not in {"argon2id", "argon2i", "pbkdf2"}:
+                  weak_slots.append(f"{dev}:keyslot{slot_id}:pbkdf_{pbkdf}")
+                  continue
+              if pbkdf == "pbkdf2":
+                  iter_match = re.search(r"Iterations:\s*([0-9]+)", joined)
+                  if not iter_match or int(iter_match.group(1)) < 100000:
+                      weak_slots.append(f"{dev}:keyslot{slot_id}:iterations")
+
+          if enabled_slots == 0:
+              issues.append(f"{dev}:no_enabled_keyslots")
+          issues.extend(weak_slots)
+
+      if issues:
+          print("\n".join(sorted(set(issues))))
+      PY
+    expect: ""
+    assert_type: "exact"
+    severity: "high"
+    tags:
+      fstec: ["АНЗ.2"]
+    meta:
+      reference: "ФСТЭК ИБ.АУ.О.2"
+
+  - id: check_grub_superusers
+    name: "GRUB настроен с superusers"
+    module: "system"
+    command: "grep -E '^[[:space:]]*set[[:space:]]+superusers' /boot/grub*/grub.cfg 2>/dev/null || true"
+    expect: "superusers"
+    assert_type: "contains"
+    severity: "medium"
+    tags:
+      fstec: ["АНЗ.3"]
+    meta:
+      reference: "ФСТЭК ИБ.АУ.О.3"
+
+  - id: check_grub_password_hash
+    name: "GRUB защищён паролем (pbkdf2)"
+    module: "system"
+    command: "grep -Rhs 'grub.pbkdf2' /etc/grub.d/ /boot/grub*/user.cfg 2>/dev/null | head -n1"
+    expect: "grub.pbkdf2"
+    assert_type: "contains"
+    severity: "high"
+    tags:
+      fstec: ["АНЗ.3"]
+    meta:
+      reference: "ФСТЭК ИБ.АУ.О.3"
+
+  - id: check_sysctl_suid_dumpable
+    name: "fs.suid_dumpable = 0"
+    module: "system"
+    command: "sysctl -n fs.suid_dumpable 2>/dev/null || cat /proc/sys/fs/suid_dumpable"
+    expect: "0"
+    assert_type: "exact"
+    severity: "high"
+    tags:
+      fstec: ["ЗИС.3"]
+    meta:
+      reference: "ФСТЭК ИБ.ЗС.О.3"
+
+  - id: check_sysctl_rp_filter
+    name: "rp_filter включён для all и default"
+    module: "network"
+    command: "echo $(sysctl -n net.ipv4.conf.all.rp_filter 2>/dev/null || cat /proc/sys/net/ipv4/conf/all/rp_filter) $(sysctl -n net.ipv4.conf.default.rp_filter 2>/dev/null || cat /proc/sys/net/ipv4/conf/default/rp_filter)"
+    expect: "^(1|2) (1|2)$"
+    assert_type: "regexp"
+    severity: "medium"
+    tags:
+      fstec: ["ЗИС.3"]
+    meta:
+      reference: "ФСТЭК ИБ.ЗС.О.3"
+
+  - id: check_sysctl_redirects
+    name: "Отключены IPv4 redirects"
+    module: "network"
+    command: "echo $(sysctl -n net.ipv4.conf.all.accept_redirects 2>/dev/null || cat /proc/sys/net/ipv4/conf/all/accept_redirects) $(sysctl -n net.ipv4.conf.default.accept_redirects 2>/dev/null || cat /proc/sys/net/ipv4/conf/default/accept_redirects) $(sysctl -n net.ipv4.conf.all.send_redirects 2>/dev/null || cat /proc/sys/net/ipv4/conf/all/send_redirects)"
+    expect: "^0 0 0$"
+    assert_type: "regexp"
+    severity: "medium"
+    tags:
+      fstec: ["ЗИС.3"]
+    meta:
+      reference: "ФСТЭК ИБ.ЗС.О.3"
+
+  - id: check_sysctl_kptr_restrict
+    name: "kernel.kptr_restrict ≥ 1"
+    module: "system"
+    command: "sysctl -n kernel.kptr_restrict 2>/dev/null || cat /proc/sys/kernel/kptr_restrict"
+    expect: "^([1-9][0-9]*)$"
+    assert_type: "regexp"
+    severity: "medium"
+    tags:
+      fstec: ["ЗИС.3"]
+    meta:
+      reference: "ФСТЭК ИБ.ЗС.О.3"
+
+  - id: check_sysctl_unprivileged_bpf
+    name: "kernel.unprivileged_bpf_disabled = 1"
+    module: "system"
+    command: "sysctl -n kernel.unprivileged_bpf_disabled 2>/dev/null || cat /proc/sys/kernel/unprivileged_bpf_disabled"
+    expect: "1"
+    assert_type: "exact"
+    severity: "medium"
+    tags:
+      fstec: ["ЗИС.3"]
+    meta:
+      reference: "ФСТЭК ИБ.ЗС.О.3"

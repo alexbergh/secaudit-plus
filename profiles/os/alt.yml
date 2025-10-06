@@ -1,0 +1,28 @@
+schema_version: '1.1'
+profile_name: Alt Linux SP — расширенный профиль (с астра-спецификой)
+description: Расширенный аудит безопасности для Alt Linux (СП/Server) с жёсткими SSH,
+  PAM, journald, sysctl и файловыми политиками
+extends:
+- ../base/linux.yml
+meta:
+  fstec: https://fstec.ru/normativnye-dokumenty/prikazy/239
+  cis: https://www.cisecurity.org/benchmark/linux/
+  stig: https://public.cyber.mil/stigs/downloads/
+vars:
+  SHADOW_PERM_PATTERN: ^600$
+  GSHADOW_PERM_PATTERN: ^600$
+  SUID_MAX_PATTERN: ^([0-1]?[0-9]|2[0-5])$
+checks:
+- id: check_pam_lockout
+  name: 'PAM: блокировка после 3 неудачных входов (pam_tally2/faillock)'
+  module: system
+  command: grep -rhE '^[[:space:]]*auth.*required.*(pam_tally2|pam_faillock).so.*(deny=3|onerr=fail)'
+    /etc/pam.d/ | head -n 1 || true
+  expect: deny=3
+  assert_type: contains
+  severity: high
+  tags:
+    fstec:
+    - УПД.6
+    cis: 5.4.2
+    stig: PAM-Lockout

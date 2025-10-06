@@ -1,0 +1,53 @@
+schema_version: '1.1'
+profile_name: Astra Linux SE — усиленный профиль
+description: Жёсткий аудит безопасности для Astra Linux Special Edition (Debian-based).
+  Совместим с SecAudit++.
+extends:
+- ../base/linux.yml
+meta:
+  fstec: https://fstec.ru/normativnye-dokumenty/prikazy/239
+  cis: https://www.cisecurity.org/benchmark/debian_linux/
+  stig: https://public.cyber.mil/stigs/downloads/
+vars:
+  SHADOW_PERM_PATTERN: ^600$
+  GSHADOW_PERM_PATTERN: ^600$
+  SUID_MAX_PATTERN: ^([0-1]?[0-9]|2[0-5])$
+checks:
+- id: check_pam_lockout
+  name: 'PAM: блокировка после 3 неудачных входов (pam_tally2/faillock)'
+  module: system
+  command: grep -rhE '^[[:space:]]*auth.*required.*(pam_tally2|pam_faillock).so.*(deny=3|onerr=fail)'
+    /etc/pam.d/ | head -n 1 || true
+  expect: deny=3
+  assert_type: contains
+  severity: high
+  tags:
+    fstec:
+    - УПД.6
+    cis: 5.4.2
+    stig: PAM-Lockout
+- id: check_dmesg_restrict
+  name: Запрет чтения dmesg не root (kernel.dmesg_restrict=1)
+  module: system
+  command: sysctl -n kernel.dmesg_restrict 2>/dev/null || echo 0
+  expect: '1'
+  assert_type: exact
+  severity: medium
+  tags:
+    fstec:
+    - ЗИС.3
+    cis: 1.5.x
+    stig: Kernel-Dmesg
+- id: check_apparmor_enforce_if_present
+  name: 'AppArmor: профили в enforce (если установлен)'
+  module: system
+  command: aa-status 2>/dev/null | grep -E '^[1-9][0-9]* profiles are in enforce mode'
+    || echo '0 profiles'
+  expect: enforce mode
+  assert_type: contains
+  severity: medium
+  tags:
+    fstec:
+    - ОПС.1
+    cis: 1.6.1
+    stig: AppArmor

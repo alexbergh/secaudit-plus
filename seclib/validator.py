@@ -15,47 +15,121 @@ except Exception as e:
 
 PROFILE_SCHEMA: Dict[str, Any] = {
     "type": "object",
-    "required": ["profile_name", "description", "checks"],
+    "required": ["schema_version", "profile_name", "description", "checks"],
     "properties": {
+        "schema_version": {"type": "string", "pattern": r"^1\.\d+$"},
         "profile_name": {"type": "string", "minLength": 1},
         "description": {"type": "string"},
+        "extends": {
+            "oneOf": [
+                {"type": "string", "minLength": 1},
+                {
+                    "type": "array",
+                    "minItems": 1,
+                    "items": {"type": "string", "minLength": 1},
+                },
+            ]
+        },
+        "meta": {
+            "type": "object",
+            "additionalProperties": {"type": "string"},
+        },
         "checks": {
             "type": "array",
             "minItems": 1,
             "items": {
                 "type": "object",
-                "required": ["id", "name", "module", "command"],
+                "required": [
+                    "id",
+                    "name",
+                    "module",
+                    "command",
+                    "expect",
+                    "assert_type",
+                    "severity",
+                    "tags",
+                ],
                 "properties": {
                     "id": {"type": "string", "minLength": 1},
                     "name": {"type": "string", "minLength": 1},
                     "module": {"type": "string", "minLength": 1},
                     "command": {"type": "string", "minLength": 1},
-                    "expect": {"type": "string"},
+                    "expect": {},
                     "assert_type": {
                         "type": "string",
-                        "enum": ["exact", "contains", "regexp", "exit_code"]
+                        "enum": [
+                            "exact",
+                            "contains",
+                            "not_contains",
+                            "regexp",
+                            "exit_code",
+                            "jsonpath",
+                            "version_gte",
+                            "int_lte",
+                            "set_allowlist",
+                        ],
                     },
                     "severity": {
                         "type": "string",
-                        "enum": ["low", "medium", "high"]
+                        "enum": ["low", "medium", "high"],
                     },
                     "tags": {
                         "type": "object",
-                        "additionalProperties": {"type": "string"}
+                        "additionalProperties": {
+                            "oneOf": [
+                                {"type": "string"},
+                                {"type": "array", "items": {"type": "string"}},
+                            ]
+                        },
+                    },
+                    "meta": {
+                        "type": "object",
+                        "additionalProperties": True,
                     },
                     "timeout": {"type": "integer", "minimum": 1, "maximum": 600},
                     "rc_ok": {
                         "type": "array",
                         "items": {"type": "integer", "minimum": 0, "maximum": 255},
                         "minItems": 1,
-                        "maxItems": 8
-                    }
+                        "maxItems": 8,
+                    },
                 },
-                "additionalProperties": False
-            }
-        }
+                "allOf": [
+                    {
+                        "if": {
+                            "properties": {
+                                "assert_type": {"const": "jsonpath"}
+                            }
+                        },
+                        "then": {
+                            "properties": {
+                                "expect": {
+                                    "type": "object",
+                                    "properties": {
+                                        "path": {
+                                            "type": "string",
+                                            "minLength": 1,
+                                        },
+                                        "value": {},
+                                        "contains": {},
+                                    },
+                                    "required": ["path"],
+                                    "additionalProperties": False,
+                                }
+                            }
+                        },
+                        "else": {
+                            "properties": {
+                                "expect": {"type": ["string", "number"]}
+                            }
+                        },
+                    }
+                ],
+                "additionalProperties": False,
+            },
+        },
     },
-    "additionalProperties": False
+    "additionalProperties": False,
 }
 
 SEVERITY_RANK = {"low": 1, "medium": 2, "high": 3}

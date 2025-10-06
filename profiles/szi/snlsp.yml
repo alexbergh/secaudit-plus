@@ -1,0 +1,200 @@
+schema_version: "1.1"
+profile_name: "СЗИ Сеть SN LSP — контроль служб, политик и носителей"
+description: "Профиль аудита для комплекса SN LSP: контроль критичных служб, политик безопасности и ограничений съёмных носителей."
+
+meta:
+  fstec: "https://fstec.ru/normativnye-dokumenty/prikazy/239"
+  vendor: "https://snlsp.ru/docs/admin_guide.pdf"
+  media: "https://snlsp.ru/docs/media_control.pdf"
+
+checks:
+  # ─────────────── Службы комплекса ───────────────
+  - id: snlsp_guard_service
+    name: "SN LSP Guard активен"
+    module: "services"
+    command: |
+      if systemctl is-active --quiet snlsp-guard.service 2>/dev/null; then
+        echo active
+      else
+        echo inactive
+      fi
+    expect: "active"
+    assert_type: "exact"
+    severity: "high"
+    tags:
+      fstec: ["ЗИС.1"]
+      vendor: "SN LSP Admin Guide §3.1"
+      media: "—"
+
+  - id: snlsp_policy_update_timer
+    name: "Планировщик обновления политик включён"
+    module: "services"
+    command: |
+      if systemctl is-enabled --quiet snlsp-policy-update.timer 2>/dev/null; then
+        echo enabled
+      else
+        echo disabled
+      fi
+    expect: "enabled"
+    assert_type: "exact"
+    severity: "medium"
+    tags:
+      fstec: ["АНЗ.2"]
+      vendor: "SN LSP Admin Guide §3.4"
+      media: "—"
+
+  # ─────────────── Политики безопасности ───────────────
+  - id: snlsp_policy_level
+    name: "Политика SN LSP установлена на strict"
+    module: "snlsp"
+    command: |
+      python3 - <<'PY'
+      import json, pathlib
+      path = pathlib.Path('/etc/snlsp/policy.json')
+      data = {"level": None}
+      if path.exists():
+          try:
+              data.update(json.loads(path.read_text()))
+          except Exception:
+              pass
+      print(json.dumps(data))
+      PY
+    expect:
+      path: "$.level"
+      value: "strict"
+    assert_type: "jsonpath"
+    severity: "high"
+    tags:
+      fstec: ["ЗИС.2"]
+      vendor: "SN LSP Admin Guide §4.1"
+      media: "—"
+
+  - id: snlsp_policy_signatures
+    name: "Политики подписаны и проверены"
+    module: "snlsp"
+    command: |
+      snlspctl policy status --json 2>/dev/null || echo '{"signatures": false}'
+    expect:
+      path: "$.signatures"
+      value: true
+    assert_type: "jsonpath"
+    severity: "medium"
+    tags:
+      fstec: ["ЗИС.2"]
+      vendor: "SN LSP Admin Guide §4.3"
+      media: "—"
+
+  # ─────────────── Контроль съёмных носителей ───────────────
+  - id: snlsp_media_whitelist
+    name: "Список разрешённых USB-устройств определён"
+    module: "media"
+    command: |
+      python3 - <<'PY'
+      import json, pathlib
+      path = pathlib.Path('/etc/snlsp/media.d/whitelist.json')
+      devices = []
+      if path.exists():
+          try:
+              devices = json.loads(path.read_text())
+          except Exception:
+              devices = []
+      print(json.dumps({'has_devices': bool(devices)}))
+      PY
+    expect:
+      path: "$.has_devices"
+      value: true
+    assert_type: "jsonpath"
+    severity: "medium"
+    tags:
+      fstec: ["ЗНИ.5"]
+      vendor: "SN LSP Media Control §2.3"
+      media: "SN LSP Media Control §2.3"
+
+  - id: snlsp_media_blacklist_module
+    name: "Модуль usb-storage отключён"
+    module: "media"
+    command: "grep -RhsE 'blacklist[[:space:]]+usb-storage' /etc/modprobe.d 2>/dev/null || true"
+    expect: "usb-storage"
+    assert_type: "contains"
+    severity: "medium"
+    tags:
+      fstec: ["ЗНИ.6"]
+      vendor: "SN LSP Media Control §3.1"
+      media: "SN LSP Media Control §3.1"
+
+  - id: snlsp_disable_autofs
+    name: "autofs отключён"
+    module: "media"
+    command: |
+      if systemctl is-enabled --quiet autofs 2>/dev/null; then
+        echo enabled
+      else
+        echo disabled
+      fi
+    expect: "disabled"
+    assert_type: "exact"
+    severity: "medium"
+    tags:
+      fstec: ["ЗНИ.5"]
+      vendor: "SN LSP Media Control §3.2"
+      media: "SN LSP Media Control §3.2"
+
+  - id: snlsp_media_mount_options
+    name: "Съёмные носители монтируются только read-only"
+    module: "media"
+    command: |
+      python3 - <<'PY'
+      import json, subprocess
+      from shlex import split
+      try:
+          output = subprocess.check_output(split('findmnt -nr -t vfat,ntfs --output OPTIONS'), stderr=subprocess.DEVNULL, text=True)
+      except Exception:
+          output = ''
+      opts = [line.strip().lower() for line in output.splitlines() if line.strip()]
+      ro_only = all('ro' in line.split(',') for line in opts) if opts else False
+      print(json.dumps({'ro_only': ro_only}))
+      PY
+    expect:
+      path: "$.ro_only"
+      value: true
+    assert_type: "jsonpath"
+    severity: "high"
+    tags:
+      fstec: ["ЗНИ.7"]
+      vendor: "SN LSP Media Control §3.4"
+      media: "SN LSP Media Control §3.4"
+
+  # ─────────────── Контроль целостности ───────────────
+  - id: snlsp_integrity_agent
+    name: "Агент контроля целостности snlsp-integrity активен"
+    module: "integrity"
+    command: |
+      if systemctl is-active --quiet snlsp-integrity.service 2>/dev/null; then
+        echo active
+      else
+        echo inactive
+      fi
+    expect: "active"
+    assert_type: "exact"
+    severity: "high"
+    tags:
+      fstec: ["ЗИС.5"]
+      vendor: "SN LSP Admin Guide §5.1"
+      media: "—"
+
+  - id: snlsp_integrity_reports
+    name: "Отчёты целостности синхронизируются (rc=0)"
+    module: "integrity"
+    command: |
+      if command -v snlspctl >/dev/null 2>&1; then
+        snlspctl integrity sync --dry-run >/dev/null 2>&1
+      else
+        exit 1
+      fi
+    expect: 0
+    assert_type: "exit_code"
+    severity: "medium"
+    tags:
+      fstec: ["ЗИС.5"]
+      vendor: "SN LSP Admin Guide §5.4"
+      media: "—"

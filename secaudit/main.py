@@ -1,16 +1,29 @@
 # secaudit/main.py
 from pathlib import Path
+from datetime import datetime
 import sys
 import json
+import re
 
-from modules.cli import parse_args, list_modules, list_checks, describe_check
+from modules.cli import (
+    parse_args,
+    list_modules,
+    list_checks,
+    describe_check,
+    parse_tag_filters,
+)
 from modules.os_detect import detect_os
 from modules.audit_runner import load_profile, run_checks
-from modules.report_generator import generate_report, generate_json_report
+from modules.report_generator import (
+    generate_report,
+    generate_json_report,
+    collect_host_metadata,
+)
 from utils.logger import log_info, log_warn, log_pass, log_fail
 
 # Валидация профиля по схеме
 from seclib.validator import validate_profile
+from secaudit.exceptions import MissingDependencyError
 
 
 def _resolve_profile_path(cli_profile: str | None) -> str:
@@ -26,12 +39,27 @@ def _resolve_profile_path(cli_profile: str | None) -> str:
             return str(p)
 
     os_id = detect_os()
-    candidate = Path(f"profiles/{os_id}.yml")
+    candidate = Path(f"profiles/os/{os_id}.yml")
     if candidate.exists():
         return str(candidate)
 
+    fallback_base = Path(f"profiles/base/{os_id}.yml")
+    if fallback_base.exists():
+        return str(fallback_base)
+
     log_warn(f"Профиль для {os_id} не найден. Использую profiles/common/baseline.yml")
     return "profiles/common/baseline.yml"
+
+
+def _sanitize_filename_component(raw: str | None, fallback: str = "host") -> str:
+    if raw is None:
+        raw = ""
+    text = str(raw).strip()
+    if not text:
+        text = fallback
+    sanitized = re.sub(r"[^A-Za-z0-9._-]+", "_", text)
+    sanitized = sanitized.strip("._-")
+    return sanitized or fallback
 
 
 def _print_and_exit_validation_errors(profile_path: str, errors: list[str], strict_exit_code: int = 2) -> None:
@@ -67,15 +95,31 @@ def _apply_exit_policy(results: list[dict], fail_level: str, fail_on_undef: bool
     return exit_code
 
 
+def _print_project_info() -> None:
+    print("SecAudit++")
+    print("Alex Hellberg")
+    print("https://github.com/alexbergh/secaudit-core")
+    print("2025")
+    print("Проект распространяется под лицензией GPL-3.0")
+
+
 def main():
     args = parse_args()
+
+    if getattr(args, "info", False):
+        _print_project_info()
+        return
 
     # Определяем профиль
     profile_path = _resolve_profile_path(getattr(args, "profile", None))
     log_info(f"Загрузка профиля: {profile_path}")
 
     # Загружаем профиль (парсинг YAML + базовые проверки структуры внутри load_profile)
-    profile = load_profile(profile_path)
+    try:
+        profile = load_profile(profile_path)
+    except MissingDependencyError as exc:
+        log_fail(str(exc))
+        sys.exit(3)
 
     # Валидация по JSON-схеме перед любыми действиями
     is_valid, val_errors = validate_profile(profile)
@@ -88,7 +132,12 @@ def main():
             list_modules(profile)
             return
         if args.command == "list-checks":
-            list_checks(profile, getattr(args, "module", None))
+            try:
+                tag_filters = parse_tag_filters(getattr(args, "tags", None))
+            except ValueError as exc:
+                log_fail(str(exc))
+                sys.exit(2)
+            list_checks(profile, getattr(args, "module", None), tag_filters)
             return
         if args.command == "describe-check":
             describe_check(profile, args.check_id)
@@ -119,19 +168,34 @@ def main():
                 log_info(f"Выбраны модули: {selected_modules}")
 
         # Запуск проверок
-        results = run_checks(profile, selected_modules)
+        evidence_dir = getattr(args, "evidence", None)
+        outcome = run_checks(
+            profile,
+            selected_modules,
+            evidence_dir,
+            profile_path=profile_path,
+            level=getattr(args, "level", "baseline"),
+            variables_override=getattr(args, "vars", {}),
+            workers=getattr(args, "workers", 0),
+        )
+        results = outcome.results
+        summary = outcome.summary
 
         # Директория результатов
         Path("results").mkdir(exist_ok=True)
 
         # Полный список результатов (плоский)
         with open("results/report.json", "w", encoding="utf-8") as f:
-            json.dump(results, f, indent=2, ensure_ascii=False)
+            json.dump({"results": results, "summary": summary}, f, indent=2, ensure_ascii=False)
 
         # Группировка результатов по модулям
-        generate_json_report(results, "results/report_grouped.json")
+        generate_json_report(results, "results/report_grouped.json", summary=summary)
 
         # Логируем в консоль краткую сводку
+        score = summary.get("score")
+        if score is not None:
+            coverage = summary.get("coverage", 0) * 100
+            log_info(f"Итоговый балл: {score:.1f}% (покрытие {coverage:.1f}%)")
         for r in results:
             name = r.get("name", r.get("id", "<no-name>"))
             out = r.get("output", "")
@@ -140,12 +204,39 @@ def main():
                 log_pass(f"{name} → {out}")
             elif status == "FAIL":
                 log_fail(f"{name} → {out}")
-            else:
+            elif status == "WARN":
                 log_warn(f"{name} → {out}")
+            else:
+                log_warn(f"{name} [{status}] → {out}")
+
+        for failure in summary.get("top_failures", []) or []:
+            log_warn(
+                f"ТОП-провал: {failure.get('id')} ({failure.get('result')}) → {failure.get('reason')}"
+            )
+
+        # Метаданные хоста для отчётов и имени файла
+        host_info = collect_host_metadata(profile, results, summary=summary)
+        hostname_component = _sanitize_filename_component(host_info.get("hostname"))
+        date_component = datetime.now().strftime("%Y%m%d_%H%M%S")
+        html_report_path = Path("results") / f"report_{hostname_component}_{date_component}.html"
 
         # Генерируем отчёты (Markdown и HTML)
-        generate_report(profile, results, "report_template.md.j2", "results/report.md")
-        generate_report(profile, results, "report_template.html.j2", "results/report.html")
+        generate_report(
+            profile,
+            results,
+            "report_template.md.j2",
+            "results/report.md",
+            host_info=host_info,
+            summary=summary,
+        )
+        generate_report(
+            profile,
+            results,
+            "report_template.html.j2",
+            str(html_report_path),
+            host_info=host_info,
+            summary=summary,
+        )
 
         # Политика завершения по --fail-level / --fail-on-undef
         fail_level = getattr(args, "fail_level", "none")

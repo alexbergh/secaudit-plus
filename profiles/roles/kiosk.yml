@@ -1,0 +1,17 @@
+schema_version: "1.1"
+profile_name: "Роль: киоск"
+description: "Настройки для киосковых/терминальных станций."
+extends:
+  - "../base/workstation.yml"
+meta:
+  role: "kiosk"
+checks:
+  - id: kiosk_graphical_target
+    name: "Киоск: система загружается в графический режим"
+    module: "kiosk"
+    command: "systemctl get-default 2>/dev/null || echo unknown"
+    expect: "graphical.target"
+    assert_type: "exact"
+    severity: "medium"
+    tags:
+      role: ["kiosk"]

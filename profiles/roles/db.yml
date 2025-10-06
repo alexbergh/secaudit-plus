@@ -1,0 +1,17 @@
+schema_version: "1.1"
+profile_name: "Роль: сервер баз данных"
+description: "Надстройка для серверов с СУБД."
+extends:
+  - "../base/server.yml"
+meta:
+  role: "database"
+checks:
+  - id: db_services_port_known
+    name: "СУБД: порт PostgreSQL определён в /etc/services"
+    module: "database"
+    command: "grep -q '^postgresql' /etc/services && echo present || echo missing"
+    expect: "present"
+    assert_type: "exact"
+    severity: "low"
+    tags:
+      role: ["database"]
