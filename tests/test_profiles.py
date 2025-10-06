@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import re
+import os
+import subprocess
 from pathlib import Path
 
 import pytest
@@ -38,6 +40,32 @@ def _get_check(profile: dict, check_id: str) -> dict:
         if check.get("id") == check_id:
             return check
     raise KeyError(f"check {check_id} not found")
+
+
+def _write_executable(path: Path, content: str) -> None:
+    path.write_text(content, encoding="utf-8")
+    path.chmod(0o755)
+
+
+def _run_check_command(check: dict, *, env: dict[str, str] | None = None) -> str:
+    command = check["command"]
+    run_env = os.environ.copy()
+    if env:
+        run_env.update(env)
+
+    result = subprocess.run(
+        command,
+        shell=True,
+        text=True,
+        capture_output=True,
+        check=False,
+        env=run_env,
+    )
+    if result.returncode not in (0, 1):
+        raise RuntimeError(
+            f"command failed with rc={result.returncode}: {result.stderr.strip()}"
+        )
+    return result.stdout.strip()
 
 
 def test_base_ntp_sources_expectation_enforces_primary_and_total():
@@ -123,3 +151,123 @@ def test_debian_profile_overrides_shadow_permission_patterns():
     check_ids = _collect_check_ids(profile)
     assert "check_shadow_perms" in check_ids
     assert "check_gshadow_perms" in check_ids
+
+
+def test_base_kernel_min_version_allows_rhel7(tmp_path):
+    profile = _load_profile(BASE_PROFILE)
+    check = _get_check(profile, "base_kernel_min_version")
+
+    bin_dir = tmp_path / "bin"
+    bin_dir.mkdir()
+
+    _write_executable(
+        bin_dir / "uname",
+        "#!/bin/sh\n" "printf '3.10.0-1160.el7.x86_64\\n'\n",
+    )
+
+    _write_executable(
+        bin_dir / "rpm",
+        "#!/bin/sh\n"
+        "if [ \"$1\" = \"--eval\" ]; then\n"
+        "  printf '7\\n'\n"
+        "fi\n",
+    )
+
+    os_release = tmp_path / "os-release"
+    os_release.write_text(
+        "ID=centos\nVERSION_ID=7\nID_LIKE=\"rhel\"\n",
+        encoding="utf-8",
+    )
+
+    output = _run_check_command(
+        check,
+        env={
+            "SECAUDIT_KERNEL_OS_RELEASE": str(os_release),
+            "PATH": f"{bin_dir}:{os.environ.get('PATH', '')}",
+        },
+    )
+
+    assert output == "ok"
+
+
+def test_base_kernel_min_version_detects_rhel_like_via_id_like(tmp_path):
+    profile = _load_profile(BASE_PROFILE)
+    check = _get_check(profile, "base_kernel_min_version")
+
+    bin_dir = tmp_path / "bin"
+    bin_dir.mkdir()
+
+    _write_executable(
+        bin_dir / "uname",
+        "#!/bin/sh\n" "printf '3.10.0-1160.el7.x86_64\\n'\n",
+    )
+
+    os_release = tmp_path / "os-release"
+    os_release.write_text(
+        'ID="ol"\nVERSION_ID="7.9"\nID_LIKE="rhel fedora"\n',
+        encoding="utf-8",
+    )
+
+    output = _run_check_command(
+        check,
+        env={
+            "SECAUDIT_KERNEL_OS_RELEASE": str(os_release),
+            "PATH": f"{bin_dir}:{os.environ.get('PATH', '')}",
+        },
+    )
+
+    assert output == "ok"
+
+
+def test_base_kernel_min_version_uses_default_for_debian(tmp_path):
+    profile = _load_profile(BASE_PROFILE)
+    check = _get_check(profile, "base_kernel_min_version")
+
+    bin_dir = tmp_path / "bin"
+    bin_dir.mkdir()
+    _write_executable(
+        bin_dir / "uname",
+        "#!/bin/sh\n" "printf '4.17.0-3-amd64\\n'\n",
+    )
+
+    os_release = tmp_path / "os-release"
+    os_release.write_text(
+        "ID=debian\nVERSION_ID=11\n",
+        encoding="utf-8",
+    )
+
+    output = _run_check_command(
+        check,
+        env={
+            "SECAUDIT_KERNEL_OS_RELEASE": str(os_release),
+            "PATH": f"{bin_dir}:{os.environ.get('PATH', '')}",
+        },
+    )
+
+    assert output == "4.17.0"
+
+
+def test_base_kernel_min_version_respects_override(tmp_path):
+    profile = _load_profile(BASE_PROFILE)
+    check = _get_check(profile, "base_kernel_min_version")
+
+    bin_dir = tmp_path / "bin"
+    bin_dir.mkdir()
+    _write_executable(
+        bin_dir / "uname",
+        "#!/bin/sh\n" "printf '4.19.0-21-amd64\\n'\n",
+    )
+
+    os_release = tmp_path / "os-release"
+    os_release.write_text("ID=debian\nVERSION_ID=11\n", encoding="utf-8")
+
+    output = _run_check_command(
+        check,
+        env={
+            "SECAUDIT_KERNEL_OS_RELEASE": str(os_release),
+            "SECAUDIT_KERNEL_MIN_VERSION": "5.0",
+            "PATH": f"{bin_dir}:{os.environ.get('PATH', '')}",
+        },
+    )
+
+    assert output == "4.19.0"

@@ -1172,14 +1172,84 @@ checks:
       goskz: "9.1.1"
 
   - id: base_kernel_min_version
-    name: "Ядро: версия не ниже 4.18"
+    name: "Ядро: версия не ниже 4.18 (3.10 для RHEL/CentOS 7)"
     module: "packages"
     command: |
+      default_min="4.18"
+      override_min="${SECAUDIT_KERNEL_MIN_VERSION:-}"
+      os_release_path="${SECAUDIT_KERNEL_OS_RELEASE:-/etc/os-release}"
+
+      read_os_release_value() {
+        key="$1"
+        if [ ! -r "$os_release_path" ] || [ -z "$key" ]; then
+          return
+        fi
+
+        while IFS='=' read -r entry_key entry_value; do
+          case "$entry_key" in
+            ''|\#*)
+              continue
+              ;;
+          esac
+
+          if [ "$entry_key" = "$key" ]; then
+            entry_value=$(printf '%s\n' "$entry_value" \
+              | sed -e 's/[[:space:]]*$//' -e 's/^[[:space:]]*//' \
+                    -e 's/^"//' -e 's/"$//' -e "s/^'//" -e "s/'$//")
+            printf '%s\n' "$entry_value"
+            return
+          fi
+        done < "$os_release_path"
+      }
+
+      detect_min_version() {
+        if [ -n "$override_min" ]; then
+          printf '%s\n' "$override_min"
+          return
+        fi
+
+        detected_min=""
+        os_release_id=$(read_os_release_value ID)
+        os_release_version=$(read_os_release_value VERSION_ID)
+        os_release_like=$(read_os_release_value ID_LIKE)
+
+        os_release_major="${os_release_version%%.*}"
+
+        case "$os_release_id" in
+          centos|rhel)
+            if [ "$os_release_major" = "7" ]; then
+              detected_min="3.10"
+            fi
+            ;;
+        esac
+
+        if [ -z "$detected_min" ] && [ -n "$os_release_like" ]; then
+          if printf '%s' "$os_release_like" | grep -Eq '(centos|rhel)'; then
+            if [ "$os_release_major" = "7" ]; then
+              detected_min="3.10"
+            fi
+          fi
+        fi
+
+        if [ -z "$detected_min" ] && command -v rpm >/dev/null 2>&1; then
+          rpm_rhel_macro=$(rpm --eval '%{?rhel}' 2>/dev/null | tr -d '[:space:]')
+          if [ "$rpm_rhel_macro" = "7" ]; then
+            detected_min="3.10"
+          fi
+        fi
+
+        if [ -n "$detected_min" ]; then
+          printf '%s\n' "$detected_min"
+        else
+          printf '%s\n' "$default_min"
+        fi
+      }
+
       current=$(uname -r 2>/dev/null | cut -d- -f1)
-      min="4.18"
       if [ -z "$current" ]; then
         echo unknown
       else
+        min=$(detect_min_version)
         first=$(printf '%s\n%s\n' "$min" "$current" | sort -V | head -n1)
         if [ "$first" = "$min" ]; then
           echo ok
