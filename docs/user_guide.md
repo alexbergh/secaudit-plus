@@ -169,6 +169,8 @@ HTML-отчёт содержит раскраску по статусам (`PASS
 
 **Раздел Remediation.** В HTML и Markdown-отчётах появился блок, который агрегирует все непройденные проверки с заполненным полем `remediation`. Он упрощает передачу задач в сервис-деск: операторы сразу видят конкретные шаги, подготовленные авторами профиля. Чтобы заполнить рекомендации, добавьте в YAML-проверку многострочное поле `remediation`.
 
+Помимо визуальных отчётов SecAudit сохраняет машинные экспорты: `results/report.sarif` (формат SARIF 2.1.0 для GitHub Advanced Security, Azure DevOps и других сканеров) и `results/report.junit.xml` (JUnit XML, пригодный для GitHub/GitLab/TeamCity/Allure). Эти файлы подключаются к CI/CD и позволяют анализировать отклонения в единых интерфейсах.
+
 ## 6. Тестирование и CI/CD
 
 Запуски `pytest`, `flake8`, `mypy` и `yamllint` описаны в `workflows/ci.yml`. Чтобы повторить локально:
@@ -192,6 +194,19 @@ mypy
 ```
 
 Используйте код выхода для принятия решения о прохождении пайплайна.
+
+### GitHub Actions
+
+Файл `docs/examples/github_actions_golden_image.yml` демонстрирует полный workflow: checkout образа, установка зависимостей, запуск `secaudit audit` и публикация артефактов. Ключевые шаги:
+
+1. Установите SecAudit: `pip install -e .`.
+2. Выполните аудит golden-образа и сохраните результаты: `secaudit audit --profile profiles/base/server.yml --fail-level medium`.
+3. Загрузите отчёты в артефакты (`actions/upload-artifact`) и отправьте `results/report.sarif` через `github/codeql-action/upload-sarif` для отображения в разделе Security.
+4. Подключите `results/report.junit.xml` к `actions/upload-test-results`, чтобы сводка проверок появилась в Summary.
+
+### GitLab CI
+
+Пример `.gitlab-ci.yml` находится в `docs/examples/gitlab_ci_golden_image.yml`. Он выполняет аудит в job `secaudit_audit`, публикует каталог `results/` как артефакты и объявляет `results/report.junit.xml` как `junit`-отчёт, который GitLab отобразит на вкладке Tests. SARIF можно выгрузить в артефакты или использовать сторонние интеграции, например загрузку в DefectDojo.
 
 ## 7. Частые вопросы
 
