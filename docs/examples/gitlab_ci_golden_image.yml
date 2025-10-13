@@ -1,0 +1,29 @@
+stages:
+  - audit
+
+variables:
+  SECAUDIT_PROFILE: "profiles/base/server.yml"
+
+secaudit_audit:
+  stage: audit
+  image: python:3.11-slim
+  script:
+    - python -m venv .venv
+    - source .venv/bin/activate
+    - pip install --upgrade pip
+    - pip install -e .
+    # Добавьте подготовку golden-образа: packer build, docker load и т.п.
+    - |
+      secaudit audit \
+        --profile "$SECAUDIT_PROFILE" \
+        --level strict \
+        --fail-level medium \
+        --evidence results/evidence
+  artifacts:
+    when: always
+    paths:
+      - results/
+    expire_in: 7 days
+    reports:
+      junit: results/report.junit.xml
+  allow_failure: false

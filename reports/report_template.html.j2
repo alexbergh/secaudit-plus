@@ -240,6 +240,54 @@
       </div>
     </div>
 
+    {# ===================== REMEDIATION ====================== #}
+    {% set remediation_ns = namespace(items=[]) %}
+    {% for check in results %}
+      {% set status = norm_status(check) %}
+      {% if check.remediation and (status != 'pass') %}
+        {% set remediation_ns.items = remediation_ns.items + [{'check': check, 'status': status}] %}
+      {% endif %}
+    {% endfor %}
+
+    {% if remediation_ns.items %}
+    <div class="card mb-4 shadow-sm" id="remediation">
+      <div class="card-body">
+        <h2 class="h4 mb-3">План Remediation</h2>
+        <p class="text-muted">Список действий для устранения несоответствий. Включает только проверки, которые не прошли аудит и содержат поле <code>remediation</code>.</p>
+        <div class="table-responsive">
+          <table class="table table-sm table-bordered align-middle">
+            <thead class="table-light">
+              <tr>
+                <th style="width:3ch;">#</th>
+                <th>Проверка</th>
+                <th style="width:8ch;">Sev</th>
+                <th style="width:10ch;">Статус</th>
+                <th>Рекомендации</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for item in remediation_ns.items %}
+              {% set check = item.check %}
+              <tr>
+                <td class="text-muted">{{ loop.index }}</td>
+                <td>
+                  <div class="fw-semibold">{{ check.name|default('—') }}</div>
+                  <div class="small text-muted mono">ID: {{ check.id|default('—') }}</div>
+                </td>
+                <td>{{ sev_badge(check.severity) }}</td>
+                <td>{{ result_badge(item.status) }}</td>
+                <td>
+                  <pre class="code-pre small-mono mb-0">{{ check.remediation }}</pre>
+                </td>
+              </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+    {% endif %}
+
     {# =================== МОДУЛИ (АККОРДЕОН) =================== #}
     <div class="accordion" id="modulesAccordion">
       {% for module, checks in results | groupby('module') %}

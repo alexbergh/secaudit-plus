@@ -96,6 +96,28 @@
 
 ---
 
+{# ======================== REMEDIATION ========================= #}
+{% set remediation_ns = namespace(items=[]) %}
+{% for check in results %}
+  {% set status = norm_status(check) %}
+  {% if check.remediation and (status != 'pass') %}
+    {% set remediation_ns.items = remediation_ns.items + [{'check': check, 'status': status}] %}
+  {% endif %}
+{% endfor %}
+
+{% if remediation_ns.items %}
+## План Remediation
+Эти рекомендации сформированы по проверкам, которые не прошли аудит и содержат поле `remediation`.
+
+| № | Проверка | Severity | Статус | Рекомендации |
+|---|---|---|---|---|
+{% for item in remediation_ns.items %}
+  {% set check = item.check %}
+| {{ loop.index }} | {{ check.name|default('—') }} (`{{ check.id|default('—') }}`) | {{ sev_badge(check.severity) }} | {{ status_badge(item.status) }} | {{ check.remediation|replace('\n', '<br/>')|safe }} |
+{% endfor %}
+
+{% endif %}
+
 {# =================== ГРУППИРОВКА ПО МОДУЛЯМ ==================== #}
 {% for module, checks in results | groupby('module') %}
 ## Модуль: {{ module | capitalize }} ({{ checks | length }} проверок)

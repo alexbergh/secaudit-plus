@@ -90,6 +90,36 @@ def test_apply_assert_set_allowlist(tmp_path: Path):
     assert "unexpected" in reason
 
 
+def test_prioritized_allowlist_merges(tmp_path: Path):
+    base = tmp_path / "base.txt"
+    base.write_text("alpha\nbeta\ngamma\n", encoding="utf-8")
+
+    config = {
+        "mode": "subset",
+        "sources": [
+            {"file": str(base)},
+            {"values": ["delta"], "priority": 5},
+            {"values": ["beta"], "priority": 10, "effect": "remove"},
+            {"remove": ["gamma"], "priority": 20},
+        ],
+    }
+
+    stdout = "alpha\ndelta\n"
+    status, reason = _apply_assert(stdout, 0, config, "set_allowlist", (0,))
+    assert status == "PASS"
+    assert "allowlist" in reason.lower() or "subset" in reason.lower()
+
+    stdout = "alpha\nbeta\n"
+    status, reason = _apply_assert(stdout, 0, config, "set_allowlist", (0,))
+    assert status == "FAIL"
+    assert "beta" in reason
+
+    stdout = "gamma\n"
+    status, reason = _apply_assert(stdout, 0, config, "set_allowlist", (0,))
+    assert status == "FAIL"
+    assert "gamma" in reason
+
+
 def test_parse_tag_filters_roundtrip():
     filters = parse_tag_filters(["FSTEC=УПД.7", "cis=5.2"])
     assert filters == {"fstec": "упд.7", "cis": "5.2"}

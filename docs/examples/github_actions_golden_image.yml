@@ -1,0 +1,61 @@
+name: SecAudit Golden Image Audit
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [ main ]
+    paths:
+      - 'profiles/**'
+      - '.github/workflows/**'
+
+jobs:
+  audit-golden-image:
+    runs-on: ubuntu-latest
+    env:
+      SECAUDIT_PROFILE: profiles/base/server.yml
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      # Соберите или подготовьте golden-образ до запуска SecAudit.
+      # Здесь можно добавить docker build, packer build или распаковку артефакта.
+      - name: Prepare golden image
+        run: |
+          echo "Using host filesystem as audit target"
+
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install SecAudit
+        run: |
+          python -m venv .venv
+          source .venv/bin/activate
+          pip install -e .
+
+      - name: Run SecAudit
+        run: |
+          source .venv/bin/activate
+          mkdir -p results
+          secaudit audit \
+            --profile "${{ env.SECAUDIT_PROFILE }}" \
+            --level strict \
+            --fail-level medium \
+            --evidence results/evidence
+
+      - name: Upload raw reports as artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: secaudit-results
+          path: results/
+
+      - name: Publish SARIF to GitHub Security tab
+        uses: github/codeql-action/upload-sarif@v3
+        with:
+          sarif_file: results/report.sarif
+
+      - name: Publish JUnit summary
+        uses: actions/upload-test-results@v1
+        with:
+          files: results/report.junit.xml

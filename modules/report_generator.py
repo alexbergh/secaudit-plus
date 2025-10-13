@@ -2,11 +2,14 @@
 from jinja2 import Environment, FileSystemLoader
 from datetime import datetime, date
 from pathlib import Path
+from importlib import metadata as importlib_metadata
 import json
 import platform
 import socket
 from collections import defaultdict
 from collections.abc import Mapping, Sequence
+from typing import Any, Dict, List
+from xml.etree import ElementTree as ET
 
 
 FSTEK21_DESCRIPTIONS = {
@@ -280,6 +283,94 @@ def _collect_high_findings(results):
         highs.append(record)
 
     return highs
+
+
+def _detect_tool_metadata():
+    """Return name/version metadata for the SARIF/JUnit exports."""
+
+    candidates = ["secaudit-core", "secaudit"]
+    for dist_name in candidates:
+        try:
+            version = importlib_metadata.version(dist_name)
+            return {
+                "name": "SecAudit",
+                "full_name": dist_name,
+                "version": version,
+            }
+        except importlib_metadata.PackageNotFoundError:
+            continue
+        except Exception:
+            continue
+
+    return {"name": "SecAudit", "full_name": "secaudit-core", "version": "dev"}
+
+
+def _result_message(record: Mapping) -> str:
+    for key in ("reason", "output", "message"):
+        value = record.get(key)
+        if isinstance(value, str) and value.strip():
+            return value.strip()
+    return f"Result: {_canonical_status(record)}"
+
+
+def _sarif_level(status: str, severity: str | None) -> str:
+    severity = (severity or "").strip().lower()
+    severity_map = {
+        "critical": "error",
+        "high": "error",
+        "medium": "warning",
+        "moderate": "warning",
+        "low": "note",
+        "info": "note",
+    }
+
+    if status in {"FAIL", "ERROR"}:
+        return severity_map.get(severity, "error")
+    if status == "WARN":
+        return severity_map.get(severity, "warning")
+    if status == "SKIP":
+        return "note"
+    if status == "PASS":
+        return "none"
+    return severity_map.get(severity, "warning")
+
+
+def _sarif_kind(status: str) -> str:
+    return {
+        "PASS": "pass",
+        "FAIL": "fail",
+        "ERROR": "fail",
+        "WARN": "review",
+        "SKIP": "notApplicable",
+    }.get(status, "review")
+
+
+def _safe_float(value, default: float = 0.0) -> float:
+    try:
+        return float(value)
+    except (TypeError, ValueError):
+        return default
+
+
+def _stringify(value) -> str:
+    if value is None:
+        return ""
+    if isinstance(value, (str, bytes)):
+        return value.decode() if isinstance(value, bytes) else value
+    return json.dumps(value, ensure_ascii=False, default=str)
+
+
+def _iter_properties(prefix: str, value):
+    if isinstance(value, Mapping):
+        for key, val in value.items():
+            if not isinstance(key, str):
+                key = str(key)
+            next_prefix = f"{prefix}{key}" if not prefix else f"{prefix}.{key}"
+            yield from _iter_properties(next_prefix, val)
+    elif isinstance(value, (list, tuple, set)):
+        return
+    else:
+        yield prefix, value
 
 
 _HOST_FIELD_MAP = {
@@ -563,3 +654,412 @@ def generate_json_report(results: list, output_path: str, summary: dict | None =
     Path(output_path).parent.mkdir(parents=True, exist_ok=True)
     with open(output_path, "w", encoding="utf-8") as f:
         json.dump(payload, f, indent=2, ensure_ascii=False)
+
+
+def generate_sarif_report(
+    profile: Mapping | None,
+    results: list,
+    output_path: str,
+    summary: Mapping | None = None,
+    host_info: Mapping | None = None,
+):
+    tool_info = _detect_tool_metadata()
+    rules: dict[str, dict] = {}
+    sarif_results: list[dict] = []
+
+    for record in results or []:
+        if not isinstance(record, Mapping):
+            continue
+
+        status = _canonical_status(record)
+        check_id = str(record.get("id") or record.get("name") or "SEC-CHECK")
+        severity = record.get("severity")
+
+        rule_entry = rules.get(check_id)
+        if rule_entry is None:
+            rule_entry = {
+                "id": check_id,
+                "name": record.get("name") or check_id,
+                "shortDescription": {"text": record.get("name") or check_id},
+                "fullDescription": {
+                    "text": record.get("description")
+                    or record.get("reason")
+                    or record.get("output")
+                    or record.get("name")
+                    or check_id,
+                },
+                "defaultConfiguration": {"level": _sarif_level("FAIL", severity)},
+                "properties": {},
+            }
+            ref = record.get("ref")
+            if ref:
+                rule_entry["helpUri"] = ref
+            remediation = record.get("remediation")
+            if remediation:
+                rule_entry["help"] = {"text": remediation}
+            module_name = record.get("module")
+            if module_name:
+                rule_entry["properties"]["module"] = module_name
+            if severity:
+                rule_entry["properties"]["severity"] = severity
+            tags = record.get("tags")
+            if tags:
+                rule_entry["properties"]["tags"] = tags
+            rules[check_id] = rule_entry
+
+        properties = {
+            "status": status,
+            "module": record.get("module"),
+            "severity": severity,
+            "weight": record.get("weight"),
+        }
+        if record.get("tags"):
+            properties["tags"] = record.get("tags")
+        if record.get("remediation"):
+            properties["remediation"] = record.get("remediation")
+        if record.get("command"):
+            properties["command"] = record.get("command")
+        if record.get("evidence"):
+            properties["evidence"] = record.get("evidence")
+        if record.get("duration") is not None:
+            properties["duration"] = _safe_float(record.get("duration"))
+        if record.get("cpu_time") is not None:
+            properties["cpu_time"] = _safe_float(record.get("cpu_time"))
+
+        message_text = _result_message(record)
+        sarif_record = {
+            "ruleId": check_id,
+            "level": _sarif_level(status, severity),
+            "kind": _sarif_kind(status),
+            "message": {"text": message_text},
+            "properties": properties,
+        }
+
+        module_name = record.get("module")
+        if module_name:
+            sarif_record["locations"] = [
+                {
+                    "physicalLocation": {
+                        "artifactLocation": {"uri": f"module://{module_name}"},
+                    }
+                }
+            ]
+
+        sarif_results.append(sarif_record)
+
+    run: dict[str, object] = {
+        "tool": {
+            "driver": {
+                "name": tool_info["name"],
+                "fullName": tool_info["full_name"],
+                "version": tool_info["version"],
+                "informationUri": "https://github.com/alexbergh/secaudit-core",
+                "rules": sorted(rules.values(), key=lambda item: item["id"]),
+            }
+        },
+        "results": sarif_results,
+    }
+
+    properties: dict[str, object] = {}
+    if isinstance(profile, Mapping):
+        profile_meta = {}
+        for key in ("id", "profile_name", "description", "schema_version"):
+            if key in profile:
+                profile_meta[key] = profile[key]
+        if profile_meta:
+            properties["profile"] = profile_meta
+    if summary:
+        properties["summary"] = summary
+    if host_info:
+        properties["host"] = host_info
+    if properties:
+        run["properties"] = properties
+
+    payload = {
+        "$schema": "https://json.schemastore.org/sarif-2.1.0.json",
+        "version": "2.1.0",
+        "runs": [run],
+    }
+
+    Path(output_path).parent.mkdir(parents=True, exist_ok=True)
+    with open(output_path, "w", encoding="utf-8") as f:
+        json.dump(payload, f, indent=2, ensure_ascii=False)
+
+
+def generate_junit_report(
+    profile: Mapping | None,
+    results: list,
+    output_path: str,
+    summary: Mapping | None = None,
+    host_info: Mapping | None = None,
+):
+    suite_name = None
+    if isinstance(profile, Mapping):
+        suite_name = profile.get("profile_name") or profile.get("id")
+    suite_name = suite_name or "SecAudit"
+
+    total_time = 0.0
+    failures = 0
+    errors = 0
+    skipped = 0
+
+    testsuite = ET.Element(
+        "testsuite",
+        attrib={
+            "name": suite_name,
+            "tests": str(len(results or [])),
+            "failures": "0",
+            "errors": "0",
+            "skipped": "0",
+            "time": "0.0",
+        },
+    )
+
+    if summary or host_info:
+        properties_elem = ET.SubElement(testsuite, "properties")
+        if summary:
+            for name, value in _iter_properties("summary", summary):
+                if not name:
+                    continue
+                ET.SubElement(
+                    properties_elem,
+                    "property",
+                    attrib={"name": name, "value": _stringify(value)},
+                )
+        if host_info:
+            for name, value in _iter_properties("host", host_info):
+                if not name:
+                    continue
+                ET.SubElement(
+                    properties_elem,
+                    "property",
+                    attrib={"name": name, "value": _stringify(value)},
+                )
+
+    for record in results or []:
+        if not isinstance(record, Mapping):
+            continue
+
+        status = _canonical_status(record)
+        duration = _safe_float(record.get("duration"))
+        total_time += duration
+
+        testcase = ET.SubElement(
+            testsuite,
+            "testcase",
+            attrib={
+                "name": str(record.get("name") or record.get("id") or "check"),
+                "classname": str(record.get("module") or "secaudit"),
+                "time": f"{duration:.3f}",
+            },
+        )
+
+        message = _result_message(record)
+
+        if status == "FAIL":
+            failures += 1
+            failure = ET.SubElement(
+                testcase,
+                "failure",
+                attrib={"message": message, "type": "failure"},
+            )
+            failure.text = _stringify(record.get("remediation") or message)
+        elif status == "ERROR":
+            errors += 1
+            error = ET.SubElement(
+                testcase,
+                "error",
+                attrib={"message": message, "type": "error"},
+            )
+            error.text = _stringify(record.get("stderr") or message)
+        elif status in {"WARN", "SKIP"}:
+            skipped += 1
+            ET.SubElement(testcase, "skipped", attrib={"message": message})
+
+        output = record.get("output")
+        if isinstance(output, str) and output:
+            out_elem = ET.SubElement(testcase, "system-out")
+            out_elem.text = output
+        stderr = record.get("stderr")
+        if isinstance(stderr, str) and stderr:
+            err_elem = ET.SubElement(testcase, "system-err")
+            err_elem.text = stderr
+
+    testsuite.set("failures", str(failures))
+    testsuite.set("errors", str(errors))
+    testsuite.set("skipped", str(skipped))
+    testsuite.set("time", f"{total_time:.3f}")
+
+    tree = ET.ElementTree(testsuite)
+    Path(output_path).parent.mkdir(parents=True, exist_ok=True)
+    tree.write(output_path, encoding="utf-8", xml_declaration=True)
+
+
+_PROM_STATUS_VALUE = {"PASS": 0, "WARN": 1, "FAIL": 2, "UNDEF": 3, "ERROR": 3}
+
+
+def _prometheus_escape(value: Any) -> str:
+    text = str(value if value is not None else "")
+    text = text.replace("\\", "\\\\").replace("\n", "\\n").replace("\"", "\\\"")
+    return text
+
+
+def _prometheus_labels(labels: Mapping[str, Any]) -> str:
+    parts = [f'{key}="{_prometheus_escape(val)}"' for key, val in sorted(labels.items())]
+    return ",".join(parts)
+
+
+def generate_prometheus_metrics(
+    profile: Mapping | None,
+    results: list,
+    output_path: str,
+    summary: Mapping | None = None,
+    host_info: Mapping | None = None,
+) -> None:
+    lines: List[str] = []
+
+    base_labels: Dict[str, Any] = {}
+    if isinstance(profile, Mapping):
+        profile_id = profile.get("id") or profile.get("profile_name")
+        if profile_id:
+            base_labels["profile"] = profile_id
+    if isinstance(host_info, Mapping):
+        hostname = host_info.get("hostname")
+        if hostname:
+            base_labels["host"] = hostname
+
+    lines.append(
+        "# HELP secaudit_check_status Status of audit checks (0=PASS,1=WARN,2=FAIL,3=UNDEF)"
+    )
+    lines.append("# TYPE secaudit_check_status gauge")
+
+    for record in results or []:
+        if not isinstance(record, Mapping):
+            continue
+        status = _canonical_status(record)
+        value = _PROM_STATUS_VALUE.get(status, 3)
+        labels = dict(base_labels)
+        labels["check_id"] = record.get("id") or record.get("name") or "check"
+        if record.get("module"):
+            labels["module"] = record.get("module")
+        if record.get("severity"):
+            labels["severity"] = record.get("severity")
+        lines.append(
+            f"secaudit_check_status{{{_prometheus_labels(labels)}}} {value}"
+        )
+
+        duration = _safe_float(record.get("duration"))
+        if duration:
+            duration_labels = dict(labels)
+            lines.append(
+                f"secaudit_check_duration_seconds{{{_prometheus_labels(duration_labels)}}} {duration:.6f}"
+            )
+
+    if summary:
+        score = summary.get("score")
+        if isinstance(score, (int, float)):
+            lines.append("# HELP secaudit_summary_score Overall audit score (percentage)")
+            lines.append("# TYPE secaudit_summary_score gauge")
+            lines.append(
+                f"secaudit_summary_score{{{_prometheus_labels(base_labels)}}} {float(score):.6f}"
+            )
+
+        coverage = summary.get("coverage")
+        if isinstance(coverage, (int, float)):
+            lines.append("# HELP secaudit_summary_coverage Coverage of executed checks")
+            lines.append("# TYPE secaudit_summary_coverage gauge")
+            lines.append(
+                f"secaudit_summary_coverage{{{_prometheus_labels(base_labels)}}} {float(coverage):.6f}"
+            )
+
+        counts = summary.get("status_counts")
+        if isinstance(counts, Mapping):
+            lines.append("# HELP secaudit_summary_status_total Checks per final status")
+            lines.append("# TYPE secaudit_summary_status_total gauge")
+            for status, count in counts.items():
+                try:
+                    numeric = float(count)
+                except (TypeError, ValueError):
+                    continue
+                labels = dict(base_labels)
+                labels["status"] = status
+                lines.append(
+                    f"secaudit_summary_status_total{{{_prometheus_labels(labels)}}} {numeric:.6f}"
+                )
+
+    Path(output_path).parent.mkdir(parents=True, exist_ok=True)
+    Path(output_path).write_text("\n".join(lines) + "\n", encoding="utf-8")
+
+
+def generate_elastic_export(
+    profile: Mapping | None,
+    results: list,
+    output_path: str,
+    summary: Mapping | None = None,
+    host_info: Mapping | None = None,
+) -> None:
+    timestamp = datetime.utcnow().replace(microsecond=0).isoformat() + "Z"
+
+    profile_meta: Dict[str, Any] = {}
+    if isinstance(profile, Mapping):
+        for key in ("id", "profile_name", "description", "schema_version"):
+            if profile.get(key) is not None:
+                profile_meta[key] = profile.get(key)
+
+    host_meta: Dict[str, Any] = {}
+    if isinstance(host_info, Mapping):
+        host_meta = {k: v for k, v in host_info.items() if v is not None}
+
+    lines: List[str] = []
+    for record in results or []:
+        if not isinstance(record, Mapping):
+            continue
+        entry: Dict[str, Any] = {
+            "@timestamp": timestamp,
+            "event": {
+                "dataset": "secaudit.check",
+                "kind": "state",
+                "category": ["configuration"],
+                "type": ["info"],
+            },
+            "secaudit": {
+                "check": {
+                    "id": record.get("id") or record.get("name"),
+                    "name": record.get("name") or record.get("id"),
+                    "module": record.get("module"),
+                    "severity": record.get("severity"),
+                    "status": _canonical_status(record),
+                    "reason": record.get("reason"),
+                    "remediation": record.get("remediation"),
+                    "duration": _safe_float(record.get("duration")),
+                    "cpu_time": _safe_float(record.get("cpu_time")),
+                },
+            },
+        }
+        if profile_meta:
+            entry["secaudit"]["profile"] = profile_meta
+        if host_meta:
+            entry["host"] = host_meta
+        lines.append(json.dumps(entry, ensure_ascii=False))
+
+    if summary:
+        summary_entry = {
+            "@timestamp": timestamp,
+            "event": {
+                "dataset": "secaudit.summary",
+                "kind": "state",
+                "category": ["configuration"],
+                "type": ["info"],
+            },
+            "secaudit": {
+                "summary": summary,
+            },
+        }
+        if profile_meta:
+            summary_entry["secaudit"]["profile"] = profile_meta
+        if host_meta:
+            summary_entry["host"] = host_meta
+        lines.append(json.dumps(summary_entry, ensure_ascii=False))
+
+    Path(output_path).parent.mkdir(parents=True, exist_ok=True)
+    Path(output_path).write_text("\n".join(lines) + "\n", encoding="utf-8")
