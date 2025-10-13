@@ -140,3 +140,54 @@ def test_validate_profile_accepts_set_allowlist(minimal_check, tmp_path):
     is_valid, errors = validate_profile(profile)
 
     assert is_valid, f"Profile unexpectedly invalid: {errors}"
+
+
+def test_validate_profile_accepts_vars_shorthand(minimal_check):
+    profile = {
+        "schema_version": "1.1",
+        "profile_name": "Test",
+        "description": "Test profile",
+        "vars": {"FOO": "bar", "BAR": 2, "ENABLE": True},
+        "checks": [minimal_check],
+    }
+
+    is_valid, errors = validate_profile(profile)
+
+    assert is_valid, f"Profile unexpectedly invalid: {errors}"
+
+
+def test_validate_profile_accepts_structured_vars(minimal_check):
+    profile = {
+        "schema_version": "1.1",
+        "profile_name": "Test",
+        "description": "Test profile",
+        "vars": {
+            "defaults": {"FOO": "bar"},
+            "levels": {"strict": {"FOO": "baz"}},
+            "files": ["profiles/include/vars_extra.env"],
+            "optional_files": ["profiles/include/vars_{{ level }}.env"],
+        },
+        "checks": [minimal_check],
+    }
+
+    is_valid, errors = validate_profile(profile)
+
+    assert is_valid, f"Profile unexpectedly invalid: {errors}"
+
+
+def test_validate_profile_rejects_invalid_vars_structure(minimal_check):
+    profile = {
+        "schema_version": "1.1",
+        "profile_name": "Test",
+        "description": "Test profile",
+        "vars": {
+            "files": ["ok", 123],
+            "levels": {"strict": ["not", "a", "mapping"]},
+        },
+        "checks": [minimal_check],
+    }
+
+    is_valid, errors = validate_profile(profile)
+
+    assert not is_valid
+    assert any("vars" in err for err in errors)
