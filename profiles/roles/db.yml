@@ -15,3 +15,210 @@ checks:
     severity: "low"
     tags:
       role: ["database"]
+  - id: db_postgresql_service_enabled
+    name: "PostgreSQL: сервис включён и активен"
+    module: "database"
+    command: |
+      python3 - <<'PY'
+      import json, subprocess
+
+      result = {"active": False}
+      try:
+          active_units = subprocess.run(
+              ["systemctl", "list-units", "postgresql*.service", "--state=active"],
+              check=False,
+              stdout=subprocess.PIPE,
+              stderr=subprocess.DEVNULL,
+              text=True,
+          ).stdout.splitlines()
+          enabled_units = subprocess.run(
+              ["systemctl", "list-unit-files", "postgresql*.service"],
+              check=False,
+              stdout=subprocess.PIPE,
+              stderr=subprocess.DEVNULL,
+              text=True,
+          ).stdout.splitlines()
+          active = any(line.split() and line.split()[0].startswith("postgresql") for line in active_units)
+          enabled = any(
+              parts and parts[0].startswith("postgresql") and (len(parts) > 1 and parts[1] in {"enabled", "static"})
+              for line in enabled_units
+              if (parts := line.split())
+          )
+          result["active"] = active and enabled
+      except Exception:
+          result["active"] = False
+      print(json.dumps(result))
+      PY
+    expect:
+      path: "$.active"
+      value: true
+    assert_type: "jsonpath"
+    severity: "high"
+    tags:
+      role: ["database"]
+    remediation: |
+      Включите и запустите нужный экземпляр PostgreSQL командой `systemctl enable --now postgresql@<cluster>.service`.
+  - id: db_postgresql_ssl_enabled
+    name: "PostgreSQL: SSL включён"
+    module: "database"
+    command: |
+      python3 - <<'PY'
+      import json, pathlib, re
+
+      def parse_ssl(path: pathlib.Path) -> bool:
+          try:
+              text = path.read_text()
+          except Exception:
+              return False
+          match = re.search(r"^\s*ssl\s*=\s*(\w+)", text, flags=re.MULTILINE)
+          return bool(match and match.group(1).strip().lower() in {"on", "true", "yes", "1"})
+
+      conf_root = pathlib.Path("/etc/postgresql")
+      ssl_on = False
+      if conf_root.exists():
+          for conf in conf_root.glob("**/postgresql.conf"):
+              ssl_on = parse_ssl(conf)
+              if ssl_on:
+                  break
+      print(json.dumps({"ssl": ssl_on}))
+      PY
+    expect:
+      path: "$.ssl"
+      value: true
+    assert_type: "jsonpath"
+    severity: "high"
+    tags:
+      role: ["database"]
+    remediation: |
+      Установите `ssl = on` и параметры сертификата в postgresql.conf, затем перезапустите сервис PostgreSQL.
+  - id: db_postgresql_log_connections
+    name: "PostgreSQL: включено логирование подключений"
+    module: "database"
+    command: |
+      python3 - <<'PY'
+      import json, pathlib, re
+
+      def parse_flag(path: pathlib.Path, key: str) -> bool:
+          try:
+              text = path.read_text()
+          except Exception:
+              return False
+          match = re.search(rf"^\s*{re.escape(key)}\s*=\s*(\w+)", text, flags=re.MULTILINE)
+          return bool(match and match.group(1).strip().lower() in {"on", "true", "yes", "1"})
+
+      conf_root = pathlib.Path("/etc/postgresql")
+      logging = False
+      if conf_root.exists():
+          for conf in conf_root.glob("**/postgresql.conf"):
+              logging = parse_flag(conf, "log_connections")
+              if logging:
+                  break
+      print(json.dumps({"log_connections": logging}))
+      PY
+    expect:
+      path: "$.log_connections"
+      value: true
+    assert_type: "jsonpath"
+    severity: "medium"
+    tags:
+      role: ["database"]
+    remediation: |
+      Добавьте `log_connections = on` в postgresql.conf и примените изменения перезапуском сервиса.
+  - id: db_pg_hba_no_trust
+    name: "PostgreSQL: в pg_hba.conf нет trust-авторизаций"
+    module: "database"
+    command: |
+      python3 - <<'PY'
+      import json, pathlib, re
+
+      conf_root = pathlib.Path('/etc/postgresql')
+      status = 'missing'
+      if conf_root.exists():
+          status = 'clean'
+          for pg_hba in conf_root.glob('**/pg_hba.conf'):
+              try:
+                  text = pg_hba.read_text()
+              except Exception:
+                  status = 'error'
+                  break
+              for line in text.splitlines():
+                  line = line.strip()
+                  if not line or line.startswith('#'):
+                      continue
+                  fields = re.split(r'\s+', line)
+                  if fields and fields[-1].lower() == 'trust':
+                      status = 'insecure'
+                      break
+              if status != 'clean':
+                  break
+      print(json.dumps({'status': status}))
+      PY
+    expect:
+      path: "$.status"
+      value: "clean"
+    assert_type: "jsonpath"
+    severity: "high"
+    tags:
+      role: ["database"]
+    remediation: |
+      Удалите методы `trust` из pg_hba.conf, заменив их на `scram-sha-256` или `md5`, после чего перезагрузите конфигурацию (`select pg_reload_conf();`).
+  - id: db_postgres_system_user_shell
+    name: "PostgreSQL: системный пользователь не имеет интерактивной оболочки"
+    module: "database"
+    command: "getent passwd postgres | cut -d: -f7 || echo unknown"
+    expect: "^(?:/usr/sbin/nologin|/bin/false)$"
+    assert_type: "regexp"
+    severity: "medium"
+    tags:
+      role: ["database"]
+    remediation: |
+      Установите оболочку пользователя postgres на `/usr/sbin/nologin` командой `usermod -s /usr/sbin/nologin postgres`.
+  - id: db_postgresql_data_permissions
+    name: "PostgreSQL: каталог данных защищён (700)"
+    module: "database"
+    command: |
+      python3 - <<'PY'
+      import json, pathlib
+
+      data_root = pathlib.Path("/var/lib/postgresql")
+      mode_ok = False
+      if data_root.exists():
+          try:
+              mode_ok = (data_root.stat().st_mode & 0o777) == 0o700
+          except Exception:
+              mode_ok = False
+      print(json.dumps({"mode_ok": mode_ok}))
+      PY
+    expect:
+      path: "$.mode_ok"
+      value: true
+    assert_type: "jsonpath"
+    severity: "medium"
+    tags:
+      role: ["database"]
+    remediation: "Установите владельцем каталога /var/lib/postgresql пользователя postgres и задайте права 700."
+  - id: db_postgresql_data_owner
+    name: "PostgreSQL: каталог данных принадлежит postgres"
+    module: "database"
+    command: |
+      python3 - <<'PY'
+      import json, pathlib
+
+      data_root = pathlib.Path("/var/lib/postgresql")
+      owner_ok = False
+      if data_root.exists():
+          try:
+              owner_ok = data_root.owner() == "postgres"
+          except Exception:
+              owner_ok = False
+      print(json.dumps({"owner_ok": owner_ok}))
+      PY
+    expect:
+      path: "$.owner_ok"
+      value: true
+    assert_type: "jsonpath"
+    severity: "medium"
+    tags:
+      role: ["database"]
+    remediation: |
+      Выполните `chown -R postgres:postgres /var/lib/postgresql` и убедитесь, что сервис работает от пользователя postgres.
