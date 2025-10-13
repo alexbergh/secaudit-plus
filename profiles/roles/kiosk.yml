@@ -15,3 +15,117 @@ checks:
     severity: "medium"
     tags:
       role: ["kiosk"]
+  - id: kiosk_autologin_configured
+    name: "Киоск: настроен автоматический вход пользователя"
+    module: "kiosk"
+    command: |
+      python3 - <<'PY'
+      import configparser, json, pathlib
+
+      path = pathlib.Path('/etc/gdm/custom.conf')
+      autologin = False
+      if path.exists():
+          parser = configparser.ConfigParser()
+          try:
+              parser.read(path)
+              enabled = parser.get('daemon', 'AutomaticLoginEnable', fallback='false').strip().lower()
+              user = parser.get('daemon', 'AutomaticLogin', fallback='').strip()
+              autologin = enabled in {'true', 'yes', 'on', '1'} and bool(user)
+          except Exception:
+              autologin = False
+      print(json.dumps({'autologin': autologin}))
+      PY
+    expect:
+      path: "$.autologin"
+      value: true
+    assert_type: "jsonpath"
+    severity: "medium"
+    tags:
+      role: ["kiosk"]
+    remediation: |
+      Установите параметры `AutomaticLoginEnable=true` и `AutomaticLogin=<пользователь>` в /etc/gdm/custom.conf и перезапустите gdm.
+  - id: kiosk_browser_policy_enforced
+    name: "Киоск: браузер запущен в режиме kiosk"
+    module: "kiosk"
+    command: |
+      python3 - <<'PY'
+      import json, pathlib
+
+      path = pathlib.Path('/etc/firefox/policies/policies.json')
+      kiosk_mode = False
+      if path.exists():
+          try:
+              data = json.loads(path.read_text())
+              policies = data.get('policies', {})
+              kiosk_mode = bool(policies.get('Kiosk'))
+          except Exception:
+              kiosk_mode = False
+      print(json.dumps({'kiosk': kiosk_mode}))
+      PY
+    expect:
+      path: "$.kiosk"
+      value: true
+    assert_type: "jsonpath"
+    severity: "high"
+    tags:
+      role: ["kiosk"]
+    remediation: |
+      Добавьте в /etc/firefox/policies/policies.json раздел `"Kiosk": true` и примените политику через `firefox --kiosk`.
+  - id: kiosk_disable_vt_switching
+    name: "Киоск: отключены дополнительные терминалы (getty)"
+    module: "kiosk"
+    command: |
+      python3 - <<'PY'
+      import json, subprocess
+
+      try:
+          output = subprocess.check_output(
+              ['systemctl', 'list-unit-files', 'getty@*.service', '--state=enabled'],
+              stderr=subprocess.DEVNULL,
+              text=True,
+          )
+      except subprocess.CalledProcessError as err:
+          output = err.stdout or ''
+      has_enabled = any(line.strip().startswith('getty@') for line in output.splitlines())
+      print(json.dumps({'has_enabled_getty': has_enabled}))
+      PY
+    expect:
+      path: "$.has_enabled_getty"
+      value: false
+    assert_type: "jsonpath"
+    severity: "high"
+    tags:
+      role: ["kiosk"]
+    remediation: |
+      Отключите лишние tty командой `systemctl mask getty@tty2.service getty@tty3.service ...` и перезагрузите систему.
+  - id: kiosk_ctrl_alt_del_masked
+    name: "Киоск: перехват Ctrl+Alt+Del заблокирован"
+    module: "kiosk"
+    command: "systemctl is-enabled ctrl-alt-del.target 2>/dev/null || echo unknown"
+    expect: "masked"
+    assert_type: "exact"
+    severity: "medium"
+    tags:
+      role: ["kiosk"]
+    remediation: |
+      Выполните `systemctl mask ctrl-alt-del.target` для блокировки перезагрузки через Ctrl+Alt+Del.
+  - id: kiosk_updates_locked
+    name: "Киоск: автообновления отключены для стабильности"
+    module: "kiosk"
+    command: |
+      python3 - <<'PY'
+      import json, pathlib
+
+      path = pathlib.Path('/etc/apt/apt.conf.d/99kiosk-no-auto-upgrades')
+      disabled = path.exists()
+      print(json.dumps({'auto_updates_disabled': disabled}))
+      PY
+    expect:
+      path: "$.auto_updates_disabled"
+      value: true
+    assert_type: "jsonpath"
+    severity: "low"
+    tags:
+      role: ["kiosk"]
+    remediation: |
+      Создайте файл /etc/apt/apt.conf.d/99kiosk-no-auto-upgrades с директивами `APT::Periodic::Update-Package-Lists "0";` и `APT::Periodic::Unattended-Upgrade "0";`.

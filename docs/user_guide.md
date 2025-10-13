@@ -64,6 +64,7 @@ secaudit [ГЛОБАЛЬНЫЕ ОПЦИИ] <команда> [ОПЦИИ КОМА
 | `describe-check <ID>` | Раскрывает содержимое проверки (команда, ожидания, теги). | Инвентаризация и отладка профиля. |
 | `validate` | Проверяет профиль по JSON-схеме (`--strict` — код 2 при ошибках). | Перед выкладкой изменений в профили. |
 | `audit` | Запускает аудит и формирует отчёты. | Основной режим использования. |
+| `compare <before.json> <after.json>` | Сравнивает два отчёта и выводит регрессии/улучшения. | Анализ изменений Golden-образов и релизов. |
 
 Встроенная помощь для любой команды доступна через `secaudit <команда> --help`.
 
@@ -97,6 +98,31 @@ when:
 ```
 
 Если условие не выполняется, проверка получает статус `SKIP`.
+
+### 3.4. Примеры прикладных профилей
+
+- **Сервер баз данных (`profiles/roles/db.yml`).** Наследует базовый серверный профиль и добавляет проверки жизненного цикла PostgreSQL: активность и включение systemd-юнитов, требование `ssl = on` и `log_connections = on`, отсутствие `trust` в `pg_hba.conf`, а также права/владельца каталога `/var/lib/postgresql` и неинтерактивную оболочку пользователя `postgres`.
+- **Киосковый терминал (`profiles/roles/kiosk.yml`).** Поверх рабочего стола проверяет, что GDM настроен на автологин выделенного пользователя, Firefox запускается в режиме Kiosk по политике, отключены дополнительные `getty@tty*` и маскирован `ctrl-alt-del.target`, а пакетный менеджер блокирует фоновые автообновления.
+
+### 3.5. Приоритизированные allow/deny-листы
+
+Поля `allowlist` и `denylist` принимают не только путь к файлу, но и структуру:
+
+```yaml
+asserts:
+  - allowlist:
+      mode: subset
+      sources:
+        - file: "../include/base_allow.txt"
+          priority: 0
+        - values: ["tcp:8443"]
+          priority: 10
+        - values: ["tcp:8080"]
+          priority: 20
+          effect: remove
+```
+
+Каждый источник задаёт `priority` (чем выше, тем сильнее переопределение) и `effect`: `include` добавляет значения, `remove` или `effect: remove` исключает их из итогового набора. Аналогично работает `denylist`, что позволяет строить ролевые исключения без дублирования списков.
 
 ## 4. Запуск аудита
 
@@ -162,6 +188,20 @@ secaudit audit \
 
 HTML-отчёт содержит раскраску по статусам (`PASS`, `FAIL`, `WARN`, `UNDEF`, `SKIP`) и группировку по модулям. Для интеграции с SIEM можно использовать `results/report_grouped.json`.
 
+**Раздел Remediation.** В HTML и Markdown-отчётах появился блок, который агрегирует все непройденные проверки с заполненным полем `remediation`. Он упрощает передачу задач в сервис-деск: операторы сразу видят конкретные шаги, подготовленные авторами профиля. Чтобы заполнить рекомендации, добавьте в YAML-проверку многострочное поле `remediation`.
+
+Помимо визуальных отчётов SecAudit сохраняет машинные экспорты: `results/report.sarif` (формат SARIF 2.1.0 для GitHub Advanced Security, Azure DevOps и других сканеров), `results/report.junit.xml` (JUnit XML для публикации в CI), `results/report.prom` (метрики Prometheus со статусами проверок и сводкой) и `results/report.elastic.ndjson` (NDJSON-события для Elasticsearch/Logstash). Эти файлы подключаются к CI/CD и позволяют анализировать отклонения в единых интерфейсах и дашбордах наблюдения.
+
+### 5.1. Сравнение отчётов
+
+Команда `secaudit compare before.json after.json` читает два JSON-отчёта (`results/report.json` или сгруппированный файл) и выводит:
+
+- кол-во регрессий и улучшений;
+- новые проверки и удалённые элементы;
+- изменение итогового балла (`score`).
+
+Флаг `--fail-only` ограничивает вывод ухудшениями, где результирующий статус — `FAIL` или `UNDEF`. Результат можно сохранить в файл `--output diff.json` и использовать в пайплайнах регрессионного анализа.
+
 ## 6. Тестирование и CI/CD
 
 Запуски `pytest`, `flake8`, `mypy` и `yamllint` описаны в `workflows/ci.yml`. Чтобы повторить локально:
@@ -186,6 +226,19 @@ mypy
 
 Используйте код выхода для принятия решения о прохождении пайплайна.
 
+### GitHub Actions
+
+Файл `docs/examples/github_actions_golden_image.yml` демонстрирует полный workflow: checkout образа, установка зависимостей, запуск `secaudit audit` и публикация артефактов. Ключевые шаги:
+
+1. Установите SecAudit: `pip install -e .`.
+2. Выполните аудит golden-образа и сохраните результаты: `secaudit audit --profile profiles/base/server.yml --fail-level medium`.
+3. Загрузите отчёты в артефакты (`actions/upload-artifact`) и отправьте `results/report.sarif` через `github/codeql-action/upload-sarif` для отображения в разделе Security.
+4. Подключите `results/report.junit.xml` к `actions/upload-test-results`, чтобы сводка проверок появилась в Summary.
+
+### GitLab CI
+
+Пример `.gitlab-ci.yml` находится в `docs/examples/gitlab_ci_golden_image.yml`. Он выполняет аудит в job `secaudit_audit`, публикует каталог `results/` как артефакты и объявляет `results/report.junit.xml` как `junit`-отчёт, который GitLab отобразит на вкладке Tests. SARIF можно выгрузить в артефакты или использовать сторонние интеграции, например загрузку в DefectDojo.
+
 ## 7. Частые вопросы
 
 **Как добавить новый профиль?**
@@ -199,6 +252,76 @@ mypy
 
 **Что делать с `UNDEF`?**
 `UNDEF` означает, что команда завершилась ошибкой или превысила таймаут. Проверьте наличие зависимостей на целевой системе и повторите аудит. Для строгих пайплайнов добавьте `--fail-on-undef`.
+
+## 8. Интеграция с конфигурационными менеджерами
+
+### 8.1. Ansible
+
+Для автоматизации аудита в инфраструктуре добавьте задачу в плейбук. Пример ниже выполняет SecAudit на целевой машине и собирает отчёты как артефакты:
+
+```yaml
+- name: Проверка профиля SecAudit
+  hosts: all
+  become: true
+  vars:
+    secaudit_repo: /opt/secaudit-core
+    secaudit_bin: /opt/secaudit-core/.venv/bin/secaudit
+  tasks:
+    - name: Выполнить аудит
+      ansible.builtin.command:
+        cmd: >-
+          {{ secaudit_bin }} audit
+          --profile profiles/base/linux.yml
+          --level strict
+          --fail-level medium
+          --evidence results/evidence
+      args:
+        chdir: "{{ secaudit_repo }}"
+      register: secaudit_run
+      changed_when: false
+      failed_when: secaudit_run.rc not in [0, 2]
+
+    - name: Сохранить HTML-отчёт локально
+      ansible.builtin.fetch:
+        src: "{{ secaudit_repo }}/results/report_{{ inventory_hostname }}.html"
+        dest: "artifacts/"
+        flat: false
+
+    - name: Остановить плейбук при обнаружении критичных отклонений
+      ansible.builtin.fail:
+        msg: "SecAudit нашёл несоответствия уровня medium и выше"
+      when: secaudit_run.rc == 2
+```
+
+### 8.2. SaltStack
+
+Salt позволяет запускать аудит как часть highstate или оркестрации. Следующее состояние запускает SecAudit и принимает коды возврата `0` и `2` как успешные:
+
+```yaml
+secaudit_audit:
+  cmd.run:
+    - name: >-
+        /opt/secaudit-core/.venv/bin/secaudit audit
+        --profile profiles/base/server.yml
+        --level baseline
+        --fail-level low
+        --evidence results/evidence
+    - cwd: /opt/secaudit-core
+    - env:
+        SECAUDIT_WORKERS: '4'
+    - success_retcodes:
+        - 0
+        - 2
+
+secaudit_reports:
+  file.recurse:
+    - name: salt://artifacts/{{ grains['id'] }}/
+    - source: salt://{{ salt['config.get']('cachedir') }}/secaudit/results/
+    - require:
+        - cmd: secaudit_audit
+```
+
+Отчёты можно загружать в системы тикетирования или в SIEM. При необходимости используйте новые поля `remediation` для автоматического создания задач по устранению.
 
 ---
 

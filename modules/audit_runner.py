@@ -579,7 +579,12 @@ def _parse_assert_entry(entry: Any) -> List[AssertSpec]:
             continue
         params: Dict[str, Any] = {}
         if mapped == "allowlist":
-            params["mode"] = entry.get("mode") or entry.get("allowlist_mode") or "subset"
+            params["mode"] = (
+                entry.get("mode")
+                or entry.get("allowlist_mode")
+                or (value.get("mode") if isinstance(value, dict) else None)
+                or "subset"
+            )
         specs.append(AssertSpec(type=mapped, value=value, params=params, message=message, on_fail=on_fail))
 
     return specs
@@ -614,12 +619,53 @@ def _collect_assertions(check: Dict[str, Any]) -> List[AssertSpec]:
     return specs
 
 
-def _load_reference_list(value: Any, base_dir: Path) -> Tuple[List[str], Optional[str]]:
-    if isinstance(value, (list, tuple, set)):
-        entries = [str(item).strip() for item in value if str(item).strip()]
-        return entries, None
-    if value is None:
-        return [], "empty reference"
+@dataclass
+class _PrioritizedEntry:
+    priority: int
+    include: bool
+
+
+class _PrioritizedSet:
+    """Helper that keeps only the highest-priority decision for every entry."""
+
+    def __init__(self) -> None:
+        self._entries: Dict[str, _PrioritizedEntry] = {}
+
+    def apply(self, value: str, *, priority: int, include: bool) -> None:
+        normalized = str(value).strip()
+        if not normalized:
+            return
+        current = self._entries.get(normalized)
+        if current is None or priority >= current.priority:
+            self._entries[normalized] = _PrioritizedEntry(priority=priority, include=include)
+
+    def finalize(self) -> List[str]:
+        return sorted(key for key, entry in self._entries.items() if entry.include)
+
+
+def _normalize_priority(raw: Any, default: int = 0) -> int:
+    try:
+        if raw is None:
+            return default
+        return int(raw)
+    except (TypeError, ValueError):
+        return default
+
+
+def _normalize_include_flag(raw: Any, default: bool = True) -> bool:
+    if isinstance(raw, bool):
+        return raw
+    if raw is None:
+        return default
+    text = str(raw).strip().lower()
+    if text in {"allow", "include", "add", "keep", "true", "1"}:
+        return True
+    if text in {"deny", "remove", "exclude", "drop", "false", "0", "block"}:
+        return False
+    return default
+
+
+def _read_reference_file(value: Any, base_dir: Path) -> Tuple[List[str], Optional[str]]:
     path = _resolve_path(str(value), base_dir)
     try:
         content = path.read_text(encoding="utf-8")
@@ -633,6 +679,94 @@ def _load_reference_list(value: Any, base_dir: Path) -> Tuple[List[str], Optiona
         if line.strip() and not line.lstrip().startswith("#")
     ]
     return entries, None
+
+
+def _load_reference_list(value: Any, base_dir: Path) -> Tuple[List[str], Optional[str]]:
+    if value is None:
+        return [], "empty reference"
+
+    errors: List[str] = []
+    prioritized = _PrioritizedSet()
+
+    def _apply_entries(entries: Iterable[str], *, priority: int, include: bool) -> None:
+        for entry in entries:
+            prioritized.apply(entry, priority=priority, include=include)
+
+    def _handle_node(node: Any, *, priority: int, include: bool) -> None:
+        if node is None:
+            return
+        if isinstance(node, (list, tuple, set)):
+            if node and all(isinstance(item, str) for item in node):
+                _apply_entries([str(item).strip() for item in node], priority=priority, include=include)
+                return
+            for item in node:
+                _handle_node(item, priority=priority, include=include)
+            return
+        if isinstance(node, dict):
+            local_priority = _normalize_priority(node.get("priority"), priority)
+            local_include = include
+            for key in ("include", "effect", "action"):
+                if key in node:
+                    local_include = _normalize_include_flag(node.get(key), include)
+                    break
+
+            if "sources" in node and isinstance(node["sources"], (list, tuple, set)):
+                for item in node["sources"]:
+                    _handle_node(item, priority=local_priority, include=local_include)
+            values_to_include: List[str] = []
+
+            for key in ("values", "allow", "entries"):
+                if key in node:
+                    raw_values = node[key]
+                    if isinstance(raw_values, (list, tuple, set)):
+                        values_to_include.extend(str(item).strip() for item in raw_values)
+                    elif raw_values is not None:
+                        values_to_include.append(str(raw_values).strip())
+
+            if "value" in node and node["value"] is not None:
+                values_to_include.append(str(node["value"]).strip())
+
+            file_key = None
+            for key in ("file", "path", "allowlist", "denylist"):
+                if key in node and node[key]:
+                    file_key = node[key]
+                    break
+            if file_key is not None:
+                file_entries, error = _read_reference_file(file_key, base_dir)
+                if error:
+                    errors.append(error)
+                else:
+                    values_to_include.extend(file_entries)
+
+            for key in ("remove", "exclude"):
+                if key in node:
+                    raw_remove = node[key]
+                    items = raw_remove if isinstance(raw_remove, (list, tuple, set)) else [raw_remove]
+                    for item in items:
+                        prioritized.apply(str(item), priority=local_priority, include=False)
+
+            if values_to_include:
+                _apply_entries(values_to_include, priority=local_priority, include=local_include)
+            return
+
+        if isinstance(node, str):
+            entries, error = _read_reference_file(node, base_dir)
+            if error:
+                errors.append(error)
+                return
+            _apply_entries(entries, priority=priority, include=include)
+            return
+
+        # Fallback: treat as string representation
+        prioritized.apply(str(node), priority=priority, include=include)
+
+    _handle_node(value, priority=0, include=True)
+
+    if errors:
+        unique_errors = list(dict.fromkeys(errors))
+        return [], "; ".join(unique_errors)
+
+    return prioritized.finalize(), None
 
 
 def _evaluate_single_assert(
