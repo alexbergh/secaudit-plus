@@ -15,6 +15,13 @@ except Exception as e:
 
 PROFILE_SCHEMA: Dict[str, Any] = {
     "type": "object",
+    "definitions": {
+        "varValue": {"type": ["string", "number", "boolean"]},
+        "varsMapping": {
+            "type": "object",
+            "additionalProperties": {"$ref": "#/definitions/varValue"},
+        },
+    },
     "required": ["schema_version", "profile_name", "description", "checks"],
     "properties": {
         "schema_version": {"type": "string", "pattern": r"^1\.\d+$"},
@@ -33,6 +40,31 @@ PROFILE_SCHEMA: Dict[str, Any] = {
         "meta": {
             "type": "object",
             "additionalProperties": {"type": "string"},
+        },
+        "vars": {
+            "type": "object",
+            "properties": {
+                "defaults": {"$ref": "#/definitions/varsMapping"},
+                "levels": {
+                    "type": "object",
+                    "minProperties": 1,
+                    "additionalProperties": {"$ref": "#/definitions/varsMapping"},
+                },
+                "files": {
+                    "type": "array",
+                    "items": {"type": "string", "minLength": 1},
+                    "uniqueItems": True,
+                },
+                "optional_files": {
+                    "type": "array",
+                    "items": {"type": "string", "minLength": 1},
+                    "uniqueItems": True,
+                },
+            },
+            "patternProperties": {
+                r"^[A-Z_][A-Z0-9_]*$": {"$ref": "#/definitions/varValue"}
+            },
+            "additionalProperties": False,
         },
         "checks": {
             "type": "array",
