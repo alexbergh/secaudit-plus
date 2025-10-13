@@ -6,7 +6,7 @@ SecAudit-core — инструмент командной строки для а
 
 - **Расширяемые профили.** Базовые, ОС-специфичные и ролевые YAML-файлы собираются каскадом через `extends` и не допускают дублирования идентификаторов проверок благодаря тестам на наследование.
 - **Гибкая параметризация.** Переменные задаются значениями по умолчанию, уровнями строгости (`baseline`, `strict`, `paranoid`), файлами `vars_*.env` и переопределениями из CLI (`--var KEY=VALUE`).
-- **Диагностика и отчётность.** Итог содержит оценки, покрытие, топ критичных отклонений и, при необходимости, артефакты команд (evidence). Отчёты собираются через шаблоны Jinja2 в `reports/`.
+- **Диагностика и отчётность.** Итог содержит оценки, покрытие, топ критичных отклонений и, при необходимости, артефакты команд (evidence). Отчёты собираются через шаблоны Jinja2 в `reports/` и автоматически экспортируются в JSON, Markdown, HTML, SARIF и JUnit для CI.
 - **Разнообразие проверок.** Проверяются PAM, sudo, учётные записи, файлы, сетевые службы, контейнеры, политики журналирования и другие направления, включая отраслевые профили (например, Secret Net LSP).
 - **Автоматизация.** CLI совместим с CI/CD: политика завершения настраивается флагами `--fail-level` и `--fail-on-undef`, а структура репозитория содержит готовый workflow GitHub Actions.
 
@@ -97,6 +97,11 @@ extends:
 - `tags` — ссылки на нормативные требования и внутренние классификаторы.
 - `remediation`, `ref`, `evidence` — опциональные поля для пояснений и сбора артефактов.
 
+### Усиленные ролевые профили
+
+- `profiles/roles/db.yml` проверяет жизненный цикл PostgreSQL: активность/включение системных юнитов, параметры `ssl` и `log_connections`, отсутствие `trust` в `pg_hba.conf`, права на каталог данных и неинтерактивную оболочку пользователя `postgres`.
+- `profiles/roles/kiosk.yml` фокусируется на киосках: контролирует автологин в GDM, политики браузера Firefox Kiosk, отключение лишних TTY и Ctrl+Alt+Del, а также блокировку фоновых автообновлений.
+
 ### Переменные и уровни строгости
 
 Секция `vars` внутри профиля позволяет определить значения по умолчанию, уровневые настройки и дополнительные файлы:
@@ -142,11 +147,97 @@ secaudit-core/
 
 - `report.json` — полный список проверок с результатами и сводкой.
 - `report_grouped.json` — результаты, сгруппированные по модулям.
-- `report.md` — Markdown-отчёт с аккордеонами по модулям.
+- `report.md` — Markdown-отчёт с аккордеонами по модулам.
 - `report_<hostname>_<timestamp>.html` — HTML-отчёт с визуальными индикаторами.
+- `report.sarif` — машинный отчёт для GitHub Advanced Security и других сканеров, поддерживающих SARIF 2.1.0.
+- `report.junit.xml` — отчёт JUnit XML для публикации в GitHub/GitLab/TeamCity и других CI.
 - Каталог `evidence/` (если передан `--evidence`) с вырезками команд.
 
-Сводка содержит итоговый балл, покрытие, список провалов с наибольшим весом и сопоставление требований ФСТЭК благодаря преобразованиям в `modules/report_generator.py`.
+Сводка содержит итоговый балл, покрытие, список провалов с наибольшим весом и сопоставление требований ФСТЭК благодаря преобразованиям в `modules/report_generator.py`. Отдельный блок «Remediation» в HTML/Markdown-отчётах агрегирует проваленные проверки с заполненным полем `remediation`, чтобы команды эксплуатации сразу видели план действий. Для CI/CD доступны машинные выгрузки `report.sarif` и `report.junit.xml`, которые можно публиковать в системах анализа исходного кода или интерфейсах тестов.
+
+## CI/CD интеграции
+
+Каталог `docs/examples/` содержит готовые пайплайны для golden-образов:
+
+- `docs/examples/github_actions_golden_image.yml` — workflow GitHub Actions, который собирает артефакты, публикует SARIF в Security таб и добавляет JUnit в Summary.
+- `docs/examples/gitlab_ci_golden_image.yml` — пример `.gitlab-ci.yml`, выгружающий отчёты в артефакты и подключающий JUnit к вкладке Tests.
+
+Оба сценария устанавливают SecAudit из репозитория, запускают `secaudit audit` с нужным профилем и загружают файлы `results/report.sarif` и `results/report.junit.xml`. Код завершения управляется флагами `--fail-level` и `--fail-on-undef`, поэтому вы можете останавливать сборку на критичных отклонениях, но продолжать публиковать отчёты для анализа.
+
+## Интеграция с Ansible и SaltStack
+
+### Ansible
+
+SecAudit удобно вызывать из плейбуков для регулярного контроля Golden-образов или серверов. Ниже пример роли, которая выполняет аудит и собирает отчёты как артефакты:
+
+```yaml
+- name: Аудит хоста SecAudit
+  hosts: all
+  become: true
+  vars:
+    secaudit_repo: /opt/secaudit-core
+    secaudit_bin: /opt/secaudit-core/.venv/bin/secaudit
+    secaudit_profile: profiles/base/server.yml
+  tasks:
+    - name: Запуск SecAudit с уровнем strict
+      ansible.builtin.command:
+        cmd: >-
+          {{ secaudit_bin }} audit
+          --profile {{ secaudit_profile }}
+          --level strict
+          --fail-level medium
+          --evidence results/evidence
+      args:
+        chdir: "{{ secaudit_repo }}"
+      register: secaudit_run
+      changed_when: false
+      failed_when: secaudit_run.rc not in [0, 2]
+
+    - name: Сбор отчётов как артефактов
+      ansible.builtin.fetch:
+        src: "{{ secaudit_repo }}/results/report_{{ inventory_hostname }}.html"
+        dest: "artifacts/"
+        flat: false
+
+    - name: Прервать плейбук при критическом несоответствии
+      ansible.builtin.fail:
+        msg: "SecAudit обнаружил несоответствия уровня medium и выше"
+      when: secaudit_run.rc == 2
+```
+
+Регистрируйте код возврата: `0` означает чистый аудит, `2` — найдены проблемы ≥ выбранного `--fail-level`. Сами отчёты можно прикреплять к тикетам, а поле `remediation` использовать для генерации оперативных задач.
+
+### SaltStack
+
+В SaltStack аудит подключается в виде состояния `cmd.run`. Пример проверяет образ на этапе сборки и сохраняет артефакты в кэше minion:
+
+```yaml
+secaudit_audit:
+  cmd.run:
+    - name: >-
+        /opt/secaudit-core/.venv/bin/secaudit audit
+        --profile profiles/base/linux.yml
+        --level baseline
+        --fail-level low
+        --evidence results/evidence
+    - cwd: /opt/secaudit-core
+    - env:
+        SECAUDIT_WORKERS: '4'
+    - success_retcodes:
+        - 0
+        - 2
+    - require:
+        - file: secaudit_checkout
+
+fetch_reports:
+  file.recurse:
+    - name: salt://artifacts/{{ grains['id'] }}/
+    - source: salt://{{ salt['config.get']('cachedir') }}/secaudit/results/
+    - require:
+        - cmd: secaudit_audit
+```
+
+Код возврата `2` трактуется как «успешно, но найдены несоответствия» и не прерывает пайплайн. Сохранённые отчёты можно анализировать вручную или отправлять в SIEM.
 
 ## Тестирование и качество
 

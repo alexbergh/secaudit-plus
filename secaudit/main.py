@@ -17,6 +17,8 @@ from modules.audit_runner import load_profile, run_checks
 from modules.report_generator import (
     generate_report,
     generate_json_report,
+    generate_sarif_report,
+    generate_junit_report,
     collect_host_metadata,
 )
 from utils.logger import log_info, log_warn, log_pass, log_fail
@@ -236,6 +238,21 @@ def main():
             str(html_report_path),
             host_info=host_info,
             summary=summary,
+        )
+
+        generate_sarif_report(
+            profile,
+            results,
+            "results/report.sarif",
+            summary=summary,
+            host_info=host_info,
+        )
+        generate_junit_report(
+            profile,
+            results,
+            "results/report.junit.xml",
+            summary=summary,
+            host_info=host_info,
         )
 
         # Политика завершения по --fail-level / --fail-on-undef
