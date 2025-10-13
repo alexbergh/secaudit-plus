@@ -162,6 +162,8 @@ secaudit audit \
 
 HTML-отчёт содержит раскраску по статусам (`PASS`, `FAIL`, `WARN`, `UNDEF`, `SKIP`) и группировку по модулям. Для интеграции с SIEM можно использовать `results/report_grouped.json`.
 
+**Раздел Remediation.** В HTML и Markdown-отчётах появился блок, который агрегирует все непройденные проверки с заполненным полем `remediation`. Он упрощает передачу задач в сервис-деск: операторы сразу видят конкретные шаги, подготовленные авторами профиля. Чтобы заполнить рекомендации, добавьте в YAML-проверку многострочное поле `remediation`.
+
 ## 6. Тестирование и CI/CD
 
 Запуски `pytest`, `flake8`, `mypy` и `yamllint` описаны в `workflows/ci.yml`. Чтобы повторить локально:
@@ -199,6 +201,76 @@ mypy
 
 **Что делать с `UNDEF`?**
 `UNDEF` означает, что команда завершилась ошибкой или превысила таймаут. Проверьте наличие зависимостей на целевой системе и повторите аудит. Для строгих пайплайнов добавьте `--fail-on-undef`.
+
+## 8. Интеграция с конфигурационными менеджерами
+
+### 8.1. Ansible
+
+Для автоматизации аудита в инфраструктуре добавьте задачу в плейбук. Пример ниже выполняет SecAudit на целевой машине и собирает отчёты как артефакты:
+
+```yaml
+- name: Проверка профиля SecAudit
+  hosts: all
+  become: true
+  vars:
+    secaudit_repo: /opt/secaudit-core
+    secaudit_bin: /opt/secaudit-core/.venv/bin/secaudit
+  tasks:
+    - name: Выполнить аудит
+      ansible.builtin.command:
+        cmd: >-
+          {{ secaudit_bin }} audit
+          --profile profiles/base/linux.yml
+          --level strict
+          --fail-level medium
+          --evidence results/evidence
+      args:
+        chdir: "{{ secaudit_repo }}"
+      register: secaudit_run
+      changed_when: false
+      failed_when: secaudit_run.rc not in [0, 2]
+
+    - name: Сохранить HTML-отчёт локально
+      ansible.builtin.fetch:
+        src: "{{ secaudit_repo }}/results/report_{{ inventory_hostname }}.html"
+        dest: "artifacts/"
+        flat: false
+
+    - name: Остановить плейбук при обнаружении критичных отклонений
+      ansible.builtin.fail:
+        msg: "SecAudit нашёл несоответствия уровня medium и выше"
+      when: secaudit_run.rc == 2
+```
+
+### 8.2. SaltStack
+
+Salt позволяет запускать аудит как часть highstate или оркестрации. Следующее состояние запускает SecAudit и принимает коды возврата `0` и `2` как успешные:
+
+```yaml
+secaudit_audit:
+  cmd.run:
+    - name: >-
+        /opt/secaudit-core/.venv/bin/secaudit audit
+        --profile profiles/base/server.yml
+        --level baseline
+        --fail-level low
+        --evidence results/evidence
+    - cwd: /opt/secaudit-core
+    - env:
+        SECAUDIT_WORKERS: '4'
+    - success_retcodes:
+        - 0
+        - 2
+
+secaudit_reports:
+  file.recurse:
+    - name: salt://artifacts/{{ grains['id'] }}/
+    - source: salt://{{ salt['config.get']('cachedir') }}/secaudit/results/
+    - require:
+        - cmd: secaudit_audit
+```
+
+Отчёты можно загружать в системы тикетирования или в SIEM. При необходимости используйте новые поля `remediation` для автоматического создания задач по устранению.
 
 ---
 
