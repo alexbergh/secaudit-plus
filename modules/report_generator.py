@@ -894,7 +894,7 @@ def generate_junit_report(
     Path(output_path).parent.mkdir(parents=True, exist_ok=True)
     tree.write(output_path, encoding="utf-8", xml_declaration=True)
 
-
+    
 _PROM_STATUS_VALUE = {"PASS": 0, "WARN": 1, "FAIL": 2, "UNDEF": 3, "ERROR": 3}
 
 
