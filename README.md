@@ -146,7 +146,82 @@ secaudit-core/
 - `report_<hostname>_<timestamp>.html` — HTML-отчёт с визуальными индикаторами.
 - Каталог `evidence/` (если передан `--evidence`) с вырезками команд.
 
-Сводка содержит итоговый балл, покрытие, список провалов с наибольшим весом и сопоставление требований ФСТЭК благодаря преобразованиям в `modules/report_generator.py`.
+Сводка содержит итоговый балл, покрытие, список провалов с наибольшим весом и сопоставление требований ФСТЭК благодаря преобразованиям в `modules/report_generator.py`. Отдельный блок «Remediation» в HTML/Markdown-отчётах агрегирует проваленные проверки с заполненным полем `remediation`, чтобы команды эксплуатации сразу видели план действий.
+
+## Интеграция с Ansible и SaltStack
+
+### Ansible
+
+SecAudit удобно вызывать из плейбуков для регулярного контроля Golden-образов или серверов. Ниже пример роли, которая выполняет аудит и собирает отчёты как артефакты:
+
+```yaml
+- name: Аудит хоста SecAudit
+  hosts: all
+  become: true
+  vars:
+    secaudit_repo: /opt/secaudit-core
+    secaudit_bin: /opt/secaudit-core/.venv/bin/secaudit
+    secaudit_profile: profiles/base/server.yml
+  tasks:
+    - name: Запуск SecAudit с уровнем strict
+      ansible.builtin.command:
+        cmd: >-
+          {{ secaudit_bin }} audit
+          --profile {{ secaudit_profile }}
+          --level strict
+          --fail-level medium
+          --evidence results/evidence
+      args:
+        chdir: "{{ secaudit_repo }}"
+      register: secaudit_run
+      changed_when: false
+      failed_when: secaudit_run.rc not in [0, 2]
+
+    - name: Сбор отчётов как артефактов
+      ansible.builtin.fetch:
+        src: "{{ secaudit_repo }}/results/report_{{ inventory_hostname }}.html"
+        dest: "artifacts/"
+        flat: false
+
+    - name: Прервать плейбук при критическом несоответствии
+      ansible.builtin.fail:
+        msg: "SecAudit обнаружил несоответствия уровня medium и выше"
+      when: secaudit_run.rc == 2
+```
+
+Регистрируйте код возврата: `0` означает чистый аудит, `2` — найдены проблемы ≥ выбранного `--fail-level`. Сами отчёты можно прикреплять к тикетам, а поле `remediation` использовать для генерации оперативных задач.
+
+### SaltStack
+
+В SaltStack аудит подключается в виде состояния `cmd.run`. Пример проверяет образ на этапе сборки и сохраняет артефакты в кэше minion:
+
+```yaml
+secaudit_audit:
+  cmd.run:
+    - name: >-
+        /opt/secaudit-core/.venv/bin/secaudit audit
+        --profile profiles/base/linux.yml
+        --level baseline
+        --fail-level low
+        --evidence results/evidence
+    - cwd: /opt/secaudit-core
+    - env:
+        SECAUDIT_WORKERS: '4'
+    - success_retcodes:
+        - 0
+        - 2
+    - require:
+        - file: secaudit_checkout
+
+fetch_reports:
+  file.recurse:
+    - name: salt://artifacts/{{ grains['id'] }}/
+    - source: salt://{{ salt['config.get']('cachedir') }}/secaudit/results/
+    - require:
+        - cmd: secaudit_audit
+```
+
+Код возврата `2` трактуется как «успешно, но найдены несоответствия» и не прерывает пайплайн. Сохранённые отчёты можно анализировать вручную или отправлять в SIEM.
 
 ## Тестирование и качество
 
