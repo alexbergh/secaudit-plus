@@ -150,12 +150,40 @@ PROFILE_SCHEMA: Dict[str, Any] = {
                                 }
                             }
                         },
-                        "else": {
+                    },
+                    {
+                        "if": {
+                            "properties": {
+                                "assert_type": {"const": "set_allowlist"}
+                            }
+                        },
+                        "then": {
+                            "properties": {
+                                "expect": {
+                                    "oneOf": [
+                                        {"type": "string"},
+                                        {"type": "array"},
+                                        {"type": "object"},
+                                        {"type": "number"},
+                                    ]
+                                }
+                            }
+                        },
+                    },
+                    {
+                        "if": {
+                            "properties": {
+                                "assert_type": {
+                                    "not": {"enum": ["jsonpath", "set_allowlist"]}
+                                }
+                            }
+                        },
+                        "then": {
                             "properties": {
                                 "expect": {"type": ["string", "number"]}
                             }
                         },
-                    }
+                    },
                 ],
                 "additionalProperties": False,
             },

@@ -20,7 +20,10 @@ from modules.report_generator import (
     generate_sarif_report,
     generate_junit_report,
     collect_host_metadata,
+    generate_prometheus_metrics,
+    generate_elastic_export,
 )
+from modules.report_diff import compare_reports, format_report_diff
 from utils.logger import log_info, log_warn, log_pass, log_fail
 
 # Валидация профиля по схеме
@@ -156,6 +159,17 @@ def main():
         else:
             _print_and_exit_validation_errors(profile_path, val_errors, strict_exit_code=1)
 
+    if args.command == "compare":
+        diff = compare_reports(args.before, args.after, fail_only=getattr(args, "fail_only", False))
+        print(format_report_diff(diff))
+        output_path = getattr(args, "output", None)
+        if output_path:
+            Path(output_path).write_text(
+                json.dumps(diff, indent=2, ensure_ascii=False),
+                encoding="utf-8",
+            )
+        return
+
     # Команда audit — полный запуск проверок
     if args.command == "audit":
         if not is_valid:
@@ -251,6 +265,21 @@ def main():
             profile,
             results,
             "results/report.junit.xml",
+            summary=summary,
+            host_info=host_info,
+        )
+
+        generate_prometheus_metrics(
+            profile,
+            results,
+            "results/report.prom",
+            summary=summary,
+            host_info=host_info,
+        )
+        generate_elastic_export(
+            profile,
+            results,
+            "results/report.elastic.ndjson",
             summary=summary,
             host_info=host_info,
         )

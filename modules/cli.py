@@ -271,6 +271,19 @@ def parse_args(argv: List[str] | None = None) -> argparse.Namespace:
     sub_desc.add_argument("check_id", help="ID проверки")
     _add_profile_arguments(sub_desc, default_profile=default_profile)
 
+    sub_compare = subs.add_parser("compare", help="Сравнить два JSON-отчёта")
+    sub_compare.add_argument("before", help="Путь к базовому отчёту (JSON)")
+    sub_compare.add_argument("after", help="Путь к отчёту для сравнения (JSON)")
+    sub_compare.add_argument(
+        "--fail-only",
+        action="store_true",
+        help="Показывать только ухудшения и новые проблемы (FAIL/UNDEF)",
+    )
+    sub_compare.add_argument(
+        "--output",
+        help="Сохранить результат сравнения в JSON-файл",
+    )
+
     sub_val = subs.add_parser("validate", help="Проверить профиль на ошибки")
     sub_val.add_argument(
         "--strict",

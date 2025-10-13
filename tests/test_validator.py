@@ -142,6 +142,49 @@ def test_validate_profile_accepts_set_allowlist(minimal_check, tmp_path):
     assert is_valid, f"Profile unexpectedly invalid: {errors}"
 
 
+def test_validate_profile_accepts_structured_allowlist(minimal_check):
+    check = minimal_check.copy()
+    check.update(
+        {
+            "assert_type": "set_allowlist",
+            "expect": {
+                "mode": "subset",
+                "sources": [
+                    {"values": ["alpha"], "priority": 0},
+                    {"values": ["beta"], "priority": 10, "effect": "remove"},
+                ],
+            },
+        }
+    )
+    profile = {
+        "schema_version": "1.1",
+        "profile_name": "Test",
+        "description": "Test profile",
+        "checks": [check],
+    }
+
+    is_valid, errors = validate_profile(profile)
+
+    assert is_valid, f"Profile unexpectedly invalid: {errors}"
+
+
+def test_validate_profile_rejects_object_expect_for_exact(minimal_check):
+    check = minimal_check.copy()
+    check["expect"] = {"value": "ok"}
+
+    profile = {
+        "schema_version": "1.1",
+        "profile_name": "Test",
+        "description": "Test profile",
+        "checks": [check],
+    }
+
+    is_valid, errors = validate_profile(profile)
+
+    assert not is_valid
+    assert any("expect" in err for err in errors)
+
+
 def test_validate_profile_accepts_vars_shorthand(minimal_check):
     profile = {
         "schema_version": "1.1",

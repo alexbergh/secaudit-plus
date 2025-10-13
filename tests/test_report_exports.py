@@ -2,8 +2,12 @@ import json
 from pathlib import Path
 from xml.etree import ElementTree as ET
 
-from modules.report_generator import generate_sarif_report, generate_junit_report
-
+from modules.report_generator import (
+    generate_elastic_export,
+    generate_junit_report,
+    generate_prometheus_metrics,
+    generate_sarif_report,
+)
 
 SAMPLE_PROFILE = {
     "id": "base-linux",
@@ -113,3 +117,35 @@ def test_generate_junit_report(tmp_path):
     system_out = pass_case.find("system-out")
     assert system_out is not None
     assert "chronyd enabled" in system_out.text
+
+def test_generate_prometheus_and_elastic_exports(tmp_path):
+    prom = tmp_path / "metrics.prom"
+    generate_prometheus_metrics(
+        SAMPLE_PROFILE,
+        SAMPLE_RESULTS,
+        str(prom),
+        summary=SAMPLE_SUMMARY,
+        host_info=SAMPLE_HOST,
+    )
+
+    payload = prom.read_text(encoding="utf-8")
+    assert "secaudit_check_status" in payload
+    assert 'check_id="CHK-001"' in payload
+    assert "secaudit_summary_score" in payload
+
+    elastic = tmp_path / "events.ndjson"
+    generate_elastic_export(
+        SAMPLE_PROFILE,
+        SAMPLE_RESULTS,
+        str(elastic),
+        summary=SAMPLE_SUMMARY,
+        host_info=SAMPLE_HOST,
+    )
+
+    docs = [json.loads(line) for line in elastic.read_text(encoding="utf-8").strip().splitlines()]
+    assert len(docs) == len(SAMPLE_RESULTS) + 1  # summary line
+    first = docs[0]
+    assert first["event"]["dataset"] == "secaudit.check"
+    assert first["secaudit"]["check"]["status"] == "FAIL"
+    summary_doc = docs[-1]
+    assert summary_doc["event"]["dataset"] == "secaudit.summary"

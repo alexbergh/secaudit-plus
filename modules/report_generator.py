@@ -8,6 +8,7 @@ import platform
 import socket
 from collections import defaultdict
 from collections.abc import Mapping, Sequence
+from typing import Any, Dict, List
 from xml.etree import ElementTree as ET
 
 
@@ -892,3 +893,173 @@ def generate_junit_report(
     tree = ET.ElementTree(testsuite)
     Path(output_path).parent.mkdir(parents=True, exist_ok=True)
     tree.write(output_path, encoding="utf-8", xml_declaration=True)
+
+    
+_PROM_STATUS_VALUE = {"PASS": 0, "WARN": 1, "FAIL": 2, "UNDEF": 3, "ERROR": 3}
+
+
+def _prometheus_escape(value: Any) -> str:
+    text = str(value if value is not None else "")
+    text = text.replace("\\", "\\\\").replace("\n", "\\n").replace("\"", "\\\"")
+    return text
+
+
+def _prometheus_labels(labels: Mapping[str, Any]) -> str:
+    parts = [f'{key}="{_prometheus_escape(val)}"' for key, val in sorted(labels.items())]
+    return ",".join(parts)
+
+
+def generate_prometheus_metrics(
+    profile: Mapping | None,
+    results: list,
+    output_path: str,
+    summary: Mapping | None = None,
+    host_info: Mapping | None = None,
+) -> None:
+    lines: List[str] = []
+
+    base_labels: Dict[str, Any] = {}
+    if isinstance(profile, Mapping):
+        profile_id = profile.get("id") or profile.get("profile_name")
+        if profile_id:
+            base_labels["profile"] = profile_id
+    if isinstance(host_info, Mapping):
+        hostname = host_info.get("hostname")
+        if hostname:
+            base_labels["host"] = hostname
+
+    lines.append(
+        "# HELP secaudit_check_status Status of audit checks (0=PASS,1=WARN,2=FAIL,3=UNDEF)"
+    )
+    lines.append("# TYPE secaudit_check_status gauge")
+
+    for record in results or []:
+        if not isinstance(record, Mapping):
+            continue
+        status = _canonical_status(record)
+        value = _PROM_STATUS_VALUE.get(status, 3)
+        labels = dict(base_labels)
+        labels["check_id"] = record.get("id") or record.get("name") or "check"
+        if record.get("module"):
+            labels["module"] = record.get("module")
+        if record.get("severity"):
+            labels["severity"] = record.get("severity")
+        lines.append(
+            f"secaudit_check_status{{{_prometheus_labels(labels)}}} {value}"
+        )
+
+        duration = _safe_float(record.get("duration"))
+        if duration:
+            duration_labels = dict(labels)
+            lines.append(
+                f"secaudit_check_duration_seconds{{{_prometheus_labels(duration_labels)}}} {duration:.6f}"
+            )
+
+    if summary:
+        score = summary.get("score")
+        if isinstance(score, (int, float)):
+            lines.append("# HELP secaudit_summary_score Overall audit score (percentage)")
+            lines.append("# TYPE secaudit_summary_score gauge")
+            lines.append(
+                f"secaudit_summary_score{{{_prometheus_labels(base_labels)}}} {float(score):.6f}"
+            )
+
+        coverage = summary.get("coverage")
+        if isinstance(coverage, (int, float)):
+            lines.append("# HELP secaudit_summary_coverage Coverage of executed checks")
+            lines.append("# TYPE secaudit_summary_coverage gauge")
+            lines.append(
+                f"secaudit_summary_coverage{{{_prometheus_labels(base_labels)}}} {float(coverage):.6f}"
+            )
+
+        counts = summary.get("status_counts")
+        if isinstance(counts, Mapping):
+            lines.append("# HELP secaudit_summary_status_total Checks per final status")
+            lines.append("# TYPE secaudit_summary_status_total gauge")
+            for status, count in counts.items():
+                try:
+                    numeric = float(count)
+                except (TypeError, ValueError):
+                    continue
+                labels = dict(base_labels)
+                labels["status"] = status
+                lines.append(
+                    f"secaudit_summary_status_total{{{_prometheus_labels(labels)}}} {numeric:.6f}"
+                )
+
+    Path(output_path).parent.mkdir(parents=True, exist_ok=True)
+    Path(output_path).write_text("\n".join(lines) + "\n", encoding="utf-8")
+
+
+def generate_elastic_export(
+    profile: Mapping | None,
+    results: list,
+    output_path: str,
+    summary: Mapping | None = None,
+    host_info: Mapping | None = None,
+) -> None:
+    timestamp = datetime.utcnow().replace(microsecond=0).isoformat() + "Z"
+
+    profile_meta: Dict[str, Any] = {}
+    if isinstance(profile, Mapping):
+        for key in ("id", "profile_name", "description", "schema_version"):
+            if profile.get(key) is not None:
+                profile_meta[key] = profile.get(key)
+
+    host_meta: Dict[str, Any] = {}
+    if isinstance(host_info, Mapping):
+        host_meta = {k: v for k, v in host_info.items() if v is not None}
+
+    lines: List[str] = []
+    for record in results or []:
+        if not isinstance(record, Mapping):
+            continue
+        entry: Dict[str, Any] = {
+            "@timestamp": timestamp,
+            "event": {
+                "dataset": "secaudit.check",
+                "kind": "state",
+                "category": ["configuration"],
+                "type": ["info"],
+            },
+            "secaudit": {
+                "check": {
+                    "id": record.get("id") or record.get("name"),
+                    "name": record.get("name") or record.get("id"),
+                    "module": record.get("module"),
+                    "severity": record.get("severity"),
+                    "status": _canonical_status(record),
+                    "reason": record.get("reason"),
+                    "remediation": record.get("remediation"),
+                    "duration": _safe_float(record.get("duration")),
+                    "cpu_time": _safe_float(record.get("cpu_time")),
+                },
+            },
+        }
+        if profile_meta:
+            entry["secaudit"]["profile"] = profile_meta
+        if host_meta:
+            entry["host"] = host_meta
+        lines.append(json.dumps(entry, ensure_ascii=False))
+
+    if summary:
+        summary_entry = {
+            "@timestamp": timestamp,
+            "event": {
+                "dataset": "secaudit.summary",
+                "kind": "state",
+                "category": ["configuration"],
+                "type": ["info"],
+            },
+            "secaudit": {
+                "summary": summary,
+            },
+        }
+        if profile_meta:
+            summary_entry["secaudit"]["profile"] = profile_meta
+        if host_meta:
+            summary_entry["host"] = host_meta
+        lines.append(json.dumps(summary_entry, ensure_ascii=False))
+
+    Path(output_path).parent.mkdir(parents=True, exist_ok=True)
+    Path(output_path).write_text("\n".join(lines) + "\n", encoding="utf-8")
