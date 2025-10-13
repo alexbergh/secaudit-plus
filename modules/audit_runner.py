@@ -62,11 +62,31 @@ class ExecutionContext:
     cache_lock: threading.Lock = field(default_factory=threading.Lock)
 
 
+PROJECT_ROOT = Path(__file__).resolve().parents[1]
+
+
 def _resolve_path(value: str, base_dir: Path) -> Path:
     path = Path(os.path.expanduser(str(value)))
-    if not path.is_absolute():
-        path = base_dir / path
-    return path
+    if path.is_absolute():
+        return path
+
+    candidates = []
+    if base_dir:
+        candidates.append(base_dir / path)
+
+    repo_candidate = PROJECT_ROOT / path
+    if repo_candidate not in candidates:
+        candidates.append(repo_candidate)
+
+    cwd_candidate = Path.cwd() / path
+    if cwd_candidate not in candidates:
+        candidates.append(cwd_candidate)
+
+    for candidate in candidates:
+        if candidate.exists():
+            return candidate
+
+    return candidates[0] if candidates else path
 
 
 def _load_env_file(path: Path, *, optional: bool = False) -> Dict[str, str]:
@@ -153,7 +173,7 @@ def _build_variables(
             except FileNotFoundError:
                 continue
 
-    include_dir = Path("profiles/include")
+    include_dir = PROJECT_ROOT / "profiles" / "include"
     default_vars = include_dir / f"vars_{level}.env"
     if default_vars.exists():
         variables.update(_load_env_file(default_vars, optional=True))
