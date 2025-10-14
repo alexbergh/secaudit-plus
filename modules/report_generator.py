@@ -8,7 +8,7 @@ import platform
 import socket
 from collections import defaultdict
 from collections.abc import Mapping, Sequence
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Optional
 from xml.etree import ElementTree as ET
 
 
@@ -475,7 +475,7 @@ def _detect_local_ips():
     return seen
 
 
-def collect_host_metadata(profile, results, summary: Mapping | None = None):
+def collect_host_metadata(profile: Mapping[str, Any], results: List[Mapping[str, Any]], summary: Mapping | None = None) -> Dict[str, Any]:
     info = {}
 
     def merge_mapping(data):
@@ -593,12 +593,12 @@ def _tojson_filter(value, ensure_ascii=False):
 
 
 def generate_report(
-    profile: dict,
-    results: list,
+    profile: Dict[str, Any],
+    results: List[Dict[str, Any]],
     template_name: str,
-    output_path: str,
-    host_info: dict | None = None,
-    summary: dict | None = None,
+    output_path: Path,
+    host_info: Optional[Dict[str, Any]] = None,
+    summary: Optional[Dict[str, Any]] = None,
 ):
     env = Environment(loader=FileSystemLoader("reports/"))
     env.filters["fstek_codes"] = _extract_fstek_codes
@@ -639,7 +639,7 @@ def generate_report(
     with open(output_path, "w", encoding="utf-8") as f:
         f.write(rendered)
 
-def generate_json_report(results: list, output_path: str, summary: dict | None = None):
+def generate_json_report(results: List[Dict[str, Any]], output_path: str, summary: Optional[Dict[str, Any]] = None):
     grouped = defaultdict(list)
     for r in results:
         module = r.get("module", "core")
@@ -657,9 +657,9 @@ def generate_json_report(results: list, output_path: str, summary: dict | None =
 
 
 def generate_sarif_report(
-    profile: Mapping | None,
-    results: list,
-    output_path: str,
+    profile: Optional[Mapping[str, Any]],
+    results: List[Dict[str, Any]],
+    output_path: Path,
     summary: Mapping | None = None,
     host_info: Mapping | None = None,
 ):
@@ -787,9 +787,9 @@ def generate_sarif_report(
 
 
 def generate_junit_report(
-    profile: Mapping | None,
-    results: list,
-    output_path: str,
+    profile: Optional[Mapping[str, Any]],
+    results: List[Dict[str, Any]],
+    output_path: Path,
     summary: Mapping | None = None,
     host_info: Mapping | None = None,
 ):
@@ -910,9 +910,9 @@ def _prometheus_labels(labels: Mapping[str, Any]) -> str:
 
 
 def generate_prometheus_metrics(
-    profile: Mapping | None,
-    results: list,
-    output_path: str,
+    profile: Optional[Mapping[str, Any]],
+    results: List[Dict[str, Any]],
+    output_path: Path,
     summary: Mapping | None = None,
     host_info: Mapping | None = None,
 ) -> None:
@@ -992,9 +992,9 @@ def generate_prometheus_metrics(
 
 
 def generate_elastic_export(
-    profile: Mapping | None,
-    results: list,
-    output_path: str,
+    profile: Optional[Mapping[str, Any]],
+    results: List[Dict[str, Any]],
+    output_path: Path,
     summary: Mapping | None = None,
     host_info: Mapping | None = None,
 ) -> None:

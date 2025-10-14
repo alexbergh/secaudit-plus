@@ -4,6 +4,7 @@ from datetime import datetime
 import sys
 import json
 import re
+from concurrent.futures import ThreadPoolExecutor, as_completed
 
 from modules.cli import (
     parse_args,
@@ -236,53 +237,24 @@ def main():
         date_component = datetime.now().strftime("%Y%m%d_%H%M%S")
         html_report_path = Path("results") / f"report_{hostname_component}_{date_component}.html"
 
-        # Генерируем отчёты (Markdown и HTML)
-        generate_report(
-            profile,
-            results,
-            "report_template.md.j2",
-            "results/report.md",
-            host_info=host_info,
-            summary=summary,
-        )
-        generate_report(
-            profile,
-            results,
-            "report_template.html.j2",
-            str(html_report_path),
-            host_info=host_info,
-            summary=summary,
-        )
+        # Параллельная генерация отчетов
+        log_info("Генерация отчетов...")
+        report_tasks = [
+            (generate_report, (profile, results, "report_template.md.j2", Path("results/report.md")), {"host_info": host_info, "summary": summary}),
+            (generate_report, (profile, results, "report_template.html.j2", html_report_path), {"host_info": host_info, "summary": summary}),
+            (generate_sarif_report, (profile, results, Path("results/report.sarif")), {"summary": summary, "host_info": host_info}),
+            (generate_junit_report, (profile, results, Path("results/report.junit.xml")), {"summary": summary, "host_info": host_info}),
+            (generate_prometheus_metrics, (profile, results, Path("results/report.prom")), {"summary": summary, "host_info": host_info}),
+            (generate_elastic_export, (profile, results, Path("results/report.elastic.ndjson")), {"summary": summary, "host_info": host_info}),
+        ]
 
-        generate_sarif_report(
-            profile,
-            results,
-            "results/report.sarif",
-            summary=summary,
-            host_info=host_info,
-        )
-        generate_junit_report(
-            profile,
-            results,
-            "results/report.junit.xml",
-            summary=summary,
-            host_info=host_info,
-        )
-
-        generate_prometheus_metrics(
-            profile,
-            results,
-            "results/report.prom",
-            summary=summary,
-            host_info=host_info,
-        )
-        generate_elastic_export(
-            profile,
-            results,
-            "results/report.elastic.ndjson",
-            summary=summary,
-            host_info=host_info,
-        )
+        with ThreadPoolExecutor(max_workers=len(report_tasks)) as executor:
+            futures = {executor.submit(func, *args, **kwargs) for func, args, kwargs in report_tasks}
+            for future in as_completed(futures):
+                try:
+                    future.result()
+                except Exception as exc:
+                    log_fail(f"Ошибка при генерации отчета: {exc}")
 
         # Политика завершения по --fail-level / --fail-on-undef
         fail_level = getattr(args, "fail_level", "none")
