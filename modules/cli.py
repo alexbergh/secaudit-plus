@@ -7,6 +7,9 @@ from typing import Tuple, List, Dict, Any
 
 from secaudit.exceptions import MissingDependencyError
 
+# ──────────────────────────────────────────────────────────────────────────────
+# Проверка критичных зависимостей при импорте
+# ──────────────────────────────────────────────────────────────────────────────
 try:
     import yaml  # type: ignore
 except ModuleNotFoundError as exc:  # pragma: no cover - runtime guard
@@ -14,17 +17,16 @@ except ModuleNotFoundError as exc:  # pragma: no cover - runtime guard
     _YAML_IMPORT_ERROR = exc
 else:  # pragma: no cover - exercised indirectly
     _YAML_IMPORT_ERROR = None
-
-from seclib.validator import PROFILE_SCHEMA as STRICT_PROFILE_SCHEMA
-
-# Пытаемся подключить jsonschema, чтобы валидировать профиль.
-# Если библиотека не установлена — работаем без "жёсткой" валидации.
 try:
     from jsonschema import validate as js_validate
     from jsonschema.exceptions import ValidationError as JSValidationError
     _HAS_JSONSCHEMA = True
 except Exception:
+    js_validate = None  # type: ignore
+    JSValidationError = None  # type: ignore
     _HAS_JSONSCHEMA = False
+
+from seclib.validator import PROFILE_SCHEMA as STRICT_PROFILE_SCHEMA
 
 
 _PROFILE_SCHEMA = STRICT_PROFILE_SCHEMA
@@ -138,22 +140,25 @@ def describe_check(profile: Dict[str, Any], check_id: str) -> None:
     print(f"Check ID '{check_id}' not found in the profile.")
 
 
-# ──────────────────────────────────────────────────────────────────────────────
-# Загрузка профиля и опциональная валидация
-# ──────────────────────────────────────────────────────────────────────────────
-def load_profile_file(path: str) -> Dict[str, Any]:
-    p = Path(path)
-    if not p.is_file():
-        _ensure_dependencies()
-        print(f"Ошибка: Файл профиля не найден: {path}", file=sys.stderr)
-        sys.exit(2)
+def _ensure_dependencies() -> None:
+    """Проверяет наличие PyYAML и завершает работу, если он отсутствует."""
     if yaml is None:
         raise MissingDependencyError(
             package="PyYAML",
             import_name="yaml",
             instructions="pip install -r requirements.txt",
-            original=_YAML_IMPORT_ERROR,
         )
+
+
+# ──────────────────────────────────────────────────────────────────────────────
+# Загрузка профиля и опциональная валидация
+# ──────────────────────────────────────────────────────────────────────────────
+def load_profile_file(path: str) -> Dict[str, Any]:
+    p = Path(path)
+    _ensure_dependencies()
+    if not p.is_file():
+        print(f"Ошибка: Файл профиля не найден: {path}", file=sys.stderr)
+        sys.exit(2)
     try:
         return yaml.safe_load(p.read_text(encoding="utf-8")) or {}  # type: ignore[union-attr]
     except yaml.YAMLError as e:  # type: ignore[union-attr]
@@ -180,10 +185,10 @@ def validate_profile(profile: Dict[str, Any]) -> Tuple[bool, List[str]]:
 
 
     # Если jsonschema доступен — используем полную схему
-    if _HAS_JSONSCHEMA:
+    if _HAS_JSONSCHEMA and js_validate and JSValidationError:
         try:
             js_validate(instance=profile, schema=_PROFILE_SCHEMA)
-        except JSValidationError as e:
+        except JSValidationError as e:  # type: ignore
             # Разворачиваем путь для понятной трассировки
             path = " -> ".join(str(p) for p in e.path) if e.path else "<root>"
             errors.append(f"{path}: {e.message}")

@@ -8,7 +8,7 @@ import platform
 import socket
 from collections import defaultdict
 from collections.abc import Mapping, Sequence
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List
 from xml.etree import ElementTree as ET
 
 
@@ -475,103 +475,6 @@ def _detect_local_ips():
     return seen
 
 
-def collect_host_metadata(profile: Mapping[str, Any], results: List[Mapping[str, Any]], summary: Mapping | None = None) -> Dict[str, Any]:
-    info = {}
-
-    def merge_mapping(data):
-        if not isinstance(data, Mapping):
-            return
-        for key, value in data.items():
-            if value in (None, ""):
-                continue
-            mapped = _HOST_FIELD_MAP.get(str(key).lower())
-            if not mapped:
-                continue
-            if mapped not in info:
-                info[mapped] = value
-
-    if isinstance(profile, Mapping):
-        for key in ("host", "target", "system", "metadata", "meta"):
-            merge_mapping(profile.get(key))
-
-    for item in results or []:
-        if not isinstance(item, Mapping):
-            continue
-        for key in ("host", "host_info", "system", "metadata", "meta"):
-            merge_mapping(item.get(key))
-
-    if isinstance(summary, Mapping):
-        merge_mapping(summary.get("host"))
-        os_info = summary.get("os")
-        if isinstance(os_info, Mapping):
-            merge_mapping(os_info)
-        level = summary.get("level")
-        if level:
-            info.setdefault("audit_level", level)
-        score = summary.get("score")
-        if score is not None:
-            info.setdefault("audit_score", score)
-
-    hostname = info.get("hostname")
-    if not hostname:
-        hostname = platform.node() or None
-        if not hostname:
-            try:
-                hostname = socket.gethostname()
-            except OSError:
-                hostname = None
-        if hostname:
-            info.setdefault("hostname", hostname)
-
-    os_name = info.get("os")
-    if not os_name:
-        system = platform.system()
-        release = platform.release()
-        os_candidate = " ".join(part for part in (system, release) if part)
-        if os_candidate.strip():
-            info.setdefault("os", os_candidate.strip())
-
-    kernel = info.get("kernel")
-    if not kernel:
-        kernel_candidate = platform.version() or platform.release()
-        if kernel_candidate:
-            info.setdefault("kernel", kernel_candidate)
-
-    arch = info.get("arch")
-    if not arch:
-        arch_candidate = platform.machine()
-        if arch_candidate:
-            info.setdefault("arch", arch_candidate)
-
-    raw_ip_values = []
-    for key in ("ip", "ips", "ip_address", "ipaddress", "ip_addresses", "addresses", "address"):
-        value = info.get(key)
-        if not value:
-            continue
-        if isinstance(value, (str, bytes)):
-            raw_ip_values.append(value)
-        elif isinstance(value, Sequence) and not isinstance(value, (str, bytes)):
-            raw_ip_values.extend(value)
-
-    detected_ips = _detect_local_ips()
-    merged_ips = []
-    for candidate in list(raw_ip_values) + detected_ips:
-        if not candidate:
-            continue
-        ip = str(candidate).strip()
-        if not ip:
-            continue
-        if ip in {"0.0.0.0", "::", "::0"}:
-            continue
-        if ip not in merged_ips:
-            merged_ips.append(ip)
-
-    if merged_ips:
-        info["ip"] = merged_ips if len(merged_ips) > 1 else merged_ips[0]
-
-    return info
-
-
 def _json_default(value):
     if isinstance(value, (datetime, date)):
         return value.isoformat()
@@ -590,12 +493,12 @@ def _tojson_filter(value, ensure_ascii=False):
 
 
 def generate_report(
-    profile: Dict[str, Any],
-    results: List[Dict[str, Any]],
+    profile: dict,
+    results: list,
     template_name: str,
-    output_path: Path,
-    host_info: Optional[Dict[str, Any]] = None,
-    summary: Optional[Dict[str, Any]] = None,
+    output_path: str,
+    host_info: dict | None = None,
+    summary: dict | None = None,
 ):
     env = Environment(loader=FileSystemLoader("reports/"))
     env.filters["fstek_codes"] = _extract_fstek_codes
@@ -636,7 +539,7 @@ def generate_report(
     with open(output_path, "w", encoding="utf-8") as f:
         f.write(rendered)
 
-def generate_json_report(results: List[Dict[str, Any]], output_path: str, summary: Optional[Dict[str, Any]] = None):
+def generate_json_report(results: list, output_path: str, summary: dict | None = None):
     grouped = defaultdict(list)
     for r in results:
         module = r.get("module", "core")
@@ -654,9 +557,9 @@ def generate_json_report(results: List[Dict[str, Any]], output_path: str, summar
 
 
 def generate_sarif_report(
-    profile: Optional[Mapping[str, Any]],
-    results: List[Dict[str, Any]],
-    output_path: Path,
+    profile: Mapping | None,
+    results: list,
+    output_path: str,
     summary: Mapping | None = None,
     host_info: Mapping | None = None,
 ):
@@ -784,9 +687,9 @@ def generate_sarif_report(
 
 
 def generate_junit_report(
-    profile: Optional[Mapping[str, Any]],
-    results: List[Dict[str, Any]],
-    output_path: Path,
+    profile: Mapping | None,
+    results: list,
+    output_path: str,
     summary: Mapping | None = None,
     host_info: Mapping | None = None,
 ):
@@ -907,9 +810,9 @@ def _prometheus_labels(labels: Mapping[str, Any]) -> str:
 
 
 def generate_prometheus_metrics(
-    profile: Optional[Mapping[str, Any]],
-    results: List[Dict[str, Any]],
-    output_path: Path,
+    profile: Mapping | None,
+    results: list,
+    output_path: str,
     summary: Mapping | None = None,
     host_info: Mapping | None = None,
 ) -> None:
@@ -989,9 +892,9 @@ def generate_prometheus_metrics(
 
 
 def generate_elastic_export(
-    profile: Optional[Mapping[str, Any]],
-    results: List[Dict[str, Any]],
-    output_path: Path,
+    profile: Mapping | None,
+    results: list,
+    output_path: str,
     summary: Mapping | None = None,
     host_info: Mapping | None = None,
 ) -> None:

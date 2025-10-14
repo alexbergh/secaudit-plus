@@ -11,13 +11,14 @@ on:
         required: false
 
 jobs:
-  build-and-release:
+  build:
     runs-on: ubuntu-latest
+    outputs:
+      tag_name: ${{ steps.tag_step.outputs.tag_name }}
+
     steps:
       - name: Checkout
         uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
 
       - name: Resolve tag
         id: tag_step
@@ -33,28 +34,38 @@ jobs:
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
-          python-version: "3.12"
-
-      - name: Install deps
-        run: |
-          python -m pip install --upgrade pip
-          pip install -r requirements.txt
-          pip install build
+          python-version: "3.11"
 
       - name: Build sdist/wheel
         run: |
+          pip install build
           python -m build
           sha256sum dist/* > dist/SHA256SUMS.txt
           ls -lah dist
 
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: secaudit-${{ steps.tag_step.outputs.tag_name }}
+          path: |
+            dist/*
+
+  release:
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: secaudit-${{ needs.build.outputs.tag_name }}
+          path: dist
+
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: ${{ steps.tag_step.outputs.tag_name }}
-          name: Release ${{ steps.tag_step.outputs.tag_name }}
+          tag_name: ${{ needs.build.outputs.tag_name }}
+          name: Release ${{ needs.build.outputs.tag_name }}
           draft: false
           prerelease: false
           files: |
             dist/*
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
