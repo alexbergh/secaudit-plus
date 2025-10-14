@@ -3,7 +3,7 @@ profile_name: "ФСТЭК. Базовые проверки"
 description: "Базовый аудит параметров безопасности Linux-систем"
 
 meta:
-  fstec: "https://fstec.ru/normativnye-dokumenty/prikazy/239"
+  fstec: "https://fstec.ru/dokumenty/vse-dokumenty/prikazy/prikaz-fstek-rossii-ot-18-fevralya-2013-g-n-21"
   cis: "https://www.cisecurity.org/cis-benchmarks/"
   stig: "https://public.cyber.mil/stigs/downloads/"
 

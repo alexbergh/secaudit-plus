@@ -3,7 +3,7 @@ profile_name: "Astra Linux 1.7 — профиль КСЗ и Киоск-2"
 description: "Контроль выполнения требований КСЗ Astra Linux 1.7 с акцентом на PAM, комплекс защиты и Киоск-2."
 
 meta:
-  fstec: "https://fstec.ru/normativnye-dokumenty/prikazy/239"
+  fstec: "https://fstec.ru/dokumenty/vse-dokumenty/prikazy/prikaz-fstek-rossii-ot-18-fevralya-2013-g-n-21"
   vendor: "https://wiki.astralinux.ru/display/AK/Astra+Linux+Special+Edition+1.7"
   kiosk: "https://downloads.astralinux.ru/documents/ALSE17/ALSE17_Kiosk2_Admin.pdf"
 

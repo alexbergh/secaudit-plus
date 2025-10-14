@@ -3,7 +3,7 @@ profile_name: "ALT 8 СП — профиль iptables/ГОСТ/dm-secdel"
 description: "Расширенный контроль для ALT 8 СП: сетевые фильтры iptables, ГОСТ-криптография и безопасное удаление (dm-secdel)."
 
 meta:
-  fstec: "https://fstec.ru/normativnye-dokumenty/prikazy/239"
+  fstec: "https://fstec.ru/dokumenty/vse-dokumenty/prikazy/prikaz-fstek-rossii-ot-18-fevralya-2013-g-n-21"
   vendor: "https://docs.altlinux.org/ru/ALT8_SP/"
   gost: "https://www.tc26.ru/standard/gost/"
 

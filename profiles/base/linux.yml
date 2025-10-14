@@ -6,7 +6,7 @@ extends:
   - "../include/linux_hardening.yml"
 
 meta:
-  fstec: "https://fstec.ru/normativnye-dokumenty/prikazy/239"
+  fstec: "https://fstec.ru/dokumenty/vse-dokumenty/prikazy/prikaz-fstek-rossii-ot-18-fevralya-2013-g-n-21"
   goskz: "https://docs.cntd.ru/document/1200138605"
   cis: "https://www.cisecurity.org/benchmark/linux"
 

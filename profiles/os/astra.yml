@@ -5,7 +5,7 @@ description: Жёсткий аудит безопасности для Astra Lin
 extends:
 - ../base/linux.yml
 meta:
-  fstec: https://fstec.ru/normativnye-dokumenty/prikazy/239
+  fstec: https://fstec.ru/dokumenty/vse-dokumenty/prikazy/prikaz-fstek-rossii-ot-18-fevralya-2013-g-n-21
   cis: https://www.cisecurity.org/benchmark/debian_linux/
   stig: https://public.cyber.mil/stigs/downloads/
 vars:
