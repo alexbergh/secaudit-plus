@@ -572,9 +572,6 @@ def collect_host_metadata(profile: Mapping[str, Any], results: List[Mapping[str,
     return info
 
 
-def _collect_host_metadata(profile, results):
-    return collect_host_metadata(profile, results)
-
 def _json_default(value):
     if isinstance(value, (datetime, date)):
         return value.isoformat()

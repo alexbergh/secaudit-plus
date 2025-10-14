@@ -11,11 +11,8 @@ on:
         required: false
 
 jobs:
-  build:
+  build-and-release:
     runs-on: ubuntu-latest
-    outputs:
-      tag_name: ${{ steps.tag_step.outputs.tag_name }}
-
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -25,13 +22,13 @@ jobs:
       - name: Resolve tag
         id: tag_step
         run: |
-          if [ -n "${{ github.ref_name }}" ] && [[ "${{ github.ref }}" == refs/tags/* ]]; then
-            echo "tag_name=${{ github.ref_name }}" >> $GITHUB_OUTPUT
-          elif [ -n "${{ github.event.inputs.tag }}" ]; then
-            echo "tag_name=${{ github.event.inputs.tag }}" >> $GITHUB_OUTPUT
+          if [[ "${{ github.ref }}" == refs/tags/* ]]; then
+            TAG_NAME="${{ github.ref_name }}"
           else
-            echo "No tag provided"; exit 1
+            TAG_NAME="${{ github.event.inputs.tag }}"
           fi
+          echo "tag_name=${TAG_NAME}" >> $GITHUB_OUTPUT
+          if [ -z "${TAG_NAME}" ]; then echo "Tag name is empty" >&2; exit 1; fi
 
       - name: Set up Python
         uses: actions/setup-python@v5
@@ -50,28 +47,11 @@ jobs:
           sha256sum dist/* > dist/SHA256SUMS.txt
           ls -lah dist
 
-      - name: Upload artifacts
-        uses: actions/upload-artifact@v4
-        with:
-          name: secaudit-${{ steps.tag_step.outputs.tag_name }}
-          path: |
-            dist/*
-
-  release:
-    needs: build
-    runs-on: ubuntu-latest
-    steps:
-      - name: Download artifacts
-        uses: actions/download-artifact@v4
-        with:
-          name: secaudit-${{ needs.build.outputs.tag_name }}
-          path: dist
-
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: ${{ needs.build.outputs.tag_name }}
-          name: Release ${{ needs.build.outputs.tag_name }}
+          tag_name: ${{ steps.tag_step.outputs.tag_name }}
+          name: Release ${{ steps.tag_step.outputs.tag_name }}
           draft: false
           prerelease: false
           files: |

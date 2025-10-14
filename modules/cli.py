@@ -144,6 +144,7 @@ def describe_check(profile: Dict[str, Any], check_id: str) -> None:
 def load_profile_file(path: str) -> Dict[str, Any]:
     p = Path(path)
     if not p.is_file():
+        _ensure_dependencies()
         print(f"Ошибка: Файл профиля не найден: {path}", file=sys.stderr)
         sys.exit(2)
     if yaml is None:
@@ -176,6 +177,7 @@ def validate_profile(profile: Dict[str, Any]) -> Tuple[bool, List[str]]:
     checks = profile.get("checks", [])
     if not isinstance(checks, list):
         errors.append("Поле 'checks' должно быть массивом.")
+
 
     # Если jsonschema доступен — используем полную схему
     if _HAS_JSONSCHEMA:
