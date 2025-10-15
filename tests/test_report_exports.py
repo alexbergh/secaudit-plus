@@ -1,6 +1,6 @@
 import json
 from pathlib import Path
-from xml.etree import ElementTree as ET
+from defusedxml import ElementTree as ET
 
 from modules.report_generator import (
     generate_elastic_export,
