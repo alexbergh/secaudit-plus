@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import subprocess
+import shlex
 
 
 class CommandError(Exception):
