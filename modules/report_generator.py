@@ -1,5 +1,5 @@
 # modules/report_generator.py
-from jinja2 import Environment, FileSystemLoader
+from jinja2 import Environment, FileSystemLoader, select_autoescape
 from datetime import datetime, date
 from pathlib import Path
 from importlib import metadata as importlib_metadata
@@ -500,7 +500,7 @@ def generate_report(
     host_info: dict | None = None,
     summary: dict | None = None,
 ):
-    env = Environment(loader=FileSystemLoader("reports/"))
+    env = Environment(loader=FileSystemLoader("reports/"), autoescape=select_autoescape(['html', 'xml']))
     env.filters["fstek_codes"] = _extract_fstek_codes
     env.filters["fstek_details"] = _fstek_details
     env.filters["tojson"] = _tojson_filter
