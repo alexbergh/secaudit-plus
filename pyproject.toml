@@ -3,9 +3,9 @@ requires = ["setuptools>=68", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "secaudit"
-version = "0.1.0"
-description = "SecAudit++ core CLI"
+name = "SecAudit+"
+version = "1.0.0"
+description = "SecAudit+"
 readme = "README.md"
 requires-python = ">=3.10"
 authors = [{ name = "Your Name" }]
