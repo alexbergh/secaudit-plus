@@ -10,7 +10,7 @@ log() {
   printf '[+] %s\n' "$1"
 }
 
-log "Инициализация структуры SecAudit-core в '${PROJECT_ROOT}'"
+log "Инициализация структуры SecAudit+ в '${PROJECT_ROOT}'"
 
 mkdir -p "${PROJECT_ROOT}"
 cd "${PROJECT_ROOT}"
