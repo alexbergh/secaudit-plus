@@ -216,7 +216,7 @@ def _render_template_string(text: str, context: Dict[str, Any]) -> str:
         value = _lookup_context_value(context, token)
         if value is None:
             return match.group(0)
-        return str(value)
+        return shlex.quote(str(value))
 
     return TEMPLATE_PATTERN.sub(repl, text)
 
