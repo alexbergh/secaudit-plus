@@ -4,6 +4,7 @@ description: "Минимальный набор проверок для типо
 
 extends:
   - "../include/linux_hardening.yml"
+  - "../include/containers_runtime.yml"
 
 meta:
   fstec: "https://fstec.ru/dokumenty/vse-dokumenty/prikazy/prikaz-fstek-rossii-ot-18-fevralya-2013-g-n-21"

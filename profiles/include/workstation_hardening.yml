@@ -1,0 +1,270 @@
+schema_version: "1.1"
+profile_name: "Рабочие станции — GUI и периферия"
+description: "Расширение для GUI-политик, Bluetooth/USB и корпоративных браузеров."
+vars:
+  GUI_IDLE_TIMEOUT: "300"
+  GUI_LOCK_DELAY: "0"
+  FIREFOX_POLICY_REQUIREMENTS: '{"DisableTelemetry": true, "DisableFirefoxStudies": true, "PasswordManagerEnabled": false}'
+  FIREFOX_REQUIRED_HOMEPAGE: "about:blank"
+  CHROMIUM_POLICY_REQUIREMENTS: '{"PasswordManagerEnabled": false, "SyncDisabled": true, "AutofillAddressEnabled": false}'
+  CHROMIUM_REQUIRED_HOMEPAGE: "about:blank"
+  USB_STORAGE_MODULE: "usb-storage"
+checks:
+  - id: workstation_gnome_idle_lock_policy
+    name: "GNOME: таймаут блокировки не выше {{ GUI_IDLE_TIMEOUT }} секунд"
+    module: "workstation"
+    command: |
+      python3 - <<'PY'
+      from pathlib import Path
+      import re
+
+      required = {
+          "org/gnome/desktop/session": {"idle-delay": int("{{ GUI_IDLE_TIMEOUT }}")},
+          "org/gnome/desktop/screensaver": {
+              "lock-enabled": "true",
+              "lock-delay": int("{{ GUI_LOCK_DELAY }}"),
+          },
+      }
+
+      config_dirs = [
+          Path("/etc/dconf/db/local.d"),
+          Path("/etc/dconf/db/site.d"),
+      ]
+
+      values: dict[str, dict[str, str]] = {}
+      for directory in config_dirs:
+          if not directory.exists():
+              continue
+          for cfg in sorted(p for p in directory.iterdir() if p.is_file()):
+              try:
+                  with cfg.open("r", encoding="utf-8", errors="ignore") as fh:
+                      section = None
+                      for raw_line in fh:
+                          line = raw_line.split("#", 1)[0].strip()
+                          if not line:
+                              continue
+                          if line.startswith("[") and line.endswith("]"):
+                              section = line[1:-1]
+                              continue
+                          if "=" not in line or not section:
+                              continue
+                          key, value = line.split("=", 1)
+                          key = key.strip()
+                          value = value.strip().lower()
+                          values.setdefault(section, {})[key] = value
+              except Exception:
+                  continue
+
+      issues: list[str] = []
+      for section, expected in required.items():
+          present = values.get(section, {})
+          for key, exp in expected.items():
+              val = present.get(key)
+              if val is None:
+                  issues.append(f"{section}/{key}:missing")
+                  continue
+              if isinstance(exp, int):
+                  match = re.search(r"([0-9]+)$", val)
+                  if not match or int(match.group(1)) > exp:
+                      issues.append(f"{section}/{key}:{val}")
+              else:
+                  if val not in {exp, exp.lower()}:
+                      issues.append(f"{section}/{key}:{val}")
+
+      if issues:
+          print("\n".join(sorted(set(issues))))
+      PY
+    expect: ""
+    assert_type: "exact"
+    severity: "medium"
+    tags:
+      fstec: ["ИАФ.9"]
+      cis: "1.8.3"
+
+  - id: workstation_gnome_lockdown_locks
+    name: "GNOME: параметры блокировки закреплены"
+    module: "workstation"
+    command: |
+      python3 - <<'PY'
+      from pathlib import Path
+
+      required = {
+          "org/gnome/desktop/session/idle-delay",
+          "org/gnome/desktop/screensaver/lock-enabled",
+          "org/gnome/desktop/screensaver/lock-delay",
+      }
+
+      lock_dirs = [
+          Path("/etc/dconf/db/local.d/locks"),
+          Path("/etc/dconf/db/site.d/locks"),
+      ]
+
+      locked: set[str] = set()
+      for directory in lock_dirs:
+          if not directory.exists():
+              continue
+          for cfg in sorted(p for p in directory.iterdir() if p.is_file()):
+              try:
+                  with cfg.open("r", encoding="utf-8", errors="ignore") as fh:
+                      for raw_line in fh:
+                          line = raw_line.split("#", 1)[0].strip()
+                          if not line:
+                              continue
+                          locked.add(line)
+              except Exception:
+                  continue
+
+      missing = sorted(required - locked)
+      if missing:
+          print("\n".join(missing))
+      PY
+    expect: ""
+    assert_type: "exact"
+    severity: "medium"
+    tags:
+      fstec: ["ИАФ.9"]
+      cis: "1.8.3"
+
+  - id: workstation_bluetooth_autoenable_disabled
+    name: "Bluetooth: AutoEnable=false"
+    module: "peripherals"
+    command: |
+      if [ ! -f /etc/bluetooth/main.conf ]; then
+        echo skipped
+      else
+        awk -F= 'tolower($1)=="autoenable" {gsub(/[ \t\r\n]/, "", $2); print tolower($2)}' /etc/bluetooth/main.conf | head -n1
+      fi
+    expect: "^(false|0|skipped)$"
+    assert_type: "regexp"
+    severity: "medium"
+    tags:
+      fstec: ["ЗИС.4"]
+      cis: "1.6.3"
+
+  - id: workstation_usb_storage_blacklist
+    name: "USB: модуль {{ USB_STORAGE_MODULE }} в blacklist"
+    module: "peripherals"
+    command: |
+      if [ -d /etc/modprobe.d ]; then
+        grep -R --color=never -i "^blacklist[ \t]\+{{ USB_STORAGE_MODULE }}$" /etc/modprobe.d 2>/dev/null || true
+      fi
+    expect: ""
+    assert_type: "exact"
+    severity: "high"
+    tags:
+      fstec: ["ЗИС.12"]
+      cis: "1.1.23"
+
+  - id: workstation_firefox_policies_enforced
+    name: "Firefox: корпоративные политики применены"
+    module: "workstation"
+    command: |
+      if ! command -v firefox >/dev/null 2>&1; then
+        echo skipped
+      elif [ ! -f /etc/firefox/policies/policies.json ]; then
+        echo missing
+      else
+        python3 - <<'PY'
+        import json
+        from pathlib import Path
+
+        requirements = json.loads("""{{ FIREFOX_POLICY_REQUIREMENTS }}""")
+        homepage_required = "{{ FIREFOX_REQUIRED_HOMEPAGE }}"
+        path = Path("/etc/firefox/policies/policies.json")
+
+        try:
+            data = json.loads(path.read_text(encoding="utf-8"))
+        except Exception:
+            print("invalid-json")
+        else:
+            policies = data.get("policies", {})
+            issues = []
+            for key, expected in requirements.items():
+                if policies.get(key) != expected:
+                    issues.append(key)
+            homepage = policies.get("Homepage", {})
+            homepage_loc = homepage.get("URL") if isinstance(homepage, dict) else None
+            if homepage_loc is None:
+                issues.append("Homepage")
+            elif str(homepage_loc).strip() != homepage_required:
+                issues.append("Homepage")
+            if issues:
+                print("missing:" + ",".join(sorted(set(map(str, issues)))))
+            else:
+                print("ok")
+        PY
+      fi
+    expect: "^(ok|skipped)$"
+    assert_type: "regexp"
+    severity: "medium"
+    tags:
+      fstec: ["ЗИС.19"]
+      cis: "1.8.2"
+
+  - id: workstation_chromium_policies_enforced
+    name: "Chromium: корпоративные политики применены"
+    module: "workstation"
+    command: |
+      if command -v chromium >/dev/null 2>&1; then
+        browser_dir=/etc/chromium
+      elif command -v chromium-browser >/dev/null 2>&1; then
+        browser_dir=/etc/chromium-browser
+      elif command -v google-chrome >/dev/null 2>&1; then
+        browser_dir=/etc/opt/chrome
+      else
+        echo skipped
+        exit 0
+      fi
+      if [ ! -d "$browser_dir/policies/managed" ]; then
+        echo missing
+      else
+        python3 - <<'PY'
+        import json
+        from pathlib import Path
+
+        requirements = json.loads("""{{ CHROMIUM_POLICY_REQUIREMENTS }}""")
+        homepage_required = "{{ CHROMIUM_REQUIRED_HOMEPAGE }}"
+        base = Path("/etc")
+        dirs = [
+            Path("/etc/chromium/policies/managed"),
+            Path("/etc/chromium-browser/policies/managed"),
+            Path("/etc/opt/chrome/policies/managed"),
+        ]
+
+        effective: dict[str, object] = {}
+        found = False
+        for directory in dirs:
+            if not directory.exists():
+                continue
+            for cfg in sorted(p for p in directory.glob("*.json")):
+                try:
+                    data = json.loads(cfg.read_text(encoding="utf-8"))
+                except Exception:
+                    continue
+                if not isinstance(data, dict):
+                    continue
+                effective.update(data)
+                found = True
+
+        if not found:
+            print("missing-files")
+        else:
+            issues = []
+            for key, expected in requirements.items():
+                if effective.get(key) != expected:
+                    issues.append(key)
+            homepage = effective.get("HomepageLocation")
+            if homepage is None or str(homepage).strip() != homepage_required:
+                issues.append("HomepageLocation")
+            if issues:
+                print("missing:" + ",".join(sorted(set(map(str, issues)))))
+            else:
+                print("ok")
+        PY
+      fi
+    expect: "^(ok|skipped)$"
+    assert_type: "regexp"
+    severity: "medium"
+    tags:
+      fstec: ["ЗИС.19"]
+      cis: "1.8.2"
