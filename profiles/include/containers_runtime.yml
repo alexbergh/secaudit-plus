@@ -1,0 +1,146 @@
+schema_version: "1.1"
+profile_name: "Контейнерные движки — общие проверки"
+description: "Общие проверки безопасности для Docker/Podman/containerd и rootless-режимов."
+vars:
+  PODMAN_EXPECTED_EVENTS_LOGGER: "journald"
+  PODMAN_EXPECTED_CGROUP_MANAGER: "systemd"
+  CONTAINERD_REQUIRE_SYSTEMD_CGROUP: "true"
+checks:
+  - id: base_podman_engine_hardening
+    name: "Podman: events_logger={{ PODMAN_EXPECTED_EVENTS_LOGGER }}, cgroup_manager={{ PODMAN_EXPECTED_CGROUP_MANAGER }}"
+    module: "containers"
+    command: |
+      if ! command -v podman >/dev/null 2>&1; then
+        echo skipped
+      elif [ ! -f /etc/containers/containers.conf ]; then
+        echo missing
+      else
+        python3 - <<'PY'
+        from pathlib import Path
+        import sys
+        try:
+            import tomllib  # Python 3.11+
+        except ModuleNotFoundError:
+            try:
+                import tomli as tomllib  # type: ignore
+            except ModuleNotFoundError:
+                print("skipped")
+                sys.exit(0)
+
+        cfg_path = Path("/etc/containers/containers.conf")
+        try:
+            data = tomllib.loads(cfg_path.read_text(encoding="utf-8"))
+        except Exception:
+            print("invalid")
+        else:
+            engine = data.get("engine", {}) if isinstance(data, dict) else {}
+            events_logger = str(engine.get("events_logger", "")).strip()
+            cgroup_manager = str(engine.get("cgroup_manager", "")).strip()
+            expected_logger = "{{ PODMAN_EXPECTED_EVENTS_LOGGER }}"
+            expected_cgroup = "{{ PODMAN_EXPECTED_CGROUP_MANAGER }}"
+            if events_logger == expected_logger and cgroup_manager == expected_cgroup:
+                print("ok")
+            else:
+                print(f"events_logger={events_logger or 'unset'} cgroup_manager={cgroup_manager or 'unset'}")
+        PY
+      fi
+    expect: "^(ok|skipped)$"
+    assert_type: "regexp"
+    severity: "medium"
+    tags:
+      fstec: ["ЗИС.17"]
+      cis: "5.29"
+
+  - id: base_containerd_systemd_cgroup
+    name: "containerd: SystemdCgroup={{ CONTAINERD_REQUIRE_SYSTEMD_CGROUP }}"
+    module: "containers"
+    command: |
+      if ! command -v containerd >/dev/null 2>&1; then
+        echo skipped
+      elif [ ! -f /etc/containerd/config.toml ]; then
+        echo missing
+      else
+        python3 - <<'PY'
+        from pathlib import Path
+        import sys
+        try:
+            import tomllib  # Python 3.11+
+        except ModuleNotFoundError:
+            try:
+                import tomli as tomllib  # type: ignore
+            except ModuleNotFoundError:
+                print("skipped")
+                sys.exit(0)
+
+        cfg_path = Path("/etc/containerd/config.toml")
+        try:
+            data = tomllib.loads(cfg_path.read_text(encoding="utf-8"))
+        except Exception:
+            print("invalid")
+        else:
+            expected = "{{ CONTAINERD_REQUIRE_SYSTEMD_CGROUP }}".lower()
+            current = None
+            if isinstance(data, dict):
+                plugins = data.get("plugins", {})
+                if isinstance(plugins, dict):
+                    cri = plugins.get("io.containerd.grpc.v1.cri", {})
+                    if isinstance(cri, dict):
+                        containerd_cfg = cri.get("containerd", {})
+                        if isinstance(containerd_cfg, dict):
+                            runtimes = containerd_cfg.get("runtimes", {})
+                            if isinstance(runtimes, dict):
+                                runc_cfg = runtimes.get("runc", {})
+                                if isinstance(runc_cfg, dict):
+                                    options = runc_cfg.get("options", {})
+                                    if isinstance(options, dict):
+                                        value = options.get("SystemdCgroup")
+                                        if value is not None:
+                                            current = str(value).lower()
+            if current == expected:
+                print("ok")
+            else:
+                print(f"SystemdCgroup={current or 'unset'}")
+        PY
+      fi
+    expect: "^(ok|skipped)$"
+    assert_type: "regexp"
+    severity: "medium"
+    tags:
+      fstec: ["ЗИС.17"]
+      cis: "5.29"
+
+  - id: base_rootless_runtime_sockets
+    name: "Контейнеры: rootless-сокеты отсутствуют или в allowlist"
+    module: "containers"
+    command: |
+      python3 - <<'PY'
+      from pathlib import Path
+      import os
+      import stat
+
+      roots = [Path("/run/user")]
+      findings: list[str] = []
+      for root in roots:
+        if not root.exists():
+          continue
+        for dirpath, dirnames, filenames in os.walk(root):
+          path_dir = Path(dirpath)
+          for name in filenames:
+            if "podman" not in name and "containerd" not in name and "buildkit" not in name:
+              continue
+            full = path_dir / name
+            try:
+              st = full.lstat()
+            except FileNotFoundError:
+              continue
+            if stat.S_ISSOCK(st.st_mode):
+              findings.append("/" + str(full.relative_to(Path("/"))))
+      if findings:
+        print("\n".join(sorted(set(findings))))
+      PY
+    expect: "profiles/include/allowlist_rootless_sockets.txt"
+    assert_type: "set_allowlist"
+    severity: "high"
+    tags:
+      fstec: ["ЗИС.17"]
+      cis: "5.29"

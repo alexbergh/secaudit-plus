@@ -3,6 +3,7 @@ profile_name: "Базовый профиль Linux (рабочая станци�
 description: "Надстройка для настольных систем поверх общего Linux-профиля."
 extends:
   - "./linux.yml"
+  - "../include/workstation_hardening.yml"
 meta:
   role: "workstation"
 checks:
