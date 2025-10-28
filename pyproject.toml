@@ -3,7 +3,7 @@ requires = ["setuptools>=68", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "SecAudit+"
+name = "secaudit-plus"
 version = "1.0.0"
 description = "CLI tool for security auditing of GNU/Linux systems with YAML-based profiles"
 readme = "README.md"
