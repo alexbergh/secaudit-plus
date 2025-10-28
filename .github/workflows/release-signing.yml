@@ -1,0 +1,142 @@
+name: Release Signing
+
+on:
+  release:
+    types: [created]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Tag to sign'
+        required: true
+
+permissions:
+  contents: write
+
+jobs:
+  sign-release:
+    name: Sign Release Assets
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.10'
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install build twine
+
+      - name: Build distribution
+        run: |
+          python -m build
+          ls -la dist/
+
+      - name: Import GPG key
+        env:
+          GPG_PRIVATE_KEY: ${{ secrets.GPG_PRIVATE_KEY }}
+          GPG_PASSPHRASE: ${{ secrets.GPG_PASSPHRASE }}
+        run: |
+          echo "$GPG_PRIVATE_KEY" | gpg --batch --import
+          echo "GPG key imported successfully"
+
+      - name: Sign release assets
+        env:
+          GPG_PASSPHRASE: ${{ secrets.GPG_PASSPHRASE }}
+        run: |
+          cd dist
+          for file in *; do
+            echo "Signing ${file}..."
+            gpg --batch --yes --passphrase "$GPG_PASSPHRASE" \
+                --pinentry-mode loopback \
+                --detach-sign --armor "${file}"
+            echo "Created ${file}.asc"
+          done
+          ls -la
+
+      - name: Generate checksums
+        run: |
+          cd dist
+          sha256sum * > SHA256SUMS
+          sha512sum * > SHA512SUMS
+          cat SHA256SUMS
+          cat SHA512SUMS
+
+      - name: Sign checksums
+        env:
+          GPG_PASSPHRASE: ${{ secrets.GPG_PASSPHRASE }}
+        run: |
+          cd dist
+          gpg --batch --yes --passphrase "$GPG_PASSPHRASE" \
+              --pinentry-mode loopback \
+              --clearsign SHA256SUMS
+          gpg --batch --yes --passphrase "$GPG_PASSPHRASE" \
+              --pinentry-mode loopback \
+              --clearsign SHA512SUMS
+
+      - name: Upload signed assets to release
+        uses: softprops/action-gh-release@v1
+        with:
+          tag_name: ${{ github.event.release.tag_name || github.event.inputs.tag }}
+          files: |
+            dist/*.whl
+            dist/*.tar.gz
+            dist/*.asc
+            dist/SHA256SUMS*
+            dist/SHA512SUMS*
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Create verification instructions
+        run: |
+          cat > VERIFY.md << 'EOF'
+          # Verification Instructions
+
+          ## Verify GPG Signatures
+
+          1. Import the public key:
+          ```bash
+          gpg --keyserver keys.openpgp.org --recv-keys <KEY_ID>
+          ```
+
+          2. Verify a file:
+          ```bash
+          gpg --verify secaudit_plus-1.0.0-py3-none-any.whl.asc secaudit_plus-1.0.0-py3-none-any.whl
+          ```
+
+          ## Verify Checksums
+
+          1. Verify checksum signature:
+          ```bash
+          gpg --verify SHA256SUMS.asc
+          ```
+
+          2. Check file integrity:
+          ```bash
+          sha256sum -c SHA256SUMS
+          ```
+
+          ## Verify Docker Image
+
+          ```bash
+          cosign verify \
+            --certificate-identity-regexp="https://github.com/alexbergh/secaudit-core" \
+            --certificate-oidc-issuer=https://token.actions.githubusercontent.com \
+            ghcr.io/alexbergh/secaudit-core:latest
+          ```
+          EOF
+          cat VERIFY.md
+
+      - name: Upload verification instructions
+        uses: softprops/action-gh-release@v1
+        with:
+          tag_name: ${{ github.event.release.tag_name || github.event.inputs.tag }}
+          files: VERIFY.md
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

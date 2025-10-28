@@ -21,6 +21,8 @@ env:
 permissions:
   contents: read
   packages: write
+  security-events: write
+  id-token: write  # Required for Cosign
 
 jobs:
   build-and-push:
@@ -56,6 +58,7 @@ jobs:
             type=raw,value=latest,enable={{is_default_branch}}
 
       - name: Build and push Docker image
+        id: build-and-push
         uses: docker/build-push-action@v5
         with:
           context: .
@@ -91,6 +94,34 @@ jobs:
 
       - name: Upload Trivy results to GitHub Security
         if: github.event_name != 'pull_request'
-        uses: github/codeql-action/upload-sarif@v3
+        uses: github/codeql-action/upload-sarif@v4
         with:
           sarif_file: 'trivy-results.sarif'
+
+      - name: Install Cosign
+        if: github.event_name != 'pull_request'
+        uses: sigstore/cosign-installer@v3
+
+      - name: Sign container image with Cosign
+        if: github.event_name != 'pull_request'
+        env:
+          DIGEST: ${{ steps.build-and-push.outputs.digest }}
+          TAGS: ${{ steps.meta.outputs.tags }}
+        run: |
+          echo "Signing image with digest: ${DIGEST}"
+          for tag in ${TAGS}; do
+            echo "Signing tag: ${tag}"
+            cosign sign --yes "${tag}@${DIGEST}"
+          done
+
+      - name: Verify image signature
+        if: github.event_name != 'pull_request'
+        env:
+          DIGEST: ${{ steps.build-and-push.outputs.digest }}
+          IMAGE: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+        run: |
+          echo "Verifying signature for: ${IMAGE}@${DIGEST}"
+          cosign verify \
+            --certificate-identity-regexp="https://github.com/${{ github.repository }}" \
+            --certificate-oidc-issuer=https://token.actions.githubusercontent.com \
+            "${IMAGE}@${DIGEST}"
