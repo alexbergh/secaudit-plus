@@ -1,0 +1,69 @@
+{{- if and .Values.ingress.enabled .Values.tls.enabled -}}
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: {{ include "secaudit.fullname" . }}-tls
+  labels:
+    {{- include "secaudit.labels" . | nindent 4 }}
+  annotations:
+    {{- if .Values.tls.certManager.enabled }}
+    cert-manager.io/cluster-issuer: {{ .Values.tls.certManager.issuer }}
+    cert-manager.io/acme-challenge-type: {{ .Values.tls.certManager.challengeType | default "http01" }}
+    {{- end }}
+    nginx.ingress.kubernetes.io/ssl-redirect: "true"
+    nginx.ingress.kubernetes.io/force-ssl-redirect: "true"
+    nginx.ingress.kubernetes.io/ssl-protocols: "TLSv1.2 TLSv1.3"
+    nginx.ingress.kubernetes.io/ssl-ciphers: "ECDHE-ECDSA-AES128-GCM-SHA256:ECDHE-RSA-AES128-GCM-SHA256:ECDHE-ECDSA-AES256-GCM-SHA384:ECDHE-RSA-AES256-GCM-SHA384"
+    {{- with .Values.ingress.annotations }}
+    {{- toYaml . | nindent 4 }}
+    {{- end }}
+spec:
+  ingressClassName: {{ .Values.ingress.className }}
+  tls:
+    {{- range .Values.ingress.hosts }}
+    - hosts:
+        - {{ .host | quote }}
+      secretName: {{ include "secaudit.fullname" $ }}-tls-{{ .host | replace "." "-" }}
+    {{- end }}
+  rules:
+    {{- range .Values.ingress.hosts }}
+    - host: {{ .host | quote }}
+      http:
+        paths:
+          {{- range .paths }}
+          - path: {{ .path }}
+            pathType: {{ .pathType }}
+            backend:
+              service:
+                name: {{ include "secaudit.fullname" $ }}
+                port:
+                  number: {{ $.Values.service.port }}
+          {{- end }}
+    {{- end }}
+{{- end }}
+
+{{- if .Values.tls.certManager.enabled -}}
+---
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: {{ include "secaudit.fullname" . }}-cert
+  labels:
+    {{- include "secaudit.labels" . | nindent 4 }}
+spec:
+  secretName: {{ include "secaudit.fullname" . }}-tls
+  issuerRef:
+    name: {{ .Values.tls.certManager.issuer }}
+    kind: {{ .Values.tls.certManager.issuerKind | default "ClusterIssuer" }}
+  dnsNames:
+    {{- range .Values.ingress.hosts }}
+    - {{ .host }}
+    {{- end }}
+  {{- if .Values.tls.certManager.duration }}
+  duration: {{ .Values.tls.certManager.duration }}
+  {{- end }}
+  {{- if .Values.tls.certManager.renewBefore }}
+  renewBefore: {{ .Values.tls.certManager.renewBefore }}
+  {{- end }}
+{{- end }}

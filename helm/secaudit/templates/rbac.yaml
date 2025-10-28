@@ -1,0 +1,208 @@
+{{- if .Values.rbac.create -}}
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: {{ include "secaudit.serviceAccountName" . }}
+  labels:
+    {{- include "secaudit.labels" . | nindent 4 }}
+  {{- with .Values.serviceAccount.annotations }}
+  annotations:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: {{ include "secaudit.fullname" . }}-viewer
+  labels:
+    {{- include "secaudit.labels" . | nindent 4 }}
+    app.kubernetes.io/component: rbac
+rules:
+  # Read-only access to audit results
+  - apiGroups: [""]
+    resources: ["configmaps"]
+    resourceNames: ["{{ include "secaudit.fullname" . }}-results"]
+    verbs: ["get", "list", "watch"]
+  
+  # Read logs
+  - apiGroups: [""]
+    resources: ["pods/log"]
+    verbs: ["get", "list"]
+  
+  # View pod status
+  - apiGroups: [""]
+    resources: ["pods"]
+    verbs: ["get", "list", "watch"]
+
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: {{ include "secaudit.fullname" . }}-auditor
+  labels:
+    {{- include "secaudit.labels" . | nindent 4 }}
+    app.kubernetes.io/component: rbac
+rules:
+  # Full access to audit results
+  - apiGroups: [""]
+    resources: ["configmaps"]
+    verbs: ["get", "list", "watch", "create", "update", "patch"]
+  
+  # Manage pods
+  - apiGroups: [""]
+    resources: ["pods"]
+    verbs: ["get", "list", "watch", "create", "delete"]
+  
+  # Read logs
+  - apiGroups: [""]
+    resources: ["pods/log"]
+    verbs: ["get", "list"]
+  
+  # Execute commands in pods
+  - apiGroups: [""]
+    resources: ["pods/exec"]
+    verbs: ["create"]
+  
+  # Manage jobs
+  - apiGroups: ["batch"]
+    resources: ["jobs", "cronjobs"]
+    verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: {{ include "secaudit.fullname" . }}-admin
+  labels:
+    {{- include "secaudit.labels" . | nindent 4 }}
+    app.kubernetes.io/component: rbac
+rules:
+  # Full access to all resources
+  - apiGroups: [""]
+    resources: ["*"]
+    verbs: ["*"]
+  
+  - apiGroups: ["apps"]
+    resources: ["*"]
+    verbs: ["*"]
+  
+  - apiGroups: ["batch"]
+    resources: ["*"]
+    verbs: ["*"]
+  
+  - apiGroups: ["rbac.authorization.k8s.io"]
+    resources: ["roles", "rolebindings"]
+    verbs: ["get", "list", "watch"]
+
+---
+# ClusterRole for node-level auditing
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: {{ include "secaudit.fullname" . }}-node-auditor
+  labels:
+    {{- include "secaudit.labels" . | nindent 4 }}
+    app.kubernetes.io/component: rbac
+rules:
+  # Read node information
+  - apiGroups: [""]
+    resources: ["nodes"]
+    verbs: ["get", "list", "watch"]
+  
+  # Read node metrics
+  - apiGroups: ["metrics.k8s.io"]
+    resources: ["nodes"]
+    verbs: ["get", "list"]
+  
+  # Read security policies
+  - apiGroups: ["policy"]
+    resources: ["podsecuritypolicies"]
+    verbs: ["get", "list", "watch"]
+  
+  # Read network policies
+  - apiGroups: ["networking.k8s.io"]
+    resources: ["networkpolicies"]
+    verbs: ["get", "list", "watch"]
+
+---
+# RoleBinding for viewers
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: {{ include "secaudit.fullname" . }}-viewer-binding
+  labels:
+    {{- include "secaudit.labels" . | nindent 4 }}
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: {{ include "secaudit.fullname" . }}-viewer
+subjects:
+  {{- range .Values.rbac.viewers }}
+  - kind: {{ .kind | default "User" }}
+    name: {{ .name }}
+    {{- if .namespace }}
+    namespace: {{ .namespace }}
+    {{- end }}
+  {{- end }}
+
+---
+# RoleBinding for auditors
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: {{ include "secaudit.fullname" . }}-auditor-binding
+  labels:
+    {{- include "secaudit.labels" . | nindent 4 }}
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: {{ include "secaudit.fullname" . }}-auditor
+subjects:
+  {{- range .Values.rbac.auditors }}
+  - kind: {{ .kind | default "User" }}
+    name: {{ .name }}
+    {{- if .namespace }}
+    namespace: {{ .namespace }}
+    {{- end }}
+  {{- end }}
+
+---
+# RoleBinding for admins
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: {{ include "secaudit.fullname" . }}-admin-binding
+  labels:
+    {{- include "secaudit.labels" . | nindent 4 }}
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: {{ include "secaudit.fullname" . }}-admin
+subjects:
+  {{- range .Values.rbac.admins }}
+  - kind: {{ .kind | default "User" }}
+    name: {{ .name }}
+    {{- if .namespace }}
+    namespace: {{ .namespace }}
+    {{- end }}
+  {{- end }}
+
+---
+# ClusterRoleBinding for node auditing
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: {{ include "secaudit.fullname" . }}-node-auditor-binding
+  labels:
+    {{- include "secaudit.labels" . | nindent 4 }}
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: {{ include "secaudit.fullname" . }}-node-auditor
+subjects:
+  - kind: ServiceAccount
+    name: {{ include "secaudit.serviceAccountName" . }}
+    namespace: {{ .Release.Namespace }}
+{{- end }}

@@ -119,3 +119,153 @@ monitoring:
   prometheusRule:
     enabled: false
     rules: []
+
+rbac:
+  create: true
+  
+  # Viewers - read-only access to results
+  viewers:
+    - name: security-team
+      kind: Group
+    # - name: user@example.com
+    #   kind: User
+  
+  # Auditors - can run audits and manage results
+  auditors:
+    - name: audit-operators
+      kind: Group
+    # - name: auditor@example.com
+    #   kind: User
+  
+  # Admins - full control
+  admins:
+    - name: security-admins
+      kind: Group
+    # - name: admin@example.com
+    #   kind: User
+
+authentication:
+  enabled: false
+  
+  # JWT authentication
+  jwt:
+    enabled: false
+    secret: ""  # Set via --set or secrets
+    issuer: "secaudit"
+    expiration: 24h
+  
+  # API keys
+  apiKeys:
+    enabled: false
+    keys: []
+    # - name: ci-pipeline
+    #   key: ""  # Set via secrets
+    #   roles: [auditor]
+  
+  # OIDC integration
+  oidc:
+    enabled: false
+    issuerUrl: ""
+    clientId: ""
+    clientSecret: ""  # Set via secrets
+
+auditLog:
+  enabled: true
+  
+  # Log all API calls and audit executions
+  logLevel: INFO
+  
+  # Retention
+  retentionDays: 90
+  
+  # Output destinations
+  destinations:
+    - type: file
+      path: /app/logs/audit.log
+    # - type: syslog
+    #   host: syslog.example.com
+    #   port: 514
+    # - type: elasticsearch
+    #   url: https://elasticsearch.example.com
+    #   index: secaudit-audit
+
+encryption:
+  enabled: false
+  
+  # GPG encryption for reports
+  gpg:
+    enabled: false
+    # Public key for encryption (base64 or path)
+    publicKey: ""
+    # Private key for decryption (base64 or path)
+    privateKey: ""
+    # Passphrase for private key
+    passphrase: ""
+    # Recipients for report encryption
+    recipients:
+      - security-team@example.com
+    # Sign reports
+    sign: true
+    # Remove original files after encryption
+    removeOriginal: false
+  
+  # AES encryption for temporary data
+  aes:
+    enabled: false
+    # 32-byte key (base64 encoded)
+    key: ""
+  
+  # Encryption at rest
+  atRest:
+    enabled: false
+    # Storage class with encryption
+    storageClass: encrypted-ssd
+
+tls:
+  enabled: false
+  
+  # TLS certificate (PEM format)
+  certificate: ""
+  # TLS private key (PEM format)
+  privateKey: ""
+  # CA certificate (optional)
+  ca: ""
+  
+  # Cert-manager integration
+  certManager:
+    enabled: false
+    issuer: letsencrypt-prod
+    issuerKind: ClusterIssuer
+    challengeType: http01
+    duration: 2160h  # 90 days
+    renewBefore: 360h  # 15 days
+  
+  # mTLS (mutual TLS)
+  mtls:
+    enabled: false
+    # Require client certificates
+    requireClientCert: false
+    # Trusted CA for client certificates
+    clientCA: ""
+
+externalSecrets:
+  enabled: false
+  # External Secrets Operator integration
+  secretStore: vault-backend
+  secretStoreKind: SecretStore
+  refreshInterval: 1h
+  data: []
+  # - secretKey: gpg-passphrase
+  #   remoteKey: secaudit/gpg
+  #   property: passphrase
+  # - secretKey: jwt-secret
+  #   remoteKey: secaudit/auth
+  #   property: jwt_secret
+
+vault:
+  enabled: false
+  # HashiCorp Vault integration
+  role: secaudit
+  secretPath: secret/data/secaudit
+  # Vault agent sidecar injection
+  agentInject: true
