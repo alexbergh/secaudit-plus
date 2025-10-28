@@ -475,6 +475,44 @@ def _detect_local_ips():
     return seen
 
 
+def collect_host_metadata(profile: dict | None = None, results: list | None = None, summary: dict | None = None) -> dict:
+    """
+    Collect host metadata for reports.
+    
+    Args:
+        profile: Audit profile
+        results: Audit results
+        summary: Audit summary
+        
+    Returns:
+        Dictionary with host metadata
+    """
+    metadata = {
+        "hostname": platform.node() or "unknown",
+        "os": platform.system(),
+        "os_release": platform.release(),
+        "os_version": platform.version(),
+        "arch": platform.machine(),
+        "python_version": platform.python_version(),
+        "timestamp": datetime.now().isoformat(),
+        "ips": _detect_local_ips(),
+    }
+    
+    # Add profile info if available
+    if profile:
+        metadata["profile_name"] = profile.get("name", "unknown")
+        metadata["profile_level"] = profile.get("level", "baseline")
+    
+    # Add summary if available
+    if summary:
+        metadata["score"] = summary.get("score", 0)
+        metadata["total_checks"] = summary.get("total", 0)
+        metadata["passed"] = summary.get("passed", 0)
+        metadata["failed"] = summary.get("failed", 0)
+    
+    return metadata
+
+
 def _json_default(value):
     if isinstance(value, (datetime, date)):
         return value.isoformat()
