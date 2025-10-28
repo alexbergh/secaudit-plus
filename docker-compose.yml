@@ -1,0 +1,101 @@
+version: '3.8'
+
+services:
+  secaudit:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: secaudit-plus:latest
+    container_name: secaudit-core
+    
+    # Privileged mode for system audits (security consideration!)
+    privileged: true
+    
+    # Mount host system for auditing
+    volumes:
+      - ./profiles:/app/profiles:ro
+      - ./results:/app/results
+      - /etc:/host/etc:ro
+      - /var:/host/var:ro
+      - /sys:/host/sys:ro
+      - /proc:/host/proc:ro
+    
+    environment:
+      - SECAUDIT_LEVEL=baseline
+      - SECAUDIT_WORKERS=4
+    
+    # Override default command
+    command: audit --profile profiles/base/linux.yml --level baseline
+    
+    # Resource limits
+    deploy:
+      resources:
+        limits:
+          cpus: '2'
+          memory: 1G
+        reservations:
+          cpus: '1'
+          memory: 512M
+    
+    # Logging configuration
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+    
+    # Network mode
+    network_mode: host
+    
+    # Restart policy
+    restart: "no"
+
+  # Development environment
+  secaudit-dev:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: secaudit-plus:dev
+    container_name: secaudit-dev
+    
+    volumes:
+      - .:/app
+      - ./results:/app/results
+    
+    environment:
+      - SECAUDIT_LEVEL=baseline
+      - PYTHONDONTWRITEBYTECODE=1
+    
+    command: /bin/bash
+    
+    stdin_open: true
+    tty: true
+    
+    network_mode: host
+
+  # Test runner
+  secaudit-test:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: secaudit-plus:test
+    container_name: secaudit-test
+    
+    volumes:
+      - .:/app
+      - ./htmlcov:/app/htmlcov
+    
+    command: >
+      sh -c "
+        pip install pytest-cov bandit safety &&
+        pytest --cov=modules --cov=secaudit --cov=seclib --cov=utils 
+               --cov-report=term-missing 
+               --cov-report=html 
+               -v
+      "
+    
+    network_mode: host
+
+networks:
+  default:
+    driver: bridge

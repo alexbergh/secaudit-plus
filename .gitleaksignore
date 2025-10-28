@@ -1,0 +1,8 @@
+# Gitleaks ignore patterns
+
+# Test fixtures and examples
+tests/fixtures/
+docs/examples/
+
+# Known false positives
+# Add specific patterns here if needed
