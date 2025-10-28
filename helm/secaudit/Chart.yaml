@@ -1,0 +1,22 @@
+apiVersion: v2
+name: secaudit
+description: Helm chart for SecAudit+ security auditing tool
+type: application
+version: 1.0.0
+appVersion: "1.0.0"
+
+keywords:
+  - security
+  - audit
+  - compliance
+  - fstek
+  - cis
+
+maintainers:
+  - name: Alex Hellberg
+    email: alex@example.com
+
+sources:
+  - https://github.com/alexbergh/secaudit-core
+
+icon: https://raw.githubusercontent.com/alexbergh/secaudit-core/main/docs/logo.png

@@ -1,0 +1,59 @@
+{{- if .Values.cronjob.enabled }}
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: {{ include "secaudit.fullname" . }}-cronjob
+  labels:
+    {{- include "secaudit.labels" . | nindent 4 }}
+spec:
+  schedule: {{ .Values.cronjob.schedule | quote }}
+  successfulJobsHistoryLimit: {{ .Values.cronjob.successfulJobsHistoryLimit }}
+  failedJobsHistoryLimit: {{ .Values.cronjob.failedJobsHistoryLimit }}
+  concurrencyPolicy: {{ .Values.cronjob.concurrencyPolicy }}
+  jobTemplate:
+    spec:
+      template:
+        metadata:
+          labels:
+            {{- include "secaudit.selectorLabels" . | nindent 12 }}
+        spec:
+          serviceAccountName: {{ include "secaudit.serviceAccountName" . }}
+          restartPolicy: OnFailure
+          containers:
+          - name: {{ .Chart.Name }}
+            image: "{{ .Values.image.repository }}:{{ .Values.image.tag | default .Chart.AppVersion }}"
+            imagePullPolicy: {{ .Values.image.pullPolicy }}
+            command:
+              - secaudit
+              - audit
+              - --profile
+              - {{ index .Values.config.profiles 0 }}
+              - --level
+              - {{ .Values.config.level }}
+            volumeMounts:
+              {{- if .Values.persistence.enabled }}
+              - name: results
+                mountPath: {{ .Values.persistence.mountPath }}
+              {{- end }}
+              {{- if .Values.hostPaths.enabled }}
+              {{- range .Values.hostPaths.paths }}
+              - name: {{ .name }}
+                mountPath: {{ .mountPath }}
+                readOnly: {{ .readOnly }}
+              {{- end }}
+              {{- end }}
+          volumes:
+            {{- if .Values.persistence.enabled }}
+            - name: results
+              persistentVolumeClaim:
+                claimName: {{ include "secaudit.fullname" . }}
+            {{- end }}
+            {{- if .Values.hostPaths.enabled }}
+            {{- range .Values.hostPaths.paths }}
+            - name: {{ .name }}
+              hostPath:
+                path: {{ .hostPath }}
+                type: Directory
+            {{- end }}
+            {{- end }}
+{{- end }}

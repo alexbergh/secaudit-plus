@@ -1,0 +1,55 @@
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: secaudit-alerts
+  labels:
+    app: secaudit
+spec:
+  groups:
+  - name: secaudit
+    interval: 30s
+    rules:
+    - alert: SecAuditLowScore
+      expr: secaudit_score < 50
+      for: 5m
+      labels:
+        severity: warning
+      annotations:
+        summary: "SecAudit score is low"
+        description: "Security audit score is {{ $value }}%, which is below 50%"
+    
+    - alert: SecAuditCriticalScore
+      expr: secaudit_score < 30
+      for: 5m
+      labels:
+        severity: critical
+      annotations:
+        summary: "SecAudit score is critical"
+        description: "Security audit score is {{ $value }}%, which is critically low"
+    
+    - alert: SecAuditHighFailureRate
+      expr: rate(secaudit_checks_total{result="FAIL"}[5m]) > 0.1
+      for: 10m
+      labels:
+        severity: warning
+      annotations:
+        summary: "High rate of failed security checks"
+        description: "Failed checks rate is {{ $value }} per second"
+    
+    - alert: SecAuditAuditNotRunning
+      expr: time() - secaudit_last_audit_timestamp > 86400
+      for: 1h
+      labels:
+        severity: warning
+      annotations:
+        summary: "Security audit has not run recently"
+        description: "Last audit was {{ $value }} seconds ago (>24h)"
+    
+    - alert: SecAuditHighSeverityFailures
+      expr: secaudit_checks_total{result="FAIL",severity="high"} > 5
+      for: 5m
+      labels:
+        severity: critical
+      annotations:
+        summary: "Multiple high-severity security failures"
+        description: "{{ $value }} high-severity checks have failed"

@@ -129,17 +129,22 @@ vars:
 
 ```
 secaudit-core/
+├─ .github/workflows/   # CI/CD workflows (CI, Release, CodeQL, Semgrep, Secrets, Docker)
 ├─ main.py              # Альтернативная точка входа CLI
 ├─ secaudit/            # Пакет CLI и служебные исключения
 ├─ modules/             # Исполнитель аудита, CLI-парсер, генератор отчётов
 ├─ seclib/              # Схемы и валидаторы профилей
 ├─ profiles/            # YAML-профили и include-файлы
 ├─ reports/             # Шаблоны отчётов (Jinja2)
-├─ tests/               # Юнит-тесты и регрессия профилей
-├─ docs/                # Расширенная документация и дорожные карты
-├─ workflows/           # Примеры интеграции с CI
-├─ utils/               # Вспомогательные скрипты и преобразования
+├─ tests/               # Юнит-тесты, регрессия профилей и integration tests
+├─ docs/                # Расширенная документация и deployment guide
+├─ helm/secaudit/       # Helm chart для Kubernetes
+├─ monitoring/          # Grafana dashboards и Prometheus rules
+├─ utils/               # Вспомогательные скрипты и логирование
 ├─ results/             # Каталог для отчётов (создаётся автоматически)
+├─ Dockerfile           # Multi-stage Docker образ
+├─ docker-compose.yml   # Сервисы для production, dev и test
+├─ Makefile             # Автоматизация задач разработки
 ├─ requirements.txt
 ├─ pyproject.toml
 └─ init.sh
@@ -247,22 +252,88 @@ fetch_reports:
 
 ## Тестирование и качество
 
-- `pytest` — проверка вспомогательных функций и регрессия наследования профилей.
+- `pytest` — проверка вспомогательных функций, регрессия наследования профилей и 11 integration tests.
 - `yamllint` — статический анализ YAML (используется в CI).
-- `flake8`, `mypy` — линтеры и статический анализ (см. `workflows/ci.yml`).
+- `flake8`, `mypy` — линтеры и статический анализ (см. `.github/workflows/ci.yml`).
+- `bandit` — security linting для Python кода.
+- `safety` — проверка уязвимостей в зависимостях.
+- `semgrep` — SAST сканирование с SARIF output.
+- `gitleaks`, `trufflehog` — обнаружение секретов в коде.
 
 Запуск локально:
 
 ```bash
+# Все тесты
 pytest
-yamllint profiles
-flake8
-mypy
+
+# Integration tests
+pytest -m integration -v
+
+# С coverage
+pytest --cov=modules --cov=secaudit --cov-report=html
+
+# Линтинг и security
+make lint
+make security
+
+# Все проверки (как в CI)
+make ci
 ```
+
+## Docker и Kubernetes
+
+### Docker
+
+```bash
+# Сборка образа
+docker build -t secaudit-plus:latest .
+
+# Запуск аудита
+docker run --rm --privileged \
+  -v $(pwd)/profiles:/app/profiles:ro \
+  -v $(pwd)/results:/app/results \
+  -v /etc:/host/etc:ro \
+  secaudit-plus:latest audit --profile profiles/base/linux.yml
+
+# Использование docker-compose
+docker-compose run --rm secaudit
+```
+
+### Kubernetes (Helm)
+
+```bash
+# Установка
+helm install secaudit ./helm/secaudit -n secaudit --create-namespace
+
+# С кастомными параметрами
+helm install secaudit ./helm/secaudit \
+  --set config.level=strict \
+  --set cronjob.enabled=true \
+  --set monitoring.serviceMonitor.enabled=true
+```
+
+Подробнее см. [Deployment Guide](docs/DEPLOYMENT.md).
+
+## Мониторинг
+
+Проект включает готовые конфигурации для мониторинга:
+
+- **Prometheus ServiceMonitor** — автоматический сбор метрик
+- **Grafana Dashboard** — 6 панелей с визуализацией результатов
+- **Prometheus Alerting Rules** — 5 правил для критичных событий
+
+Метрики:
+- `secaudit_score` — общий балл аудита (0-100)
+- `secaudit_checks_total` — количество проверок по результатам
+- `secaudit_audit_duration_seconds` — длительность аудита
+- `secaudit_last_audit_timestamp` — timestamp последнего аудита
 
 ## Дополнительные материалы
 
 - [Руководство пользователя](docs/user_guide.md)
 - [Дорожная карта и статус покрытия](docs/roadmap.md)
+- [Deployment Guide](docs/DEPLOYMENT.md)
+- [Security Policy](SECURITY.md)
+- [Contributing Guidelines](CONTRIBUTING.md)
 
 Обратная связь и предложения приветствуются через issue tracker.

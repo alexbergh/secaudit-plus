@@ -110,22 +110,38 @@ def _print_project_info() -> None:
 
 
 def main():
-    args = parse_args()
+    try:
+        args = parse_args()
+    except SystemExit:
+        raise
+    except Exception as exc:
+        log_fail(f"Ошибка парсинга аргументов: {exc}")
+        sys.exit(1)
 
     if getattr(args, "info", False):
         _print_project_info()
         return
 
     # Определяем профиль
-    profile_path = _resolve_profile_path(getattr(args, "profile", None))
-    log_info(f"Загрузка профиля: {profile_path}")
+    try:
+        profile_path = _resolve_profile_path(getattr(args, "profile", None))
+        log_info(f"Загрузка профиля: {profile_path}")
+    except Exception as exc:
+        log_fail(f"Ошибка определения пути профиля: {exc}")
+        sys.exit(1)
 
     # Загружаем профиль (парсинг YAML + базовые проверки структуры внутри load_profile)
     try:
         profile = load_profile(profile_path)
     except MissingDependencyError as exc:
-        log_fail(str(exc))
+        log_fail(f"Отсутствует зависимость: {exc}")
         sys.exit(3)
+    except FileNotFoundError:
+        log_fail(f"Файл профиля не найден: {profile_path}")
+        sys.exit(1)
+    except Exception as exc:
+        log_fail(f"Ошибка загрузки профиля: {exc}")
+        sys.exit(1)
 
     # Валидация по JSON-схеме перед любыми действиями
     is_valid, val_errors = validate_profile(profile)
@@ -161,15 +177,23 @@ def main():
             _print_and_exit_validation_errors(profile_path, val_errors, strict_exit_code=1)
 
     if args.command == "compare":
-        diff = compare_reports(args.before, args.after, fail_only=getattr(args, "fail_only", False))
-        print(format_report_diff(diff))
-        output_path = getattr(args, "output", None)
-        if output_path:
-            Path(output_path).write_text(
-                json.dumps(diff, indent=2, ensure_ascii=False),
-                encoding="utf-8",
-            )
-        return
+        try:
+            diff = compare_reports(args.before, args.after, fail_only=getattr(args, "fail_only", False))
+            print(format_report_diff(diff))
+            output_path = getattr(args, "output", None)
+            if output_path:
+                Path(output_path).write_text(
+                    json.dumps(diff, indent=2, ensure_ascii=False),
+                    encoding="utf-8",
+                )
+            log_info("Сравнение отчетов завершено")
+            return
+        except FileNotFoundError as exc:
+            log_fail(f"Файл отчета не найден: {exc}")
+            sys.exit(1)
+        except Exception as exc:
+            log_fail(f"Ошибка сравнения отчетов: {exc}")
+            sys.exit(1)
 
     # Команда audit — полный запуск проверок
     if args.command == "audit":
@@ -199,14 +223,26 @@ def main():
         summary = outcome.summary
 
         # Директория результатов
-        Path("results").mkdir(exist_ok=True)
+        try:
+            Path("results").mkdir(exist_ok=True)
+        except OSError as exc:
+            log_fail(f"Не удалось создать директорию results: {exc}")
+            sys.exit(1)
 
         # Полный список результатов (плоский)
-        with open("results/report.json", "w", encoding="utf-8") as f:
-            json.dump({"results": results, "summary": summary}, f, indent=2, ensure_ascii=False)
+        try:
+            with open("results/report.json", "w", encoding="utf-8") as f:
+                json.dump({"results": results, "summary": summary}, f, indent=2, ensure_ascii=False)
+            log_info("Сохранен results/report.json")
+        except OSError as exc:
+            log_fail(f"Ошибка записи results/report.json: {exc}")
 
         # Группировка результатов по модулям
-        generate_json_report(results, "results/report_grouped.json", summary=summary)
+        try:
+            generate_json_report(results, "results/report_grouped.json", summary=summary)
+            log_info("Сохранен results/report_grouped.json")
+        except Exception as exc:
+            log_fail(f"Ошибка генерации report_grouped.json: {exc}")
 
         # Логируем в консоль краткую сводку
         score = summary.get("score")

@@ -42,17 +42,35 @@
 - Генераторы SARIF и JUnit подключены к `secaudit audit`, отчёты сохраняются рядом с HTML/Markdown артефактами и пригодны для публикации в CI/CD.
 - Экспорт Prometheus (`metrics.prom`) и Elastic NDJSON (`elastic.ndjson`) выполняется автоматически, обеспечивая интеграцию с системами мониторинга.
 - Команда `secaudit compare` и модуль `report_diff` позволяют сравнивать JSON-отчёты и выявлять регрессии/улучшения между сборками.
+- Готовые Grafana dashboards (6 панелей) и Prometheus alerting rules (5 правил) для визуализации и оповещений.
+- GitHub Actions workflows для автоматической публикации Docker образов в GHCR с SBOM и Trivy сканированием.
 
 ### 1.9. Ролевые профили
 - Профиль `roles/db.yml` контролирует статус PostgreSQL/MySQL, шифрование/SSL, журналирование, trust-записи в `pg_hba.conf`, владельцев каталогов и системного пользователя БД.
 - Профиль `roles/kiosk.yml` покрывает GDM-autologin, политику Firefox Kiosk, блокировку TTY, маскирование Ctrl+Alt+Del и заморозку обновлений.
+
+### 1.10. DevOps и контейнеризация
+- Helm chart для Kubernetes с поддержкой Deployment, CronJob, PVC, ServiceAccount и Ingress.
+- Multi-stage Dockerfile для оптимизированной сборки образов.
+- docker-compose.yml с сервисами для production, development и testing.
+- Автоматическая публикация в GitHub Container Registry с multi-platform builds (amd64, arm64).
+- ServiceMonitor для Prometheus Operator и интеграция с Grafana.
+
+### 1.11. Качество кода и тестирование
+- Comprehensive error handling с детальными сообщениями об ошибках.
+- Файловое логирование с timestamp и уровнями детализации (DEBUG, INFO, WARN, ERROR, CRITICAL).
+- 11 integration tests для end-to-end проверки workflow.
+- Comprehensive docstrings в Google Style с примерами использования.
+- CI/CD workflows: CodeQL, Semgrep, Bandit, Safety, Gitleaks, TruffleHog.
+- Pre-commit hooks с 10+ инструментами проверки качества.
+- Makefile с 20+ командами для автоматизации разработки.
 
 ## 2. Фокус ближайших итераций
 
 ### 2.1. Горизонт «Сейчас» (1–2 спринта)
 - **Покрытие профилей.** Добавить профиль для рабочих станций (GUI, Bluetooth/USB, браузеры) и укрепить контейнерный раздел базового профиля проверками Podman/containerd и ограничениями на rootless-контейнеры.
 - **Движок и UX.** Ввести ограничение на параллелизм/приоритет команд, отчёт о потреблении ресурсов в CLI и управление тайм-аутами на уровне профиля.
-- **Интеграции.** Подготовить готовые pipelines для публикации Prometheus-метрик и Elastic-экспортов (Grafana dashboards, dashboards Kibana) и описать best practices их использования.
+- **Увеличение test coverage.** Довести покрытие тестами до 80%+ с добавлением тестов для критичных модулей.
 
 ### 2.2. Горизонт «Скоро» (квартал)
 - **Ролевые и отраслевые профили.** Разработать профили для рабочих станций разработчиков, bastion-хостов и средств защиты информации, переиспользуя allowlist/denylist.

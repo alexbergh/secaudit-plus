@@ -1,0 +1,96 @@
+{
+  "dashboard": {
+    "title": "SecAudit+ Monitoring",
+    "tags": ["security", "audit", "compliance"],
+    "timezone": "browser",
+    "panels": [
+      {
+        "id": 1,
+        "title": "Audit Score",
+        "type": "gauge",
+        "targets": [
+          {
+            "expr": "secaudit_score",
+            "legendFormat": "Score"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "min": 0,
+            "max": 100,
+            "thresholds": {
+              "steps": [
+                {"value": 0, "color": "red"},
+                {"value": 50, "color": "yellow"},
+                {"value": 80, "color": "green"}
+              ]
+            }
+          }
+        }
+      },
+      {
+        "id": 2,
+        "title": "Check Results",
+        "type": "stat",
+        "targets": [
+          {
+            "expr": "secaudit_checks_total{result=\"PASS\"}",
+            "legendFormat": "Passed"
+          },
+          {
+            "expr": "secaudit_checks_total{result=\"FAIL\"}",
+            "legendFormat": "Failed"
+          },
+          {
+            "expr": "secaudit_checks_total{result=\"WARN\"}",
+            "legendFormat": "Warnings"
+          }
+        ]
+      },
+      {
+        "id": 3,
+        "title": "Checks by Severity",
+        "type": "piechart",
+        "targets": [
+          {
+            "expr": "sum by (severity) (secaudit_checks_total)",
+            "legendFormat": "{{severity}}"
+          }
+        ]
+      },
+      {
+        "id": 4,
+        "title": "Checks by Module",
+        "type": "bargauge",
+        "targets": [
+          {
+            "expr": "sum by (module) (secaudit_checks_total)",
+            "legendFormat": "{{module}}"
+          }
+        ]
+      },
+      {
+        "id": 5,
+        "title": "Audit Duration",
+        "type": "graph",
+        "targets": [
+          {
+            "expr": "secaudit_audit_duration_seconds",
+            "legendFormat": "Duration"
+          }
+        ]
+      },
+      {
+        "id": 6,
+        "title": "Failed Checks Over Time",
+        "type": "graph",
+        "targets": [
+          {
+            "expr": "rate(secaudit_checks_total{result=\"FAIL\"}[5m])",
+            "legendFormat": "Failed checks/min"
+          }
+        ]
+      }
+    ]
+  }
+}
