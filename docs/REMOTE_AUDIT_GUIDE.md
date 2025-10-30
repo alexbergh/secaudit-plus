@@ -36,10 +36,14 @@ ls -la ./reports/hosts/
 
 ### Базовое сканирование
 
-Сканирование одной подсети:
+Сканирование одной подсети (замените на вашу сеть):
 
 ```bash
-secaudit scan --networks 192.168.1.0/24 -o scan_results.json
+# Пример 1: Подсеть офиса
+secaudit scan --networks 172.16.10.0/24 -o office_scan.json
+
+# Пример 2: Подсеть серверов
+secaudit scan --networks 10.50.100.0/24 -o servers_scan.json
 ```
 
 ### Расширенное сканирование
@@ -47,13 +51,21 @@ secaudit scan --networks 192.168.1.0/24 -o scan_results.json
 Сканирование множественных сетей с дополнительными параметрами:
 
 ```bash
+# Пример: Сканирование разных зон инфраструктуры
 secaudit scan \
-  --networks 192.168.1.0/24,10.0.0.0/24 \
+  --networks 10.10.0.0/22,10.20.0.0/22,172.30.0.0/24 \
   --ssh-ports 22,2222,22000 \
   --timeout 5 \
   --workers 100 \
   --ping-method both \
-  -o scan_results.json
+  -o multi_zone_scan.json
+
+# Пример: Сканирование DMZ с нестандартными портами
+secaudit scan \
+  --networks 203.0.113.0/25 \
+  --ssh-ports 22000,22001,22002 \
+  --timeout 10 \
+  -o dmz_scan.json
 ```
 
 ### Фильтрация результатов
@@ -61,10 +73,17 @@ secaudit scan \
 Сканирование с фильтрацией по ОС:
 
 ```bash
+# Только Ubuntu и Debian серверы
 secaudit scan \
-  --networks 192.168.1.0/24 \
+  --networks 10.100.0.0/16 \
   --filter-os ubuntu,debian \
-  -o ubuntu_hosts.json
+  -o linux_debian_based.json
+
+# Только CentOS/RHEL серверы
+secaudit scan \
+  --networks 10.200.0.0/16 \
+  --filter-os centos,rhel,rocky \
+  -o redhat_based.json
 ```
 
 ### Параметры команды scan
@@ -308,23 +327,30 @@ cat /var/secaudit/reports/hosts/web-server-01/latest/report.json | jq .summary
 ### Пример 1: Аудит новой инфраструктуры
 
 ```bash
-# Сканируем сеть
-secaudit scan --networks 192.168.1.0/24 -o scan.json
+# Сценарий: Аудит нового дата-центра с несколькими подсетями
 
-# Создаём инвентори
+# Сканируем все подсети дата-центра (замените на ваши сети)
+secaudit scan \
+  --networks 10.100.10.0/24,10.100.20.0/24,10.100.30.0/24 \
+  -o dc_scan.json
+
+# Создаём инвентори с автоматической группировкой по подсетям
 secaudit inventory create \
-  --from-scan scan.json \
-  -o inventory.yml \
+  --from-scan dc_scan.json \
+  -o dc_inventory.yml \
   --auto-group \
   --ssh-key ~/.ssh/audit_key
 
-# Редактируем inventory.yml для настройки групп и профилей
-# ...
+# Редактируем dc_inventory.yml для настройки групп и профилей
+# Например, переименовываем группы:
+# - subnet_10_100_10_0 -> web_servers
+# - subnet_10_100_20_0 -> app_servers
+# - subnet_10_100_30_0 -> db_servers
 
 # Запускаем аудит
 secaudit audit-remote \
-  --inventory inventory.yml \
-  --output-dir ./reports \
+  --inventory dc_inventory.yml \
+  --output-dir ./dc_audit_reports \
   --level baseline \
   --workers 20
 ```
@@ -357,18 +383,22 @@ secaudit audit-remote \
 ### Пример 4: Быстрая проверка новых хостов
 
 ```bash
-# Сканирование
-secaudit scan --networks 10.20.0.0/24 -o new_hosts.json
+# Сценарий: Проверка вновь добавленных серверов в разных локациях
+
+# Сканирование новых серверов (разные подсети)
+secaudit scan \
+  --networks 172.25.100.0/26,172.25.200.0/26 \
+  -o new_servers.json
 
 # Создание временного инвентори
 secaudit inventory create \
-  --from-scan new_hosts.json \
+  --from-scan new_servers.json \
   -o temp_inventory.yml
 
 # Быстрый аудит
 secaudit audit-remote \
   --inventory temp_inventory.yml \
-  --output-dir ./quick_check \
+  --output-dir ./new_servers_check \
   --level baseline \
   --workers 50
 ```

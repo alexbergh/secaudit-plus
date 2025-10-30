@@ -369,14 +369,17 @@ SecAudit+ поддерживает сканирование сети, управ
 ### Сканирование сети
 
 ```bash
-# Сканирование подсети
-secaudit scan --networks 192.168.1.0/24 -o scan_results.json
+# Сканирование подсети (укажите вашу сеть)
+secaudit scan --networks 10.50.100.0/24 -o scan_results.json
 
-# Сканирование множественных сетей
-secaudit scan --networks 192.168.1.0/24,10.0.0.0/24 --ssh-ports 22,2222 -o scan.json
+# Сканирование множественных сетей (разные зоны инфраструктуры)
+secaudit scan --networks 172.16.10.0/24,172.16.20.0/24,10.0.100.0/24 --ssh-ports 22,2222 -o scan.json
 
 # С фильтрацией по ОС
-secaudit scan --networks 192.168.1.0/24 --filter-os ubuntu,debian -o scan.json
+secaudit scan --networks 10.100.0.0/16 --filter-os ubuntu,debian -o scan.json
+
+# Сканирование DMZ с нестандартными портами
+secaudit scan --networks 203.0.113.0/24 --ssh-ports 22000,22001 -o dmz_scan.json
 ```
 
 ### Управление инвентори
@@ -410,18 +413,24 @@ secaudit audit-remote \
   --workers 20 \
   --level strict
 
-# Аудит конкретной группы
+# Аудит конкретной группы (например, production серверы)
 secaudit audit-remote \
   --inventory inventory.yml \
   --group production \
   --level strict \
   --fail-level high
 
-# Аудит с фильтрацией по тегам
+# Аудит с фильтрацией по тегам (например, критичные веб-серверы)
 secaudit audit-remote \
   --inventory inventory.yml \
   --tags "critical,webserver" \
   --evidence
+
+# Аудит по типу ОС (например, только Ubuntu серверы)
+secaudit audit-remote \
+  --inventory inventory.yml \
+  --os ubuntu \
+  --level paranoid
 ```
 
 Подробная документация: [Архитектура сетевого сканирования](docs/NETWORK_SCANNING_ARCHITECTURE.md)

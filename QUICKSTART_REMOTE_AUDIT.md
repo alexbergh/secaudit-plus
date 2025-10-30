@@ -6,7 +6,8 @@
 
 ```bash
 # 1. Сканирование сети (30 сек)
-secaudit scan --networks 192.168.1.0/24 -o scan.json
+# Укажите ВАШУ сеть вместо примера ниже
+secaudit scan --networks 10.0.0.0/24 -o scan.json
 
 # 2. Создание инвентори (5 сек)
 secaudit inventory create --from-scan scan.json -o inventory.yml --auto-group
@@ -41,14 +42,17 @@ secaudit audit-remote --inventory inventory.yml --output-dir ./reports
 ### Сканирование
 
 ```bash
-# Простое сканирование
-secaudit scan --networks 192.168.1.0/24 -o scan.json
+# Простое сканирование одной сети
+secaudit scan --networks 10.20.30.0/24 -o scan.json
 
-# С множественными сетями и портами
-secaudit scan --networks 192.168.1.0/24,10.0.0.0/24 --ssh-ports 22,2222 -o scan.json
+# С множественными сетями и портами (для разных подразделений/ЦОД)
+secaudit scan --networks 172.16.10.0/24,172.16.20.0/24,10.0.100.0/24 --ssh-ports 22,2222 -o scan.json
 
-# С фильтром по ОС
-secaudit scan --networks 192.168.1.0/24 --filter-os ubuntu -o ubuntu_hosts.json
+# С фильтром по ОС (только Ubuntu серверы)
+secaudit scan --networks 10.50.0.0/16 --filter-os ubuntu -o ubuntu_hosts.json
+
+# Сканирование DMZ зоны с нестандартными портами
+secaudit scan --networks 203.0.113.0/24 --ssh-ports 22000,22001 -o dmz_scan.json
 ```
 
 ### Инвентори
@@ -161,12 +165,16 @@ secaudit audit-remote --help
 ### Workflow 1: Новая инфраструктура
 
 ```bash
-# Обнаружение хостов
-secaudit scan --networks 192.168.0.0/16 -o discovery.json
+# Обнаружение хостов в корпоративной сети (измените на вашу сеть)
+# Пример 1: Сеть офиса
+secaudit scan --networks 172.20.0.0/16 -o office_discovery.json
+
+# Пример 2: Несколько подсетей дата-центра
+secaudit scan --networks 10.100.0.0/22,10.100.4.0/22,10.100.8.0/22 -o dc_discovery.json
 
 # Создание структурированного инвентори
 secaudit inventory create \
-  --from-scan discovery.json \
+  --from-scan dc_discovery.json \
   -o infrastructure.yml \
   --auto-group \
   --ssh-key ~/.ssh/prod_key
@@ -206,11 +214,12 @@ cat ./compliance_*/summary.json | jq '.successful, .failed'
 DATE=$(date +%Y%m%d)
 REPORT_DIR="/var/secaudit/reports/${DATE}"
 
-# Обновление инвентори
+# Обновление инвентори (укажите ваши сети)
+# Пример: производственная сеть компании
 secaudit inventory update \
   --inventory /etc/secaudit/inventory.yml \
   --scan \
-  --networks 192.168.1.0/24
+  --networks 10.200.0.0/16,10.201.0.0/16
 
 # Аудит
 secaudit audit-remote \
