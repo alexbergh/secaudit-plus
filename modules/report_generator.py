@@ -6,10 +6,19 @@ from importlib import metadata as importlib_metadata
 import json
 import platform
 import socket
+import os
 from collections import defaultdict
 from collections.abc import Mapping, Sequence
 from typing import Any, Dict, List
 from xml.etree import ElementTree as ET
+
+# Import redaction module if available
+try:
+    from seclib.redaction import SensitiveDataRedactor
+    REDACTION_AVAILABLE = True
+except ImportError:
+    REDACTION_AVAILABLE = False
+    SensitiveDataRedactor = None
 
 
 FSTEK21_DESCRIPTIONS = {

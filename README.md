@@ -166,6 +166,37 @@ secaudit-core/
 
 Сводка содержит итоговый балл, покрытие, список провалов с наибольшим весом и сопоставление требований ФСТЭК благодаря преобразованиям в `modules/report_generator.py`. Отдельный блок «Remediation» в HTML/Markdown-отчётах агрегирует проваленные проверки с заполненным полем `remediation`, чтобы команды эксплуатации сразу видели план действий. Для CI/CD доступны машинные выгрузки `report.sarif` и `report.junit.xml`, которые можно публиковать в системах анализа исходного кода или интерфейсах тестов.
 
+### Защита чувствительных данных (Sensitive Data Redaction)
+
+SecAudit+ автоматически редактирует чувствительные данные в отчетах для предотвращения утечек:
+
+```bash
+# Редактирование включено по умолчанию
+secaudit audit --profile profiles/base/server.yml
+
+# Отключить редактирование (не рекомендуется для production)
+export SECAUDIT_REDACT_SENSITIVE=false
+secaudit audit --profile profiles/base/server.yml
+```
+
+**Автоматически редактируются:**
+- Пароли и секреты (`password=`, `secret=`)
+- API ключи и токены (`api_key=`, `token=`, `bearer`)
+- Приватные ключи (PEM, SSH)
+- AWS/GitHub/облачные credentials
+- Строки подключения к БД
+- Email адреса и приватные IP
+
+**Важные поля сохраняются:** `id`, `module`, `severity`, `status`, `duration` остаются нетронутыми для анализа.
+
+Проверить статус редактирования можно в JSON-отчете:
+```json
+{
+  "_redaction_applied": true,
+  "modules": {...}
+}
+```
+
 ## CI/CD интеграции
 
 Каталог `docs/examples/` содержит готовые пайплайны для golden-образов:

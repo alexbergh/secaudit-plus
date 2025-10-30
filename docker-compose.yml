@@ -6,10 +6,20 @@ services:
       context: .
       dockerfile: Dockerfile
     image: secaudit-plus:latest
-    container_name: secaudit-core
+    container_name: secaudit-plus
     
-    # Privileged mode for system audits (security consideration!)
-    privileged: true
+    # Security: Use specific capabilities instead of privileged mode
+    # This reduces attack surface while maintaining audit functionality
+    cap_add:
+      - SYS_ADMIN      # Required for mount operations and system inspection
+      - SYS_PTRACE     # Required for process inspection
+      - DAC_READ_SEARCH # Required for reading protected files
+      - AUDIT_READ     # Required for audit log access
+      - NET_ADMIN      # Required for network configuration checks
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
     
     # Mount host system for auditing
     volumes:

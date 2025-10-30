@@ -64,7 +64,10 @@ ENV PYTHONUNBUFFERED=1 \
 HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
     CMD secaudit --info || exit 1
 
-# Switch to non-root user (note: many checks require root)
+# Security Note: Many audit checks require root privileges or specific capabilities.
+# When running in Docker/K8s, use capabilities (SYS_ADMIN, SYS_PTRACE, etc.) 
+# instead of privileged mode. See docker-compose.yml and helm/values.yaml for examples.
+# For production, consider running specific checks as non-root where possible.
 # USER secaudit
 
 # Default command

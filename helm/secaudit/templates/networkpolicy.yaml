@@ -1,0 +1,110 @@
+{{- if .Values.networkPolicy.enabled -}}
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: {{ include "secaudit.fullname" . }}
+  labels:
+    {{- include "secaudit.labels" . | nindent 4 }}
+spec:
+  podSelector:
+    matchLabels:
+      {{- include "secaudit.selectorLabels" . | nindent 6 }}
+  
+  policyTypes:
+    - Ingress
+    - Egress
+  
+  {{- if .Values.networkPolicy.ingress.enabled }}
+  ingress:
+    {{- if .Values.networkPolicy.ingress.rules }}
+    {{- toYaml .Values.networkPolicy.ingress.rules | nindent 4 }}
+    {{- else }}
+    # Default: Allow ingress from same namespace
+    - from:
+      - podSelector: {}
+      {{- if .Values.networkPolicy.ingress.allowFromNamespaces }}
+      - namespaceSelector:
+          matchLabels:
+            {{- toYaml .Values.networkPolicy.ingress.allowFromNamespaces | nindent 12 }}
+      {{- end }}
+      ports:
+      - protocol: TCP
+        port: {{ .Values.service.port }}
+    {{- end }}
+  {{- end }}
+  
+  egress:
+    {{- if .Values.networkPolicy.egress.rules }}
+    {{- toYaml .Values.networkPolicy.egress.rules | nindent 4 }}
+    {{- else }}
+    # DNS resolution (required)
+    - to:
+      - namespaceSelector:
+          matchLabels:
+            name: kube-system
+      ports:
+      - protocol: UDP
+        port: 53
+    
+    # HTTPS for external APIs (if needed)
+    {{- if .Values.networkPolicy.egress.allowExternal }}
+    - to:
+      - namespaceSelector: {}
+      ports:
+      - protocol: TCP
+        port: 443
+    {{- end }}
+    
+    # Prometheus metrics (if monitoring enabled)
+    {{- if .Values.monitoring.serviceMonitor.enabled }}
+    - to:
+      - namespaceSelector:
+          matchLabels:
+            name: {{ .Values.networkPolicy.egress.monitoringNamespace | default "monitoring" }}
+      ports:
+      - protocol: TCP
+        port: 9090
+    {{- end }}
+    
+    # Elasticsearch (if enabled)
+    {{- if .Values.networkPolicy.egress.elasticsearch.enabled }}
+    - to:
+      {{- if .Values.networkPolicy.egress.elasticsearch.namespaceSelector }}
+      - namespaceSelector:
+          matchLabels:
+            {{- toYaml .Values.networkPolicy.egress.elasticsearch.namespaceSelector | nindent 12 }}
+      {{- end }}
+      {{- if .Values.networkPolicy.egress.elasticsearch.podSelector }}
+      - podSelector:
+          matchLabels:
+            {{- toYaml .Values.networkPolicy.egress.elasticsearch.podSelector | nindent 12 }}
+      {{- end }}
+      ports:
+      - protocol: TCP
+        port: {{ .Values.networkPolicy.egress.elasticsearch.port | default 9200 }}
+    {{- end }}
+    
+    # Custom egress rules
+    {{- range .Values.networkPolicy.egress.customRules }}
+    - to:
+      {{- if .namespaceSelector }}
+      - namespaceSelector:
+          matchLabels:
+            {{- toYaml .namespaceSelector | nindent 12 }}
+      {{- end }}
+      {{- if .podSelector }}
+      - podSelector:
+          matchLabels:
+            {{- toYaml .podSelector | nindent 12 }}
+      {{- end }}
+      {{- if .ipBlock }}
+      - ipBlock:
+          {{- toYaml .ipBlock | nindent 10 }}
+      {{- end }}
+      {{- if .ports }}
+      ports:
+      {{- toYaml .ports | nindent 6 }}
+      {{- end }}
+    {{- end }}
+    {{- end }}
+{{- end }}

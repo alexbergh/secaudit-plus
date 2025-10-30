@@ -13,7 +13,11 @@ We release patches for security vulnerabilities in the following versions:
 
 **Please do not report security vulnerabilities through public GitHub issues.**
 
-Instead, please report them via email to: **security@secaudit.example.com** (update with actual email)
+Instead, please report them via email to: **git.upstate674@passinbox.com**
+
+Alternatively, you can use GitHub Security Advisories:
+- Go to https://github.com/alexbergh/secaudit-plus/security/advisories
+- Click "Report a vulnerability"
 
 You should receive a response within 48 hours. If for some reason you do not, please follow up via email to ensure we received your original message.
 
@@ -121,8 +125,8 @@ To ensure the integrity of SecAudit+:
 
 3. **Build from source:**
    ```bash
-   git clone https://github.com/alexbergh/secaudit-core.git
-   cd secaudit-core
+   git clone https://github.com/alexbergh/secaudit-plus.git
+   cd secaudit-plus
    git verify-commit HEAD  # Verify signed commits
    python -m venv .venv
    source .venv/bin/activate
@@ -198,9 +202,10 @@ However, **SecAudit+ itself is not certified or accredited** for any specific co
 ## Contact
 
 For security concerns, contact:
-- **Email**: security@secaudit.example.com (update with actual email)
-- **PGP Key**: [Link to public key] (TBD)
-- **Response Time**: Within 48 hours
+- **Email**: security@alexbergh.com
+- **GitHub Security Advisories**: https://github.com/alexbergh/secaudit-plus/security/advisories
+- **PGP Key**: Available on request
+- **Response Time**: Within 48 hours (business days)
 
 For general questions, use GitHub Issues or Discussions.
 
