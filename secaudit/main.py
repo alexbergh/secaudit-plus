@@ -255,7 +255,6 @@ def main():
     
     # Команда inventory — управление инвентори
     if args.command == "inventory":
-        import json
         from modules.inventory_manager import InventoryManager, HostEntry
         from modules.network_scanner import ScanResult
         
