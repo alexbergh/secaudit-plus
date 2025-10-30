@@ -208,6 +208,245 @@ def main():
             log_fail(f"Ошибка сравнения отчетов: {exc}")
             sys.exit(1)
 
+    # Команда scan — сканирование сети
+    if args.command == "scan":
+        from modules.network_scanner import scan_networks, export_results_json, export_results_yaml, print_scan_summary
+        
+        networks = [n.strip() for n in args.networks.split(",") if n.strip()]
+        ssh_ports = [int(p.strip()) for p in args.ssh_ports.split(",") if p.strip()]
+        
+        log_info(f"Сканирование сетей: {', '.join(networks)}")
+        
+        try:
+            results = scan_networks(
+                networks=networks,
+                ssh_ports=ssh_ports,
+                timeout=args.timeout,
+                workers=args.workers,
+                ping_method=args.ping_method,
+                resolve_hostnames=not args.no_resolve,
+                detect_os=not args.no_detect_os,
+            )
+            
+            # Фильтрация по ОС если указано
+            if hasattr(args, "filter_os") and args.filter_os:
+                os_filters = [f.strip().lower() for f in args.filter_os.split(",")]
+                results = [
+                    r for r in results 
+                    if r.os_detected and any(f in r.os_detected.lower() for f in os_filters)
+                ]
+                log_info(f"Отфильтровано по ОС: {len(results)} хостов")
+            
+            # Сохранение результатов
+            output_path = Path(args.output)
+            if output_path.suffix.lower() in [".yml", ".yaml"]:
+                export_results_yaml(results, output_path)
+            else:
+                export_results_json(results, output_path)
+            
+            # Вывод сводки
+            print_scan_summary(results)
+            
+            return
+            
+        except Exception as exc:
+            log_fail(f"Ошибка сканирования: {exc}")
+            sys.exit(1)
+    
+    # Команда inventory — управление инвентори
+    if args.command == "inventory":
+        import json
+        from modules.inventory_manager import InventoryManager, HostEntry
+        from modules.network_scanner import ScanResult
+        
+        if args.inventory_command == "create":
+            # Создание инвентори из сканирования
+            try:
+                with open(args.from_scan, 'r', encoding='utf-8') as f:
+                    scan_data = json.load(f)
+                
+                # Конвертируем в ScanResult объекты
+                scan_results = []
+                for host_data in scan_data.get("hosts", []):
+                    result = ScanResult(
+                        ip=host_data["ip"],
+                        hostname=host_data.get("hostname"),
+                        is_alive=host_data.get("is_alive", False),
+                        ssh_port=host_data.get("ssh_port"),
+                        ssh_banner=host_data.get("ssh_banner"),
+                        os_detected=host_data.get("os_detected"),
+                    )
+                    scan_results.append(result)
+                
+                manager = InventoryManager()
+                manager.create_from_scan(
+                    scan_results,
+                    auto_group=args.auto_group,
+                    default_group=args.default_group,
+                    ssh_user=args.ssh_user,
+                    ssh_key=args.ssh_key,
+                    default_profile=args.profile,
+                )
+                
+                manager.save(Path(args.output))
+                manager.print_summary()
+                
+                log_info("Инвентори успешно создан")
+                return
+                
+            except Exception as exc:
+                log_fail(f"Ошибка создания инвентори: {exc}")
+                sys.exit(1)
+        
+        elif args.inventory_command == "add-host":
+            # Добавление хоста в инвентори
+            try:
+                manager = InventoryManager(Path(args.inventory))
+                manager.load()
+                
+                tags = [t.strip() for t in args.tags.split(",")] if args.tags else []
+                
+                host = HostEntry(
+                    ip=args.ip,
+                    hostname=args.hostname,
+                    ssh_port=args.ssh_port,
+                    ssh_user=args.ssh_user,
+                    ssh_key=args.ssh_key,
+                    profile=args.profile,
+                    tags=tags,
+                )
+                
+                manager.inventory.add_host(host, args.group)
+                manager.save()
+                
+                log_info(f"Хост {args.ip} добавлен в группу {args.group}")
+                return
+                
+            except Exception as exc:
+                log_fail(f"Ошибка добавления хоста: {exc}")
+                sys.exit(1)
+        
+        elif args.inventory_command == "list":
+            # Показ хостов из инвентори
+            try:
+                manager = InventoryManager(Path(args.inventory))
+                manager.load()
+                
+                tags = [t.strip() for t in args.tags.split(",")] if args.tags else None
+                
+                manager.list_hosts(
+                    group=args.group,
+                    tags=tags,
+                    os_filter=args.os,
+                    verbose=args.verbose,
+                )
+                
+                return
+                
+            except Exception as exc:
+                log_fail(f"Ошибка чтения инвентори: {exc}")
+                sys.exit(1)
+        
+        elif args.inventory_command == "update":
+            # Обновление инвентори
+            try:
+                manager = InventoryManager(Path(args.inventory))
+                manager.load()
+                
+                if args.scan and args.networks:
+                    from modules.network_scanner import scan_networks
+                    
+                    networks = [n.strip() for n in args.networks.split(",")]
+                    log_info(f"Сканирование для обновления: {', '.join(networks)}")
+                    
+                    scan_results = scan_networks(networks=networks)
+                    
+                    # Обновляем существующие хосты и добавляем новые
+                    for result in scan_results:
+                        if not result.is_alive:
+                            continue
+                        
+                        existing = manager.inventory.get_host(result.ip)
+                        if existing:
+                            # Обновляем информацию
+                            host, group_name = existing
+                            if result.hostname:
+                                host.hostname = result.hostname
+                            if result.ssh_port:
+                                host.ssh_port = result.ssh_port
+                            if result.os_detected:
+                                host.os = result.os_detected
+                        else:
+                            # Добавляем новый хост
+                            host = HostEntry(
+                                ip=result.ip,
+                                hostname=result.hostname,
+                                ssh_port=result.ssh_port or 22,
+                                os=result.os_detected,
+                            )
+                            manager.inventory.add_host(host, "discovered")
+                    
+                    manager.save()
+                    log_info("Инвентори обновлён")
+                
+                manager.print_summary()
+                return
+                
+            except Exception as exc:
+                log_fail(f"Ошибка обновления инвентори: {exc}")
+                sys.exit(1)
+    
+    # Команда audit-remote — удалённый аудит
+    if args.command == "audit-remote":
+        from modules.inventory_manager import load_inventory
+        from modules.remote_executor import execute_remote_audit
+        
+        try:
+            # Загружаем инвентори
+            inventory = load_inventory(Path(args.inventory))
+            log_info(f"Загружен инвентори с {inventory.get_host_count()} хостами")
+            
+            # Парсим теги если указаны
+            tags = [t.strip() for t in args.tags.split(",")] if args.tags else None
+            
+            # Выполняем удалённый аудит
+            results = execute_remote_audit(
+                inventory=inventory,
+                output_dir=Path(args.output_dir),
+                workers=args.workers,
+                profile=args.profile,
+                level=args.level,
+                fail_level=args.fail_level,
+                evidence=args.evidence,
+                group=args.group,
+                tags=tags,
+                os_filter=args.os_filter,
+            )
+            
+            # Выводим сводку
+            successful = sum(1 for r in results if r.success)
+            failed = len(results) - successful
+            
+            print("\n" + "="*60)
+            print("СВОДКА УДАЛЁННОГО АУДИТА")
+            print("="*60)
+            print(f"Всего хостов: {len(results)}")
+            print(f"Успешно: {successful}")
+            print(f"С ошибками: {failed}")
+            print("="*60 + "\n")
+            
+            # Код возврата
+            if failed > 0:
+                sys.exit(2)
+            
+            return
+            
+        except Exception as exc:
+            log_fail(f"Ошибка удалённого аудита: {exc}")
+            import traceback
+            traceback.print_exc()
+            sys.exit(1)
+    
     # Команда audit — полный запуск проверок
     if args.command == "audit":
         if not is_valid:

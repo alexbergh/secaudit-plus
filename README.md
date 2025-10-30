@@ -56,6 +56,9 @@ CLI можно запускать и напрямую через интерпр�
 | `secaudit validate [--strict]` | Валидация профиля по JSON-схеме. В строгом режиме ошибки возвращают код 2. |
 | `secaudit audit [OPTIONS]` | Полноценный запуск аудита и генерация отчётов. |
 | `secaudit compare <before.json> <after.json> [--fail-only] [--output diff.json]` | Сравнение двух JSON-отчётов с агрегированной статистикой и перечнем регрессий/улучшений. |
+| `secaudit scan --networks <CIDR> -o <file>` | Сканирование сети для обнаружения активных хостов. |
+| `secaudit inventory create/list/add-host/update` | Управление инвентори хостов для удалённого аудита. |
+| `secaudit audit-remote --inventory <file>` | Удалённый запуск аудитов на хостах из инвентори. |
 
 Глобальные флаги:
 
@@ -359,11 +362,76 @@ helm install secaudit ./helm/secaudit \
 - `secaudit_audit_duration_seconds` — длительность аудита
 - `secaudit_last_audit_timestamp` — timestamp последнего аудита
 
+## Сканирование сети и удалённый аудит
+
+SecAudit+ поддерживает сканирование сети, управление инвентори хостов и удалённое выполнение аудитов:
+
+### Сканирование сети
+
+```bash
+# Сканирование подсети
+secaudit scan --networks 192.168.1.0/24 -o scan_results.json
+
+# Сканирование множественных сетей
+secaudit scan --networks 192.168.1.0/24,10.0.0.0/24 --ssh-ports 22,2222 -o scan.json
+
+# С фильтрацией по ОС
+secaudit scan --networks 192.168.1.0/24 --filter-os ubuntu,debian -o scan.json
+```
+
+### Управление инвентори
+
+```bash
+# Создание инвентори из результатов сканирования
+secaudit inventory create --from-scan scan_results.json -o inventory.yml --auto-group
+
+# Просмотр хостов
+secaudit inventory list --inventory inventory.yml --group production
+
+# Добавление хоста вручную
+secaudit inventory add-host \
+  --inventory inventory.yml \
+  --ip 192.168.1.100 \
+  --hostname server-01 \
+  --group production \
+  --tags "critical,webserver"
+
+# Обновление инвентори через повторное сканирование
+secaudit inventory update --inventory inventory.yml --scan --networks 192.168.1.0/24
+```
+
+### Удалённый аудит
+
+```bash
+# Запуск аудита на всех хостах из инвентори
+secaudit audit-remote \
+  --inventory inventory.yml \
+  --output-dir /var/secaudit/reports \
+  --workers 20 \
+  --level strict
+
+# Аудит конкретной группы
+secaudit audit-remote \
+  --inventory inventory.yml \
+  --group production \
+  --level strict \
+  --fail-level high
+
+# Аудит с фильтрацией по тегам
+secaudit audit-remote \
+  --inventory inventory.yml \
+  --tags "critical,webserver" \
+  --evidence
+```
+
+Подробная документация: [Архитектура сетевого сканирования](docs/NETWORK_SCANNING_ARCHITECTURE.md)
+
 ## Дополнительные материалы
 
 - [Руководство пользователя](docs/user_guide.md)
 - [Дорожная карта и статус покрытия](docs/roadmap.md)
 - [Deployment Guide](docs/DEPLOYMENT.md)
+- [Архитектура сетевого сканирования и удалённого аудита](docs/NETWORK_SCANNING_ARCHITECTURE.md)
 - [Security Policy](SECURITY.md)
 - [Contributing Guidelines](CONTRIBUTING.md)
 

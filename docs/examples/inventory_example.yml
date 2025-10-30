@@ -1,0 +1,165 @@
+# Пример инвентори для SecAudit+
+# Этот файл описывает хосты для удалённого аудита
+
+version: "1.0"
+updated: "2025-10-30 19:20:00"
+
+# Настройки безопасности (опционально)
+security:
+  ssh_keys:
+    default: /etc/secaudit/keys/default_key
+    production: /etc/secaudit/keys/prod_key
+    development: /etc/secaudit/keys/dev_key
+
+# Группы хостов
+groups:
+  # Производственная среда
+  production:
+    # Переменные группы (применяются ко всем хостам в группе если не переопределены)
+    vars:
+      ssh_port: 22
+      ssh_user: audituser
+      ssh_key: /etc/secaudit/keys/prod_key
+      profile: profiles/base/server.yml
+      level: strict
+    
+    hosts:
+      - hostname: web-server-01
+        ip: 192.168.1.10
+        os: ubuntu-22.04
+        tags:
+          - webserver
+          - nginx
+          - critical
+        vars:
+          profile: profiles/roles/webserver.yml
+      
+      - hostname: web-server-02
+        ip: 192.168.1.11
+        os: ubuntu-22.04
+        tags:
+          - webserver
+          - nginx
+          - critical
+      
+      - hostname: db-server-01
+        ip: 192.168.1.20
+        os: ubuntu-22.04
+        ssh_port: 2222
+        profile: profiles/roles/db.yml
+        tags:
+          - database
+          - postgresql
+          - critical
+      
+      - hostname: app-server-01
+        ip: 192.168.1.30
+        os: ubuntu-20.04
+        tags:
+          - application
+          - python
+          - important
+
+  # Среда разработки
+  development:
+    vars:
+      ssh_port: 22
+      ssh_user: devuser
+      ssh_key: /etc/secaudit/keys/dev_key
+      profile: profiles/base/linux.yml
+      level: baseline
+    
+    hosts:
+      - hostname: dev-01
+        ip: 10.0.0.10
+        os: ubuntu-20.04
+        tags:
+          - dev
+          - testing
+      
+      - hostname: dev-02
+        ip: 10.0.0.11
+        os: debian-11
+        tags:
+          - dev
+          - testing
+
+  # Тестовая среда
+  testing:
+    vars:
+      ssh_port: 22
+      ssh_user: testuser
+      profile: profiles/base/server.yml
+      level: baseline
+    
+    hosts:
+      - hostname: test-server-01
+        ip: 10.1.0.10
+        os: ubuntu-22.04
+        tags:
+          - test
+          - staging
+      
+      - hostname: test-server-02
+        ip: 10.1.0.11
+        os: ubuntu-22.04
+        tags:
+          - test
+          - staging
+
+  # Инфраструктурные серверы
+  infrastructure:
+    vars:
+      ssh_port: 22
+      ssh_user: root
+      ssh_key: /etc/secaudit/keys/infra_key
+      profile: profiles/base/server.yml
+      level: paranoid
+    
+    hosts:
+      - hostname: monitoring-01
+        ip: 192.168.2.10
+        os: ubuntu-22.04
+        tags:
+          - monitoring
+          - prometheus
+          - critical
+      
+      - hostname: logging-01
+        ip: 192.168.2.20
+        os: ubuntu-22.04
+        tags:
+          - logging
+          - elasticsearch
+          - critical
+      
+      - hostname: backup-01
+        ip: 192.168.2.30
+        os: ubuntu-22.04
+        tags:
+          - backup
+          - important
+
+  # Хосты, обнаруженные сканированием (автоматически созданные)
+  discovered:
+    vars:
+      ssh_port: 22
+      ssh_user: root
+      profile: profiles/common/baseline.yml
+      level: baseline
+    
+    hosts:
+      - hostname: unknown-01
+        ip: 192.168.3.100
+        os: ubuntu
+        tags:
+          - discovered
+          - unclassified
+      
+      - hostname: unknown-02
+        ip: 192.168.3.101
+        ssh_port: 2222
+        tags:
+          - discovered
+          - unclassified
+          - custom_ssh_port

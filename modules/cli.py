@@ -353,6 +353,246 @@ def parse_args(argv: List[str] | None = None) -> argparse.Namespace:
     )
     _add_profile_arguments(sub_audit, default_profile=default_profile)
 
+    # ──────────────────────────────────────────────────────────────────────────────
+    # Команды для сетевого сканирования и удалённого аудита
+    # ──────────────────────────────────────────────────────────────────────────────
+    
+    sub_scan = subs.add_parser("scan", help="Сканирование сети для обнаружения хостов")
+    sub_scan.add_argument(
+        "--network",
+        "--networks",
+        dest="networks",
+        required=True,
+        help="Сеть или список сетей через запятую (например: 192.168.1.0/24,10.0.0.0/24)",
+    )
+    sub_scan.add_argument(
+        "--ssh-ports",
+        default="22",
+        help="SSH порты для проверки через запятую (по умолчанию: 22)",
+    )
+    sub_scan.add_argument(
+        "--timeout",
+        type=int,
+        default=2,
+        help="Таймаут для каждого хоста в секундах (по умолчанию: 2)",
+    )
+    sub_scan.add_argument(
+        "--workers",
+        type=int,
+        default=50,
+        help="Количество параллельных workers (по умолчанию: 50)",
+    )
+    sub_scan.add_argument(
+        "--ping-method",
+        choices=["tcp", "icmp", "both"],
+        default="tcp",
+        help="Метод проверки доступности (по умолчанию: tcp)",
+    )
+    sub_scan.add_argument(
+        "--no-resolve",
+        action="store_true",
+        help="Не резолвить hostname'ы",
+    )
+    sub_scan.add_argument(
+        "--no-detect-os",
+        action="store_true",
+        help="Не определять ОС по SSH баннеру",
+    )
+    sub_scan.add_argument(
+        "--filter-os",
+        help="Фильтр по ОС (например: ubuntu,debian)",
+    )
+    sub_scan.add_argument(
+        "-o", "--output",
+        required=True,
+        help="Путь к выходному файлу (JSON или YAML)",
+    )
+
+    sub_inventory = subs.add_parser("inventory", help="Управление инвентори хостов")
+    inv_subs = sub_inventory.add_subparsers(dest="inventory_command", required=True, help="Операции с инвентори")
+    
+    # inventory create
+    inv_create = inv_subs.add_parser("create", help="Создать инвентори из результатов сканирования")
+    inv_create.add_argument(
+        "--from-scan",
+        required=True,
+        help="Путь к файлу с результатами сканирования (JSON)",
+    )
+    inv_create.add_argument(
+        "-o", "--output",
+        required=True,
+        help="Путь к выходному файлу инвентори (YAML)",
+    )
+    inv_create.add_argument(
+        "--auto-group",
+        action="store_true",
+        help="Автоматически группировать хосты по подсетям",
+    )
+    inv_create.add_argument(
+        "--default-group",
+        default="discovered",
+        help="Имя группы по умолчанию (по умолчанию: discovered)",
+    )
+    inv_create.add_argument(
+        "--ssh-user",
+        default="root",
+        help="SSH пользователь по умолчанию (по умолчанию: root)",
+    )
+    inv_create.add_argument(
+        "--ssh-key",
+        help="Путь к SSH ключу по умолчанию",
+    )
+    inv_create.add_argument(
+        "--profile",
+        help="Профиль аудита по умолчанию",
+    )
+    
+    # inventory add-host
+    inv_add = inv_subs.add_parser("add-host", help="Добавить хост в инвентори")
+    inv_add.add_argument(
+        "--inventory",
+        required=True,
+        help="Путь к файлу инвентори",
+    )
+    inv_add.add_argument(
+        "--ip",
+        required=True,
+        help="IP адрес хоста",
+    )
+    inv_add.add_argument(
+        "--hostname",
+        help="Hostname хоста",
+    )
+    inv_add.add_argument(
+        "--group",
+        default="default",
+        help="Группа хоста (по умолчанию: default)",
+    )
+    inv_add.add_argument(
+        "--ssh-port",
+        type=int,
+        default=22,
+        help="SSH порт (по умолчанию: 22)",
+    )
+    inv_add.add_argument(
+        "--ssh-user",
+        default="root",
+        help="SSH пользователь (по умолчанию: root)",
+    )
+    inv_add.add_argument(
+        "--ssh-key",
+        help="Путь к SSH ключу",
+    )
+    inv_add.add_argument(
+        "--profile",
+        help="Профиль аудита",
+    )
+    inv_add.add_argument(
+        "--tags",
+        help="Теги через запятую",
+    )
+    
+    # inventory list
+    inv_list = inv_subs.add_parser("list", help="Показать хосты из инвентори")
+    inv_list.add_argument(
+        "--inventory",
+        required=True,
+        help="Путь к файлу инвентори",
+    )
+    inv_list.add_argument(
+        "--group",
+        help="Фильтр по группе",
+    )
+    inv_list.add_argument(
+        "--tags",
+        help="Фильтр по тегам через запятую",
+    )
+    inv_list.add_argument(
+        "--os",
+        help="Фильтр по ОС",
+    )
+    inv_list.add_argument(
+        "-v", "--verbose",
+        action="store_true",
+        help="Подробный вывод",
+    )
+    
+    # inventory update
+    inv_update = inv_subs.add_parser("update", help="Обновить инвентори из сканирования")
+    inv_update.add_argument(
+        "--inventory",
+        required=True,
+        help="Путь к файлу инвентори",
+    )
+    inv_update.add_argument(
+        "--scan",
+        action="store_true",
+        help="Выполнить новое сканирование",
+    )
+    inv_update.add_argument(
+        "--networks",
+        help="Сети для сканирования через запятую",
+    )
+
+    # audit-remote
+    sub_audit_remote = subs.add_parser("audit-remote", help="Удалённый запуск аудита на хостах")
+    sub_audit_remote.add_argument(
+        "--inventory",
+        required=True,
+        help="Путь к файлу инвентори",
+    )
+    sub_audit_remote.add_argument(
+        "--output-dir",
+        default="results/remote",
+        help="Директория для сохранения результатов (по умолчанию: results/remote)",
+    )
+    sub_audit_remote.add_argument(
+        "--workers",
+        type=int,
+        default=10,
+        help="Количество параллельных workers (по умолчанию: 10)",
+    )
+    sub_audit_remote.add_argument(
+        "--profile",
+        help="Профиль аудита (переопределяет профили из инвентори)",
+    )
+    sub_audit_remote.add_argument(
+        "--level",
+        choices=["baseline", "strict", "paranoid"],
+        default="baseline",
+        help="Уровень строгости (по умолчанию: baseline)",
+    )
+    sub_audit_remote.add_argument(
+        "--fail-level",
+        choices=["none", "low", "medium", "high"],
+        default="none",
+        help="Порог неуспеха (по умолчанию: none)",
+    )
+    sub_audit_remote.add_argument(
+        "--evidence",
+        action="store_true",
+        help="Собирать evidence (улики)",
+    )
+    sub_audit_remote.add_argument(
+        "--group",
+        help="Фильтр по группе хостов",
+    )
+    sub_audit_remote.add_argument(
+        "--tags",
+        help="Фильтр по тегам через запятую",
+    )
+    sub_audit_remote.add_argument(
+        "--os",
+        dest="os_filter",
+        help="Фильтр по ОС",
+    )
+    sub_audit_remote.add_argument(
+        "--timeout",
+        type=int,
+        default=300,
+        help="Таймаут выполнения на одном хосте в секундах (по умолчанию: 300)",
+    )
+
     args = parser.parse_args(argv)
     profile_from_position = getattr(args, "profile_path", None)
     if profile_from_position is not None:
