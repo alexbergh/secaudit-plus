@@ -202,7 +202,7 @@ However, **SecAudit+ itself is not certified or accredited** for any specific co
 ## Contact
 
 For security concerns, contact:
-- **Email**: security@alexbergh.com
+- **Email**: git.upstate674@passinbox.com
 - **GitHub Security Advisories**: https://github.com/alexbergh/secaudit-plus/security/advisories
 - **PGP Key**: Available on request
 - **Response Time**: Within 48 hours (business days)

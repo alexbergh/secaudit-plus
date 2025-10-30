@@ -14,10 +14,18 @@ WORKDIR /build
 
 # Copy dependency files
 COPY requirements.txt pyproject.toml ./
+COPY requirements.lock* ./
 
 # Install Python dependencies
-RUN pip install --no-cache-dir --upgrade pip setuptools wheel && \
-    pip install --no-cache-dir -r requirements.txt
+# Use requirements.lock with hashes for security if available, fallback to requirements.txt
+RUN pip install --no-cache-dir --upgrade pip && \
+    if [ -f requirements.lock ]; then \
+        echo "Installing from requirements.lock with hash verification..."; \
+        pip install --no-cache-dir --require-hashes -r requirements.lock; \
+    else \
+        echo "Installing from requirements.txt (no hash verification)..."; \
+        pip install --no-cache-dir -r requirements.txt; \
+    fi
 
 # Production stage
 FROM python:3.12-slim

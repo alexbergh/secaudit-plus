@@ -291,6 +291,19 @@ def parse_args(argv: List[str] | None = None) -> argparse.Namespace:
         help="Сохранить результат сравнения в JSON-файл",
     )
 
+    sub_health = subs.add_parser("health", help="Проверка здоровья системы (для K8s probes)")
+    sub_health.add_argument(
+        "--type",
+        choices=["liveness", "readiness"],
+        default="liveness",
+        help="Тип проверки: liveness (живость) или readiness (готовность)",
+    )
+    sub_health.add_argument(
+        "--json",
+        action="store_true",
+        help="Вывод в JSON формате (для автоматизации)",
+    )
+
     sub_val = subs.add_parser("validate", help="Проверить профиль на ошибки")
     sub_val.add_argument(
         "--strict",

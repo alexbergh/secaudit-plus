@@ -122,6 +122,19 @@ def main():
         _print_project_info()
         return
 
+    # Health check command (doesn't require profile)
+    if args.command == "health":
+        try:
+            from secaudit.health import health_check_handler, print_health_status
+            if getattr(args, "json", False):
+                exit_code = health_check_handler(getattr(args, "type", "liveness"))
+            else:
+                exit_code = print_health_status()
+            sys.exit(exit_code)
+        except ImportError:
+            log_fail("Health check module not available")
+            sys.exit(1)
+
     # Определяем профиль
     try:
         profile_path = _resolve_profile_path(getattr(args, "profile", None))

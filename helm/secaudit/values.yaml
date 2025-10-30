@@ -25,12 +25,22 @@ podSecurityContext:
   fsGroup: 0
 
 securityContext:
-  privileged: true
+  # Security: Use minimal capabilities instead of privileged mode
+  # CIS Kubernetes Benchmark 5.2.5: Minimize the admission of privileged containers
+  privileged: false
+  allowPrivilegeEscalation: false
   capabilities:
+    drop:
+      - ALL
     add:
-      - SYS_ADMIN
-      - NET_ADMIN
+      - SYS_ADMIN          # Required for mount operations and system inspection
+      - SYS_PTRACE         # Required for process inspection
+      - DAC_READ_SEARCH    # Required for reading protected files
+      - AUDIT_READ         # Required for audit log access
+      - NET_ADMIN          # Required for network configuration checks
   readOnlyRootFilesystem: false
+  seccompProfile:
+    type: RuntimeDefault
 
 service:
   type: ClusterIP
@@ -60,6 +70,19 @@ autoscaling:
   minReplicas: 1
   maxReplicas: 10
   targetCPUUtilizationPercentage: 80
+
+healthCheck:
+  enabled: true
+  liveness:
+    initialDelaySeconds: 30
+    periodSeconds: 10
+    timeoutSeconds: 5
+    failureThreshold: 3
+  readiness:
+    initialDelaySeconds: 10
+    periodSeconds: 5
+    timeoutSeconds: 3
+    failureThreshold: 3
 
 nodeSelector: {}
 
@@ -249,18 +272,53 @@ tls:
     clientCA: ""
 
 externalSecrets:
-  enabled: false
+  # SECURITY RECOMMENDATION: Enable External Secrets for production!
+  # External Secrets Operator must be installed in the cluster first:
+  # helm repo add external-secrets https://charts.external-secrets.io
+  # helm install external-secrets external-secrets/external-secrets \
+  #   -n external-secrets-system --create-namespace
+  enabled: false  # Set to true for production
+  
   # External Secrets Operator integration
   secretStore: vault-backend
   secretStoreKind: SecretStore
   refreshInterval: 1h
-  data: []
-  # - secretKey: gpg-passphrase
-  #   remoteKey: secaudit/gpg
-  #   property: passphrase
-  # - secretKey: jwt-secret
-  #   remoteKey: secaudit/auth
-  #   property: jwt_secret
+  
+  # Example configuration for common secrets:
+  data:
+    - secretKey: gpg-passphrase
+      remoteKey: secaudit/gpg
+      property: passphrase
+    - secretKey: jwt-secret
+      remoteKey: secaudit/auth
+      property: jwt_secret
+    - secretKey: aes-encryption-key
+      remoteKey: secaudit/encryption
+      property: aes_key
+  
+  # For AWS Secrets Manager:
+  # secretStore: aws-secrets-manager
+  # secretStoreKind: ClusterSecretStore
+  # data:
+  #   - secretKey: gpg-passphrase
+  #     remoteRef:
+  #       key: prod/secaudit/gpg-passphrase
+  
+  # For Azure Key Vault:
+  # secretStore: azure-keyvault
+  # secretStoreKind: ClusterSecretStore
+  # data:
+  #   - secretKey: gpg-passphrase
+  #     remoteRef:
+  #       key: secaudit-gpg-passphrase
+  
+  # For Google Secret Manager:
+  # secretStore: gcpsm-secret-store
+  # secretStoreKind: ClusterSecretStore
+  # data:
+  #   - secretKey: gpg-passphrase
+  #     remoteRef:
+  #       key: projects/PROJECT_ID/secrets/secaudit-gpg-passphrase
 
 vault:
   enabled: false
