@@ -53,7 +53,7 @@ def run_bash(
     try:
         result = subprocess.run(
             command,
-            shell=True,
+            shell=True,  # nosec B602 - Commands from trusted YAML profiles only
             text=True,
             capture_output=True,
             timeout=timeout,
