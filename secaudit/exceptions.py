@@ -32,4 +32,3 @@ class MissingDependencyError(RuntimeError):
             message += " Установите требуемый пакет и повторите попытку."
 
         super().__init__(message)
-

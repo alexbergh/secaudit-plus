@@ -118,8 +118,8 @@ def check_readiness() -> Dict[str, Any]:
     
     # Check critical dependencies
     try:
-        import yaml
-        import jinja2
+        import yaml  # noqa: F401
+        import jinja2  # noqa: F401
         readiness["checks"]["dependencies"] = {
             "status": "pass",
             "message": "All critical dependencies loaded"
@@ -158,11 +158,12 @@ def print_health_status():
     """Print health status in human-readable format."""
     health = check_system_health()
     
-    print(f"\n🏥 SecAudit+ Health Check")
-    print(f"{'='*50}")
-    print(f"Status: {'✅ HEALTHY' if health['status'] == 'healthy' else '❌ UNHEALTHY'}")
+    print("\n🏥 SecAudit+ Health Check")
+    print("="*50)
+    status_emoji = '✅ HEALTHY' if health['status'] == 'healthy' else '❌ UNHEALTHY'
+    print(f"Status: {status_emoji}")
     print(f"Timestamp: {health['timestamp']}")
-    print(f"\nChecks:")
+    print("\nChecks:")
     
     for check_name, check_data in health["checks"].items():
         status_icon = "✅" if check_data["status"] == "pass" else "❌"

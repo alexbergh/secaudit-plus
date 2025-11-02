@@ -118,6 +118,7 @@ def test_generate_junit_report(tmp_path):
     assert system_out is not None
     assert "chronyd enabled" in system_out.text
 
+
 def test_generate_prometheus_and_elastic_exports(tmp_path):
     prom = tmp_path / "metrics.prom"
     generate_prometheus_metrics(

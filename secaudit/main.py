@@ -83,7 +83,7 @@ def _apply_exit_policy(results: list[dict], fail_level: str, fail_on_undef: bool
     Если ни одно условие не выполнено → 0
     """
     level_weight = {"none": -1, "low": 0, "medium": 1, "high": 2}
-    sev_weight   = {"low": 0, "medium": 1, "high": 2}
+    sev_weight = {"low": 0, "medium": 1, "high": 2}
 
     exit_code = 0
 
@@ -595,12 +595,24 @@ def main():
         # Параллельная генерация отчетов
         log_info("Генерация отчетов...")
         report_tasks = [
-            (generate_report, (profile, results, "report_template.md.j2", Path("results/report.md")), {"host_info": host_info, "summary": summary}),
-            (generate_report, (profile, results, "report_template.html.j2", html_report_path), {"host_info": host_info, "summary": summary}),
-            (generate_sarif_report, (profile, results, Path("results/report.sarif")), {"summary": summary, "host_info": host_info}),
-            (generate_junit_report, (profile, results, Path("results/report.junit.xml")), {"summary": summary, "host_info": host_info}),
-            (generate_prometheus_metrics, (profile, results, Path("results/report.prom")), {"summary": summary, "host_info": host_info}),
-            (generate_elastic_export, (profile, results, Path("results/report.elastic.ndjson")), {"summary": summary, "host_info": host_info}),
+            (generate_report, (profile, results, "report_template.md.j2",
+                               Path("results/report.md")),
+             {"host_info": host_info, "summary": summary}),
+            (generate_report, (profile, results, "report_template.html.j2",
+                               html_report_path),
+             {"host_info": host_info, "summary": summary}),
+            (generate_sarif_report, (profile, results,
+                                     Path("results/report.sarif")),
+             {"summary": summary, "host_info": host_info}),
+            (generate_junit_report, (profile, results,
+                                     Path("results/report.junit.xml")),
+             {"summary": summary, "host_info": host_info}),
+            (generate_prometheus_metrics, (profile, results,
+                                           Path("results/report.prom")),
+             {"summary": summary, "host_info": host_info}),
+            (generate_elastic_export, (profile, results,
+                                       Path("results/report.elastic.ndjson")),
+             {"summary": summary, "host_info": host_info}),
         ]
 
         with ThreadPoolExecutor(max_workers=len(report_tasks)) as executor:

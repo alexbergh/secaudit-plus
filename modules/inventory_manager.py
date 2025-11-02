@@ -9,9 +9,9 @@ from __future__ import annotations
 import time
 from dataclasses import dataclass, field, asdict
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Set
+from typing import Dict, List, Any, Optional
 
-from utils.logger import log_info, log_warn, log_fail
+from utils.logger import log_info, log_error, log_fail
 
 
 @dataclass

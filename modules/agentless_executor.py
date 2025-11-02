@@ -397,7 +397,7 @@ class AgentlessExecutor:
                 shell=False
             )
             return result.returncode == 0
-        except:
+        except Exception:
             return False
     
     def _evaluate_check_result(
@@ -430,26 +430,31 @@ class AgentlessExecutor:
                 if output == expect:
                     return "PASS", f"exact match '{expect}'", [{"type": "exact", "value": expect, "status": "PASS"}]
                 else:
-                    return "FAIL", f"got '{output}' != expect '{expect}'", [{"type": "exact", "value": expect, "status": "FAIL"}]
+                    return ("FAIL", f"got '{output}' != expect '{expect}'",
+                            [{"type": "exact", "value": expect, "status": "FAIL"}])
             
             elif assert_type == "contains":
                 if expect in output:
                     return "PASS", f"contains '{expect}'", [{"type": "contains", "value": expect, "status": "PASS"}]
                 else:
-                    return "FAIL", f"'{expect}' not found in output", [{"type": "contains", "value": expect, "status": "FAIL"}]
+                    return ("FAIL", f"'{expect}' not found in output",
+                            [{"type": "contains", "value": expect, "status": "FAIL"}])
             
             elif assert_type == "not_contains":
                 if expect not in output:
-                    return "PASS", f"does not contain '{expect}'", [{"type": "not_contains", "value": expect, "status": "PASS"}]
+                    return ("PASS", f"does not contain '{expect}'",
+                            [{"type": "not_contains", "value": expect, "status": "PASS"}])
                 else:
-                    return "FAIL", f"'{expect}' unexpectedly found", [{"type": "not_contains", "value": expect, "status": "FAIL"}]
+                    return ("FAIL", f"'{expect}' unexpectedly found",
+                            [{"type": "not_contains", "value": expect, "status": "FAIL"}])
             
             elif assert_type == "rc":
                 expected_rc = int(expect)
                 if rc == expected_rc:
                     return "PASS", f"rc={rc} as expected", [{"type": "rc", "value": expect, "status": "PASS"}]
                 else:
-                    return "FAIL", f"rc={rc}, expected {expected_rc}", [{"type": "rc", "value": expect, "status": "FAIL"}]
+                    return ("FAIL", f"rc={rc}, expected {expected_rc}",
+                            [{"type": "rc", "value": expect, "status": "FAIL"}])
             
             else:
                 # Если нет expect, считаем PASS если rc==0

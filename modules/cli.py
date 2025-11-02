@@ -183,7 +183,6 @@ def validate_profile(profile: Dict[str, Any]) -> Tuple[bool, List[str]]:
     if not isinstance(checks, list):
         errors.append("Поле 'checks' должно быть массивом.")
 
-
     # Если jsonschema доступен — используем полную схему
     if _HAS_JSONSCHEMA and js_validate and JSValidationError:
         try:

@@ -6,7 +6,6 @@ from importlib import metadata as importlib_metadata
 import json
 import platform
 import socket
-import os
 from collections import defaultdict
 from collections.abc import Mapping, Sequence
 from typing import Any, Dict, List
@@ -484,7 +483,8 @@ def _detect_local_ips():
     return seen
 
 
-def collect_host_metadata(profile: dict | None = None, results: list | None = None, summary: dict | None = None) -> dict:
+def collect_host_metadata(profile: dict | None = None, results: list | None = None,
+                          summary: dict | None = None) -> dict:
     """
     Collect host metadata for reports.
     
@@ -585,6 +585,7 @@ def generate_report(
     Path(output_path).parent.mkdir(parents=True, exist_ok=True)
     with open(output_path, "w", encoding="utf-8") as f:
         f.write(rendered)
+
 
 def generate_json_report(results: list, output_path: str, summary: dict | None = None):
     grouped = defaultdict(list)

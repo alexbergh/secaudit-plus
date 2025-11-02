@@ -13,8 +13,13 @@ from copy import deepcopy
 from dataclasses import dataclass, field, replace
 from pathlib import Path
 from typing import Any, Dict, List, Tuple, Optional, Iterable
+from json import JSONDecodeError
+from packaging import version
 
 from secaudit.exceptions import MissingDependencyError
+from modules.bash_executor import run_bash, CommandError
+from modules.os_detect import read_os_release
+from seclib.validator import severity_rank
 
 
 @dataclass
@@ -1046,6 +1051,7 @@ def _make_snippet(text: str, *, max_lines: int = 10, max_chars: int = 800) -> st
             snippet = snippet.rstrip("\n") + "\n…"
     return snippet
 
+
 try:
     import yaml  # type: ignore
 except ModuleNotFoundError as exc:  # pragma: no cover - runtime guard
@@ -1053,12 +1059,6 @@ except ModuleNotFoundError as exc:  # pragma: no cover - runtime guard
     _YAML_IMPORT_ERROR = exc
 else:  # pragma: no cover - exercised indirectly
     _YAML_IMPORT_ERROR = None
-from json import JSONDecodeError
-from packaging import version
-
-from modules.bash_executor import run_bash, CommandError  # <= используем мягкий исполнитель
-from modules.os_detect import read_os_release
-from seclib.validator import severity_rank
 
 
 # ───────────────────────── Загрузка профиля ─────────────────────────
@@ -1575,9 +1575,6 @@ def _apply_assert(stdout: str, rc: int, expect: Any, assert_type: str, rc_ok: Tu
     result: PASS|FAIL по проверке (до обработки таймаута в _execute_check)
     reason: краткое пояснение
     """
-
-    out = stdout.strip()
-
     if rc not in rc_ok:
         return "FAIL", f"rc={rc} not in {rc_ok}"
     dummy_context = ExecutionContext(

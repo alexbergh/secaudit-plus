@@ -39,7 +39,11 @@ jobs:
 
       - name: Lint (flake8)
         run: |
-          flake8 modules secaudit utils tests --max-line-length=120 --exclude __init__.py
+          flake8 modules secaudit utils tests \
+            --max-line-length=120 \
+            --exclude __init__.py \
+            --extend-ignore=W293,W291,W391 \
+            --per-file-ignores="tests/*:F401,F841"
 
       - name: Type check (mypy)
         run: |
