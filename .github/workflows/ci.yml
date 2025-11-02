@@ -35,7 +35,7 @@ jobs:
         run: |
           python -m pip install --upgrade pip
           pip install -r requirements.txt
-          pip install build pytest-cov bandit safety types-PyYAML
+          pip install build pytest-cov bandit safety types-PyYAML defusedxml
 
       - name: Lint (flake8)
         run: |
