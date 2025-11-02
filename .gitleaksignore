@@ -5,4 +5,5 @@ tests/fixtures/
 docs/examples/
 
 # Known false positives
-# Add specific patterns here if needed
+# Test API keys (not real secrets)
+tests/test_security.py:sk-1234567890abcdef

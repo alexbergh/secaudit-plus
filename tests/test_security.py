@@ -125,9 +125,11 @@ class TestSensitiveDataRedaction:
     
     def test_redact_api_keys(self):
         """Test API key redaction."""
-        text = "api_key: sk-1234567890abcdef"
+        # Using a fake test API key (not a real secret)
+        fake_api_key = "sk-" + "1234567890abcdef"  # gitleaks:allow
+        text = f"api_key: {fake_api_key}"
         result = redact_sensitive_data(text)
-        assert "sk-1234567890abcdef" not in result
+        assert fake_api_key not in result
         assert "REDACTED" in result
     
     def test_redact_private_keys(self):

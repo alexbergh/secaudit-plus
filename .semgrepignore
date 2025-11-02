@@ -1,27 +1,40 @@
 # Semgrep ignore patterns
 
-# Test files
+# Test files (contain intentional security test cases)
 tests/
 test_*.py
+*_test.py
 
 # Virtual environments
 venv/
 .venv/
 env/
+*.virtualenv/
 
 # Build artifacts
 dist/
 build/
 *.egg-info/
+*.whl
+*.tar.gz
 
-# Cache
+# Cache directories
 __pycache__/
 .pytest_cache/
 .mypy_cache/
+.ruff_cache/
+.coverage
 
 # Documentation
 docs/
+*.md
 
-# Examples
+# Examples and fixtures
 examples/
 docs/examples/
+fixtures/
+test_fixtures/
+
+# Configuration that may contain test patterns
+*.example.*
+.env.example
