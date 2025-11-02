@@ -490,12 +490,14 @@ class AgentlessExecutor:
     
     def _generate_summary_report(self):
         """Генерирует сводный отчёт по всем хостам."""
+        successful_count = sum(1 for r in self.results if r.success)
+        total_score = sum(r.score for r in self.results if r.success)
         summary_data = {
             "audit_time": time.strftime("%Y-%m-%d %H:%M:%S"),
             "total_hosts": len(self.results),
-            "successful": sum(1 for r in self.results if r.success),
+            "successful": successful_count,
             "failed": sum(1 for r in self.results if not r.success),
-            "average_score": sum(r.score for r in self.results if r.success) / max(sum(1 for r in self.results if r.success), 1),
+            "average_score": total_score / max(successful_count, 1),
             "hosts": [r.to_dict() for r in self.results]
         }
         

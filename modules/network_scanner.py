@@ -12,8 +12,9 @@ import threading
 import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from dataclasses import dataclass, field
-from ipaddress import IPv4Address, IPv4Network, ip_network
-from typing import Any, Dict, List, Optional, Set, Tuple
+from ipaddress import ip_network
+from pathlib import Path
+from typing import Any, Dict, List, Optional, Set
 
 from utils.logger import log_info, log_warn, log_fail
 

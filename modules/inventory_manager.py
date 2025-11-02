@@ -11,7 +11,7 @@ from dataclasses import dataclass, field, asdict
 from pathlib import Path
 from typing import Dict, List, Any, Optional
 
-from utils.logger import log_info, log_error, log_fail
+from utils.logger import log_info, log_fail
 
 
 @dataclass
