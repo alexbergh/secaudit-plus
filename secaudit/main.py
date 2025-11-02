@@ -106,7 +106,7 @@ def _print_project_info() -> None:
     print("Alex Hellberg")
     print("https://github.com/alexbergh/secaudit-core")
     print("2025")
-    print("Проект распространяется под лицензией GPL-3.0")
+    print("Проект распространяется под лицензией Apache-2.0")
 
 
 def main():
