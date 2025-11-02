@@ -1053,7 +1053,7 @@ def _make_snippet(text: str, *, max_lines: int = 10, max_chars: int = 800) -> st
 
 
 try:
-    import yaml  # type: ignore
+    import yaml
 except ModuleNotFoundError as exc:  # pragma: no cover - runtime guard
     yaml = None  # type: ignore
     _YAML_IMPORT_ERROR = exc

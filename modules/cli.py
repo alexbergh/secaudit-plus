@@ -11,7 +11,7 @@ from secaudit.exceptions import MissingDependencyError
 # Проверка критичных зависимостей при импорте
 # ──────────────────────────────────────────────────────────────────────────────
 try:
-    import yaml  # type: ignore
+    import yaml
 except ModuleNotFoundError as exc:  # pragma: no cover - runtime guard
     yaml = None  # type: ignore
     _YAML_IMPORT_ERROR = exc
@@ -23,7 +23,7 @@ try:
     _HAS_JSONSCHEMA = True
 except Exception:
     js_validate = None  # type: ignore
-    JSValidationError = None  # type: ignore
+    JSValidationError = None
     _HAS_JSONSCHEMA = False
 
 from seclib.validator import PROFILE_SCHEMA as STRICT_PROFILE_SCHEMA
@@ -161,7 +161,7 @@ def load_profile_file(path: str) -> Dict[str, Any]:
         sys.exit(2)
     try:
         return yaml.safe_load(p.read_text(encoding="utf-8")) or {}  # type: ignore[union-attr]
-    except yaml.YAMLError as e:  # type: ignore[union-attr]
+    except yaml.YAMLError as e:
         print(f"Ошибка: Не удалось прочитать YAML: {e}", file=sys.stderr)
         sys.exit(2)
 
@@ -187,7 +187,7 @@ def validate_profile(profile: Dict[str, Any]) -> Tuple[bool, List[str]]:
     if _HAS_JSONSCHEMA and js_validate and JSValidationError:
         try:
             js_validate(instance=profile, schema=_PROFILE_SCHEMA)
-        except JSValidationError as e:  # type: ignore
+        except JSValidationError as e:
             # Разворачиваем путь для понятной трассировки
             path = " -> ".join(str(p) for p in e.path) if e.path else "<root>"
             errors.append(f"{path}: {e.message}")

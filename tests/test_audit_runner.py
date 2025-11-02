@@ -225,7 +225,7 @@ def test_run_checks_extends_and_variables(tmp_path: Path):
 def test_run_checks_fact_caching(monkeypatch):
     calls = []
 
-    def fake_run_bash(command: str, timeout: int, rc_ok):  # type: ignore[override]
+    def fake_run_bash(command: str, timeout: int, rc_ok):
         calls.append(command)
 
         class _Result:
