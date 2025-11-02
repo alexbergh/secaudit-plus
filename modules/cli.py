@@ -13,7 +13,7 @@ from secaudit.exceptions import MissingDependencyError
 try:
     import yaml
 except ModuleNotFoundError as exc:  # pragma: no cover - runtime guard
-    yaml = None  # type: ignore
+    yaml = None  # type: ignore[assignment]
     _YAML_IMPORT_ERROR = exc
 else:  # pragma: no cover - exercised indirectly
     _YAML_IMPORT_ERROR = None
@@ -22,7 +22,7 @@ try:
     from jsonschema.exceptions import ValidationError as JSValidationError
     _HAS_JSONSCHEMA = True
 except Exception:
-    js_validate = None  # type: ignore
+    js_validate = None
     JSValidationError = None
     _HAS_JSONSCHEMA = False
 
@@ -160,7 +160,7 @@ def load_profile_file(path: str) -> Dict[str, Any]:
         print(f"Ошибка: Файл профиля не найден: {path}", file=sys.stderr)
         sys.exit(2)
     try:
-        return yaml.safe_load(p.read_text(encoding="utf-8")) or {}  # type: ignore[union-attr]
+        return yaml.safe_load(p.read_text(encoding="utf-8")) or {}
     except yaml.YAMLError as e:
         print(f"Ошибка: Не удалось прочитать YAML: {e}", file=sys.stderr)
         sys.exit(2)

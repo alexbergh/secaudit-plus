@@ -1055,7 +1055,7 @@ def _make_snippet(text: str, *, max_lines: int = 10, max_chars: int = 800) -> st
 try:
     import yaml
 except ModuleNotFoundError as exc:  # pragma: no cover - runtime guard
-    yaml = None  # type: ignore
+    yaml = None  # type: ignore[assignment]
     _YAML_IMPORT_ERROR = exc
 else:  # pragma: no cover - exercised indirectly
     _YAML_IMPORT_ERROR = None
@@ -1075,7 +1075,7 @@ def load_profile(path: str | Path) -> Dict[str, Any]:
             original=_YAML_IMPORT_ERROR,
         )
     with p.open("r", encoding="utf-8") as f:
-        data = yaml.safe_load(f) or {}  # type: ignore[union-attr]
+        data = yaml.safe_load(f) or {}
     # Минимальная нормализация
     data.setdefault("profile_name", str(p.stem))
     data.setdefault("description", "")

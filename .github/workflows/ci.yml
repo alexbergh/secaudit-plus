@@ -47,13 +47,7 @@ jobs:
 
       - name: Type check (mypy)
         run: |
-          mypy modules secaudit utils tests \
-            --ignore-missing-imports \
-            --no-strict-optional \
-            --allow-untyped-calls \
-            --allow-untyped-defs \
-            --allow-incomplete-defs \
-            --no-warn-return-any
+          mypy modules secaudit seclib utils
 
       - name: Lint YAML
         run: |
