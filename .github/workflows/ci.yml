@@ -51,7 +51,7 @@ jobs:
 
       - name: Lint YAML
         run: |
-          yamllint profiles .github/workflows
+          yamllint .github/workflows
 
       - name: Security scan (Bandit)
         run: |
