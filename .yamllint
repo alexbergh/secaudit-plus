@@ -3,7 +3,7 @@ extends: default
 
 rules:
   line-length:
-    max: 120
+    max: 180
     level: warning
   
   document-start:
@@ -13,10 +13,20 @@ rules:
     allowed-values: ['true', 'false', 'on', 'off']
   
   indentation:
-    spaces: 2
-    indent-sequences: true
+    spaces: consistent
+    indent-sequences: consistent
   
   trailing-spaces: enable
   
   comments:
     min-spaces-from-content: 1
+  
+  commas:
+    max-spaces-before: 0
+    min-spaces-after: 1
+    max-spaces-after: -1
+
+ignore: |
+  profiles/
+  test_results/
+  test_results_agentless/
