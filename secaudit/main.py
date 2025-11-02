@@ -446,6 +446,74 @@ def main():
             traceback.print_exc()
             sys.exit(1)
     
+    # Команда audit-agentless — agentless аудит (рекомендуется)
+    if args.command == "audit-agentless":
+        from modules.inventory_manager import load_inventory
+        from modules.agentless_executor import execute_agentless_audit
+        
+        try:
+            # Загружаем инвентори
+            inventory = load_inventory(Path(args.inventory))
+            log_info(f"[Agentless] Загружен инвентори с {inventory.get_host_count()} хостами")
+            
+            # Парсим теги если указаны
+            tags = [t.strip() for t in args.tags.split(",")] if args.tags else None
+            
+            # Выполняем agentless аудит
+            results = execute_agentless_audit(
+                inventory=inventory,
+                output_dir=Path(args.output_dir),
+                profile_path=args.profile,
+                level=args.level,
+                workers=args.workers,
+                timeout=args.timeout,
+                group=args.group,
+                tags=tags,
+                os_filter=args.os_filter,
+            )
+            
+            # Выводим сводку
+            successful = sum(1 for r in results if r.success)
+            failed = len(results) - successful
+            avg_score = sum(r.score for r in results if r.success) / max(successful, 1)
+            
+            print("\n" + "="*60)
+            print("СВОДКА AGENTLESS АУДИТА")
+            print("="*60)
+            print(f"Всего хостов: {len(results)}")
+            print(f"Успешно: {successful}")
+            print(f"С ошибками: {failed}")
+            print(f"Средний security score: {avg_score:.1f}/100")
+            print("="*60)
+            
+            # Детализация по хостам
+            print("\nРезультаты по хостам:")
+            print(f"{'Хост':<30} {'Score':<10} {'Pass/Fail/Undef':<20} {'Status':<10}")
+            print("-" * 80)
+            for r in results:
+                if r.success:
+                    status = "✓ OK"
+                    stats = f"{r.checks_pass}/{r.checks_fail}/{r.checks_undef}"
+                else:
+                    status = "✗ ERROR"
+                    stats = "-"
+                print(f"{r.host:<30} {r.score:>6.1f}/100  {stats:<20} {status:<10}")
+            
+            print("\nОтчёты сохранены в:", args.output_dir)
+            print("="*60 + "\n")
+            
+            # Код возврата
+            if failed > 0:
+                sys.exit(2)
+            
+            return
+            
+        except Exception as exc:
+            log_fail(f"[Agentless] Ошибка аудита: {exc}")
+            import traceback
+            traceback.print_exc()
+            sys.exit(1)
+    
     # Команда audit — полный запуск проверок
     if args.command == "audit":
         if not is_valid:

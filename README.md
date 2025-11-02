@@ -58,7 +58,8 @@ CLI можно запускать и напрямую через интерпр�
 | `secaudit compare <before.json> <after.json> [--fail-only] [--output diff.json]` | Сравнение двух JSON-отчётов с агрегированной статистикой и перечнем регрессий/улучшений. |
 | `secaudit scan --networks <CIDR> -o <file>` | Сканирование сети для обнаружения активных хостов. |
 | `secaudit inventory create/list/add-host/update` | Управление инвентори хостов для удалённого аудита. |
-| `secaudit audit-remote --inventory <file>` | Удалённый запуск аудитов на хостах из инвентори. |
+| `secaudit audit-agentless --inventory <file>` | **Agentless аудит (рекомендуется)** - БЕЗ установки на целевые хосты. |
+| `secaudit audit-remote --inventory <file>` | Удалённый запуск аудитов (требует установки на хостах). |
 
 Глобальные флаги:
 
@@ -403,37 +404,46 @@ secaudit inventory add-host \
 secaudit inventory update --inventory inventory.yml --scan --networks 192.168.1.0/24
 ```
 
-### Удалённый аудит
+### Удалённый аудит (Agentless - рекомендуется)
+
+**Agentless** - выполняет проверки через SSH БЕЗ установки на целевые хосты:
 
 ```bash
-# Запуск аудита на всех хостах из инвентори
-secaudit audit-remote \
+# Запуск агентless аудита (рекомендуется)
+secaudit audit-agentless \
   --inventory inventory.yml \
+  --profile profiles/base/server.yml \
   --output-dir /var/secaudit/reports \
-  --workers 20 \
   --level strict
 
-# Аудит конкретной группы (например, production серверы)
-secaudit audit-remote \
+# Аудит production серверов
+secaudit audit-agentless \
   --inventory inventory.yml \
+  --profile profiles/base/server.yml \
   --group production \
-  --level strict \
-  --fail-level high
-
-# Аудит с фильтрацией по тегам (например, критичные веб-серверы)
-secaudit audit-remote \
-  --inventory inventory.yml \
-  --tags "critical,webserver" \
-  --evidence
-
-# Аудит по типу ОС (например, только Ubuntu серверы)
-secaudit audit-remote \
-  --inventory inventory.yml \
-  --os ubuntu \
   --level paranoid
+
+# Аудит с фильтрацией по тегам
+secaudit audit-agentless \
+  --inventory inventory.yml \
+  --profile profiles/roles/webserver.yml \
+  --tags "critical,webserver" \
+  --workers 20
+
+# Только Ubuntu серверы
+secaudit audit-agentless \
+  --inventory inventory.yml \
+  --profile profiles/base/linux.yml \
+  --os ubuntu
 ```
 
-Подробная документация: [Архитектура сетевого сканирования](docs/NETWORK_SCANNING_ARCHITECTURE.md)
+**Преимущества agentless**:
+- ✅ Не требует установки на целевые хосты
+- ✅ Меньше attack surface
+- ✅ Централизованное управление
+- ✅ Типичный подход для security аудита
+
+Подробная документация: [Agentless аудит](docs/AGENTLESS_AUDIT.md)
 
 ## Дополнительные материалы
 

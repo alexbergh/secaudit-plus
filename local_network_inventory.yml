@@ -1,0 +1,54 @@
+version: '1.0'
+updated: '2025-10-30 20:20:12'
+security:
+  # Используем выделенного пользователя для аудита
+  # НЕ используйте root!
+  audit_user: secaudituser
+groups:
+  linux_servers:
+    vars:
+      # Безопасный подход: выделенный пользователь с минимальными правами
+      ssh_user: secaudituser
+      ssh_key: ~/.ssh/secaudit_key
+    hosts:
+    - hostname: vm-host-1
+      ip: 192.168.1.60
+      ssh_port: 22
+      os: linux
+      tags:
+      - vm
+      - openssh74
+      enabled: true
+    - hostname: vm-debian
+      ip: 192.168.1.122
+      ssh_port: 22
+      os: debian
+      tags:
+      - vm
+      - debian
+      enabled: true
+    - hostname: host-67
+      ip: 192.168.1.67
+      ssh_port: 22
+      tags:
+      - unknown
+      enabled: true
+  
+  network_devices:
+    vars:
+      ssh_user: admin  # Для сетевых устройств используйте admin, не root
+    hosts:
+    - hostname: KEENETIC-1092
+      ip: 192.168.1.1
+      ssh_port: 22
+      tags:
+      - router
+      - keenetic
+      enabled: false  # Отключаем роутер от аудита
+    - hostname: embedded-83
+      ip: 192.168.1.83
+      ssh_port: 22
+      tags:
+      - embedded
+      - dropbear
+      enabled: false  # Отключаем встроенное устройство

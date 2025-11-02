@@ -1,0 +1,54 @@
+{
+  "audit_time": "2025-10-30 20:20:58",
+  "total_hosts": 3,
+  "successful": 0,
+  "failed": 3,
+  "average_score": 0.0,
+  "hosts": [
+    {
+      "host": "host-67",
+      "ip": "192.168.1.67",
+      "success": false,
+      "duration": 1.2814655303955078,
+      "summary": {
+        "total": 0,
+        "pass": 0,
+        "fail": 0,
+        "undef": 0,
+        "score": 0.0
+      },
+      "results": [],
+      "error": "SSH подключение недоступно"
+    },
+    {
+      "host": "vm-host-1",
+      "ip": "192.168.1.60",
+      "success": false,
+      "duration": 10.047850370407104,
+      "summary": {
+        "total": 0,
+        "pass": 0,
+        "fail": 0,
+        "undef": 0,
+        "score": 0.0
+      },
+      "results": [],
+      "error": "SSH подключение недоступно"
+    },
+    {
+      "host": "vm-debian",
+      "ip": "192.168.1.122",
+      "success": false,
+      "duration": 10.05712342262268,
+      "summary": {
+        "total": 0,
+        "pass": 0,
+        "fail": 0,
+        "undef": 0,
+        "score": 0.0
+      },
+      "results": [],
+      "error": "SSH подключение недоступно"
+    }
+  ]
+}

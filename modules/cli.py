@@ -593,6 +593,61 @@ def parse_args(argv: List[str] | None = None) -> argparse.Namespace:
         help="Таймаут выполнения на одном хосте в секундах (по умолчанию: 300)",
     )
 
+    # audit-agentless (рекомендуемый подход)
+    sub_audit_agentless = subs.add_parser("audit-agentless", help="Agentless аудит (БЕЗ установки на целевые хосты)")
+    sub_audit_agentless.add_argument(
+        "--inventory",
+        required=True,
+        help="Путь к файлу инвентори",
+    )
+    sub_audit_agentless.add_argument(
+        "--output-dir",
+        default="results/agentless",
+        help="Директория для сохранения результатов (по умолчанию: results/agentless)",
+    )
+    sub_audit_agentless.add_argument(
+        "--profile",
+        required=True,
+        help="Путь к профилю аудита",
+    )
+    sub_audit_agentless.add_argument(
+        "--level",
+        choices=["baseline", "strict", "paranoid"],
+        default="baseline",
+        help="Уровень строгости (по умолчанию: baseline)",
+    )
+    sub_audit_agentless.add_argument(
+        "--workers",
+        type=int,
+        default=10,
+        help="Количество параллельных workers (по умолчанию: 10)",
+    )
+    sub_audit_agentless.add_argument(
+        "--timeout",
+        type=int,
+        default=30,
+        help="Таймаут выполнения одной команды в секундах (по умолчанию: 30)",
+    )
+    sub_audit_agentless.add_argument(
+        "--ssh-timeout",
+        type=int,
+        default=10,
+        help="Таймаут SSH подключения в секундах (по умолчанию: 10)",
+    )
+    sub_audit_agentless.add_argument(
+        "--group",
+        help="Фильтр по группе хостов",
+    )
+    sub_audit_agentless.add_argument(
+        "--tags",
+        help="Фильтр по тегам через запятую",
+    )
+    sub_audit_agentless.add_argument(
+        "--os",
+        dest="os_filter",
+        help="Фильтр по ОС",
+    )
+
     args = parser.parse_args(argv)
     profile_from_position = getattr(args, "profile_path", None)
     if profile_from_position is not None:
