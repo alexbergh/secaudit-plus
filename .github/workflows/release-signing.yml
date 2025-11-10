@@ -81,7 +81,7 @@ jobs:
               --clearsign SHA512SUMS
 
       - name: Upload signed assets to release
-        uses: softprops/action-gh-release@v1
+        uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ github.event.release.tag_name || github.event.inputs.tag }}
           files: |
@@ -134,7 +134,7 @@ jobs:
           cat VERIFY.md
 
       - name: Upload verification instructions
-        uses: softprops/action-gh-release@v1
+        uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ github.event.release.tag_name || github.event.inputs.tag }}
           files: VERIFY.md
