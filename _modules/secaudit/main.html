@@ -1,0 +1,745 @@
+
+
+<!DOCTYPE html>
+<html class="writer-html5" lang="en" data-content_root="../../">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>secaudit.main &mdash; SecAudit+ 1.0.0 Documentation</title>
+      <link rel="stylesheet" type="text/css" href="../../_static/pygments.css?v=b86133f3" />
+      <link rel="stylesheet" type="text/css" href="../../_static/css/theme.css?v=e59714d7" />
+
+  
+      <script src="../../_static/jquery.js?v=5d32c60e"></script>
+      <script src="../../_static/_sphinx_javascript_frameworks_compat.js?v=2cd50e6c"></script>
+      <script src="../../_static/documentation_options.js?v=8d563738"></script>
+      <script src="../../_static/doctools.js?v=9bcbadda"></script>
+      <script src="../../_static/sphinx_highlight.js?v=dc90522c"></script>
+    <script src="../../_static/js/theme.js"></script>
+    <link rel="index" title="Index" href="../../genindex.html" />
+    <link rel="search" title="Search" href="../../search.html" /> 
+</head>
+
+<body class="wy-body-for-nav"> 
+  <div class="wy-grid-for-nav">
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-scroll">
+        <div class="wy-side-nav-search" >
+
+          
+          
+          <a href="../../index.html" class="icon icon-home">
+            SecAudit+
+          </a>
+<div role="search">
+  <form id="rtd-search-form" class="wy-form" action="../../search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" aria-label="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+        </div><div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="Navigation menu">
+              <p class="caption" role="heading"><span class="caption-text">Contents:</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../modules/modules.html">modules</a></li>
+</ul>
+
+        </div>
+      </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap"><nav class="wy-nav-top" aria-label="Mobile navigation menu" >
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="../../index.html">SecAudit+</a>
+      </nav>
+
+      <div class="wy-nav-content">
+        <div class="rst-content">
+          <div role="navigation" aria-label="Page navigation">
+  <ul class="wy-breadcrumbs">
+      <li><a href="../../index.html" class="icon icon-home" aria-label="Home"></a></li>
+          <li class="breadcrumb-item"><a href="../index.html">Module code</a></li>
+      <li class="breadcrumb-item active">secaudit.main</li>
+      <li class="wy-breadcrumbs-aside">
+      </li>
+  </ul>
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+           <div itemprop="articleBody">
+             
+  <h1>Source code for secaudit.main</h1><div class="highlight"><pre>
+<span></span><span class="c1"># secaudit/main.py</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">pathlib</span><span class="w"> </span><span class="kn">import</span> <span class="n">Path</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">datetime</span><span class="w"> </span><span class="kn">import</span> <span class="n">datetime</span>
+<span class="kn">import</span><span class="w"> </span><span class="nn">sys</span>
+<span class="kn">import</span><span class="w"> </span><span class="nn">json</span>
+<span class="kn">import</span><span class="w"> </span><span class="nn">re</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">concurrent.futures</span><span class="w"> </span><span class="kn">import</span> <span class="n">ThreadPoolExecutor</span><span class="p">,</span> <span class="n">as_completed</span>
+
+<span class="kn">from</span><span class="w"> </span><span class="nn">modules.cli</span><span class="w"> </span><span class="kn">import</span> <span class="p">(</span>
+    <span class="n">parse_args</span><span class="p">,</span>
+    <span class="n">list_modules</span><span class="p">,</span>
+    <span class="n">list_checks</span><span class="p">,</span>
+    <span class="n">describe_check</span><span class="p">,</span>
+    <span class="n">parse_tag_filters</span><span class="p">,</span>
+<span class="p">)</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">modules.os_detect</span><span class="w"> </span><span class="kn">import</span> <span class="n">detect_os</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">modules.audit_runner</span><span class="w"> </span><span class="kn">import</span> <span class="n">load_profile</span><span class="p">,</span> <span class="n">run_checks</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">modules.report_generator</span><span class="w"> </span><span class="kn">import</span> <span class="p">(</span>
+    <span class="n">generate_report</span><span class="p">,</span>
+    <span class="n">generate_json_report</span><span class="p">,</span>
+    <span class="n">generate_sarif_report</span><span class="p">,</span>
+    <span class="n">generate_junit_report</span><span class="p">,</span>
+    <span class="n">collect_host_metadata</span><span class="p">,</span>
+    <span class="n">generate_prometheus_metrics</span><span class="p">,</span>
+    <span class="n">generate_elastic_export</span><span class="p">,</span>
+<span class="p">)</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">modules.report_diff</span><span class="w"> </span><span class="kn">import</span> <span class="n">compare_reports</span><span class="p">,</span> <span class="n">format_report_diff</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">utils.logger</span><span class="w"> </span><span class="kn">import</span> <span class="n">log_info</span><span class="p">,</span> <span class="n">log_warn</span><span class="p">,</span> <span class="n">log_pass</span><span class="p">,</span> <span class="n">log_fail</span>
+
+<span class="c1"># Валидация профиля по схеме</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">seclib.validator</span><span class="w"> </span><span class="kn">import</span> <span class="n">validate_profile</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">secaudit.exceptions</span><span class="w"> </span><span class="kn">import</span> <span class="n">MissingDependencyError</span>
+
+
+<span class="k">def</span><span class="w"> </span><span class="nf">_resolve_profile_path</span><span class="p">(</span><span class="n">cli_profile</span><span class="p">:</span> <span class="nb">str</span> <span class="o">|</span> <span class="kc">None</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">str</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    Возвращает путь к профилю:</span>
+<span class="sd">      1) если указан --profile и файл существует — используем его,</span>
+<span class="sd">      2) если не указан/не найден — пытаемся определить по ОС (profiles/&lt;os_id&gt;.yml),</span>
+<span class="sd">      3) иначе — fallback на profiles/common/baseline.yml.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="k">if</span> <span class="n">cli_profile</span><span class="p">:</span>
+        <span class="n">p</span> <span class="o">=</span> <span class="n">Path</span><span class="p">(</span><span class="n">cli_profile</span><span class="p">)</span>
+        <span class="k">if</span> <span class="n">p</span><span class="o">.</span><span class="n">exists</span><span class="p">():</span>
+            <span class="k">return</span> <span class="nb">str</span><span class="p">(</span><span class="n">p</span><span class="p">)</span>
+
+    <span class="n">os_id</span> <span class="o">=</span> <span class="n">detect_os</span><span class="p">()</span>
+    <span class="n">candidate</span> <span class="o">=</span> <span class="n">Path</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;profiles/os/</span><span class="si">{</span><span class="n">os_id</span><span class="si">}</span><span class="s2">.yml&quot;</span><span class="p">)</span>
+    <span class="k">if</span> <span class="n">candidate</span><span class="o">.</span><span class="n">exists</span><span class="p">():</span>
+        <span class="k">return</span> <span class="nb">str</span><span class="p">(</span><span class="n">candidate</span><span class="p">)</span>
+
+    <span class="n">fallback_base</span> <span class="o">=</span> <span class="n">Path</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;profiles/base/</span><span class="si">{</span><span class="n">os_id</span><span class="si">}</span><span class="s2">.yml&quot;</span><span class="p">)</span>
+    <span class="k">if</span> <span class="n">fallback_base</span><span class="o">.</span><span class="n">exists</span><span class="p">():</span>
+        <span class="k">return</span> <span class="nb">str</span><span class="p">(</span><span class="n">fallback_base</span><span class="p">)</span>
+
+    <span class="n">log_warn</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Профиль для </span><span class="si">{</span><span class="n">os_id</span><span class="si">}</span><span class="s2"> не найден. Использую profiles/common/baseline.yml&quot;</span><span class="p">)</span>
+    <span class="k">return</span> <span class="s2">&quot;profiles/common/baseline.yml&quot;</span>
+
+
+<span class="k">def</span><span class="w"> </span><span class="nf">_sanitize_filename_component</span><span class="p">(</span><span class="n">raw</span><span class="p">:</span> <span class="nb">str</span> <span class="o">|</span> <span class="kc">None</span><span class="p">,</span> <span class="n">fallback</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">&quot;host&quot;</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">str</span><span class="p">:</span>
+    <span class="k">if</span> <span class="n">raw</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+        <span class="n">raw</span> <span class="o">=</span> <span class="s2">&quot;&quot;</span>
+    <span class="n">text</span> <span class="o">=</span> <span class="nb">str</span><span class="p">(</span><span class="n">raw</span><span class="p">)</span><span class="o">.</span><span class="n">strip</span><span class="p">()</span>
+    <span class="k">if</span> <span class="ow">not</span> <span class="n">text</span><span class="p">:</span>
+        <span class="n">text</span> <span class="o">=</span> <span class="n">fallback</span>
+    <span class="n">sanitized</span> <span class="o">=</span> <span class="n">re</span><span class="o">.</span><span class="n">sub</span><span class="p">(</span><span class="sa">r</span><span class="s2">&quot;[^A-Za-z0-9._-]+&quot;</span><span class="p">,</span> <span class="s2">&quot;_&quot;</span><span class="p">,</span> <span class="n">text</span><span class="p">)</span>
+    <span class="n">sanitized</span> <span class="o">=</span> <span class="n">sanitized</span><span class="o">.</span><span class="n">strip</span><span class="p">(</span><span class="s2">&quot;._-&quot;</span><span class="p">)</span>
+    <span class="k">return</span> <span class="n">sanitized</span> <span class="ow">or</span> <span class="n">fallback</span>
+
+
+<span class="k">def</span><span class="w"> </span><span class="nf">_print_and_exit_validation_errors</span><span class="p">(</span><span class="n">profile_path</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">errors</span><span class="p">:</span> <span class="nb">list</span><span class="p">[</span><span class="nb">str</span><span class="p">],</span> <span class="n">strict_exit_code</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">2</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+    <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Профиль &#39;</span><span class="si">{</span><span class="n">profile_path</span><span class="si">}</span><span class="s2">&#39; невалиден:&quot;</span><span class="p">,</span> <span class="n">file</span><span class="o">=</span><span class="n">sys</span><span class="o">.</span><span class="n">stderr</span><span class="p">)</span>
+    <span class="k">for</span> <span class="n">err</span> <span class="ow">in</span> <span class="n">errors</span><span class="p">:</span>
+        <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;  - </span><span class="si">{</span><span class="n">err</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">,</span> <span class="n">file</span><span class="o">=</span><span class="n">sys</span><span class="o">.</span><span class="n">stderr</span><span class="p">)</span>
+    <span class="n">sys</span><span class="o">.</span><span class="n">exit</span><span class="p">(</span><span class="n">strict_exit_code</span><span class="p">)</span>
+
+
+<span class="k">def</span><span class="w"> </span><span class="nf">_apply_exit_policy</span><span class="p">(</span><span class="n">results</span><span class="p">:</span> <span class="nb">list</span><span class="p">[</span><span class="nb">dict</span><span class="p">],</span> <span class="n">fail_level</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">fail_on_undef</span><span class="p">:</span> <span class="nb">bool</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">int</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    Рассчитывает код возврата процесса по политике:</span>
+<span class="sd">      --fail-on-undef: любой UNDEF → код 2</span>
+<span class="sd">      --fail-level {low|medium|high|none}: любой FAIL с sev ≥ порога → код 2</span>
+<span class="sd">    Если ни одно условие не выполнено → 0</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="n">level_weight</span> <span class="o">=</span> <span class="p">{</span><span class="s2">&quot;none&quot;</span><span class="p">:</span> <span class="o">-</span><span class="mi">1</span><span class="p">,</span> <span class="s2">&quot;low&quot;</span><span class="p">:</span> <span class="mi">0</span><span class="p">,</span> <span class="s2">&quot;medium&quot;</span><span class="p">:</span> <span class="mi">1</span><span class="p">,</span> <span class="s2">&quot;high&quot;</span><span class="p">:</span> <span class="mi">2</span><span class="p">}</span>
+    <span class="n">sev_weight</span> <span class="o">=</span> <span class="p">{</span><span class="s2">&quot;low&quot;</span><span class="p">:</span> <span class="mi">0</span><span class="p">,</span> <span class="s2">&quot;medium&quot;</span><span class="p">:</span> <span class="mi">1</span><span class="p">,</span> <span class="s2">&quot;high&quot;</span><span class="p">:</span> <span class="mi">2</span><span class="p">}</span>
+
+    <span class="n">exit_code</span> <span class="o">=</span> <span class="mi">0</span>
+
+    <span class="k">if</span> <span class="n">fail_on_undef</span> <span class="ow">and</span> <span class="nb">any</span><span class="p">(</span><span class="n">r</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;result&quot;</span><span class="p">)</span> <span class="o">==</span> <span class="s2">&quot;UNDEF&quot;</span> <span class="k">for</span> <span class="n">r</span> <span class="ow">in</span> <span class="n">results</span><span class="p">):</span>
+        <span class="n">exit_code</span> <span class="o">=</span> <span class="nb">max</span><span class="p">(</span><span class="n">exit_code</span><span class="p">,</span> <span class="mi">2</span><span class="p">)</span>
+
+    <span class="n">threshold</span> <span class="o">=</span> <span class="n">level_weight</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="n">fail_level</span><span class="p">,</span> <span class="o">-</span><span class="mi">1</span><span class="p">)</span>
+    <span class="k">if</span> <span class="n">threshold</span> <span class="o">&gt;=</span> <span class="mi">0</span><span class="p">:</span>
+        <span class="k">for</span> <span class="n">r</span> <span class="ow">in</span> <span class="n">results</span><span class="p">:</span>
+            <span class="k">if</span> <span class="n">r</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;result&quot;</span><span class="p">)</span> <span class="o">==</span> <span class="s2">&quot;FAIL&quot;</span><span class="p">:</span>
+                <span class="n">sev</span> <span class="o">=</span> <span class="n">sev_weight</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="n">r</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;severity&quot;</span><span class="p">,</span> <span class="s2">&quot;low&quot;</span><span class="p">),</span> <span class="mi">0</span><span class="p">)</span>
+                <span class="k">if</span> <span class="n">sev</span> <span class="o">&gt;=</span> <span class="n">threshold</span><span class="p">:</span>
+                    <span class="n">exit_code</span> <span class="o">=</span> <span class="nb">max</span><span class="p">(</span><span class="n">exit_code</span><span class="p">,</span> <span class="mi">2</span><span class="p">)</span>
+
+    <span class="k">return</span> <span class="n">exit_code</span>
+
+
+<span class="k">def</span><span class="w"> </span><span class="nf">_print_project_info</span><span class="p">()</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+    <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;SecAudit++&quot;</span><span class="p">)</span>
+    <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;Alex Hellberg&quot;</span><span class="p">)</span>
+    <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;https://github.com/alexbergh/secaudit-core&quot;</span><span class="p">)</span>
+    <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;2025&quot;</span><span class="p">)</span>
+    <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;Проект распространяется под лицензией Apache-2.0&quot;</span><span class="p">)</span>
+
+
+<div class="viewcode-block" id="main">
+<a class="viewcode-back" href="../../modules/secaudit/secaudit.html#secaudit.main.main">[docs]</a>
+<span class="k">def</span><span class="w"> </span><span class="nf">main</span><span class="p">():</span>
+    <span class="k">try</span><span class="p">:</span>
+        <span class="n">args</span> <span class="o">=</span> <span class="n">parse_args</span><span class="p">()</span>
+    <span class="k">except</span> <span class="ne">SystemExit</span><span class="p">:</span>
+        <span class="k">raise</span>
+    <span class="k">except</span> <span class="ne">Exception</span> <span class="k">as</span> <span class="n">exc</span><span class="p">:</span>
+        <span class="n">log_fail</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Ошибка парсинга аргументов: </span><span class="si">{</span><span class="n">exc</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+        <span class="n">sys</span><span class="o">.</span><span class="n">exit</span><span class="p">(</span><span class="mi">1</span><span class="p">)</span>
+
+    <span class="k">if</span> <span class="nb">getattr</span><span class="p">(</span><span class="n">args</span><span class="p">,</span> <span class="s2">&quot;info&quot;</span><span class="p">,</span> <span class="kc">False</span><span class="p">):</span>
+        <span class="n">_print_project_info</span><span class="p">()</span>
+        <span class="k">return</span>
+
+    <span class="c1"># Health check command (doesn&#39;t require profile)</span>
+    <span class="k">if</span> <span class="n">args</span><span class="o">.</span><span class="n">command</span> <span class="o">==</span> <span class="s2">&quot;health&quot;</span><span class="p">:</span>
+        <span class="k">try</span><span class="p">:</span>
+            <span class="kn">from</span><span class="w"> </span><span class="nn">secaudit.health</span><span class="w"> </span><span class="kn">import</span> <span class="n">health_check_handler</span><span class="p">,</span> <span class="n">print_health_status</span>
+            <span class="k">if</span> <span class="nb">getattr</span><span class="p">(</span><span class="n">args</span><span class="p">,</span> <span class="s2">&quot;json&quot;</span><span class="p">,</span> <span class="kc">False</span><span class="p">):</span>
+                <span class="n">exit_code</span> <span class="o">=</span> <span class="n">health_check_handler</span><span class="p">(</span><span class="nb">getattr</span><span class="p">(</span><span class="n">args</span><span class="p">,</span> <span class="s2">&quot;type&quot;</span><span class="p">,</span> <span class="s2">&quot;liveness&quot;</span><span class="p">))</span>
+            <span class="k">else</span><span class="p">:</span>
+                <span class="n">exit_code</span> <span class="o">=</span> <span class="n">print_health_status</span><span class="p">()</span>
+            <span class="n">sys</span><span class="o">.</span><span class="n">exit</span><span class="p">(</span><span class="n">exit_code</span><span class="p">)</span>
+        <span class="k">except</span> <span class="ne">ImportError</span><span class="p">:</span>
+            <span class="n">log_fail</span><span class="p">(</span><span class="s2">&quot;Health check module not available&quot;</span><span class="p">)</span>
+            <span class="n">sys</span><span class="o">.</span><span class="n">exit</span><span class="p">(</span><span class="mi">1</span><span class="p">)</span>
+
+    <span class="c1"># Определяем профиль</span>
+    <span class="k">try</span><span class="p">:</span>
+        <span class="n">profile_path</span> <span class="o">=</span> <span class="n">_resolve_profile_path</span><span class="p">(</span><span class="nb">getattr</span><span class="p">(</span><span class="n">args</span><span class="p">,</span> <span class="s2">&quot;profile&quot;</span><span class="p">,</span> <span class="kc">None</span><span class="p">))</span>
+        <span class="n">log_info</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Загрузка профиля: </span><span class="si">{</span><span class="n">profile_path</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+    <span class="k">except</span> <span class="ne">Exception</span> <span class="k">as</span> <span class="n">exc</span><span class="p">:</span>
+        <span class="n">log_fail</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Ошибка определения пути профиля: </span><span class="si">{</span><span class="n">exc</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+        <span class="n">sys</span><span class="o">.</span><span class="n">exit</span><span class="p">(</span><span class="mi">1</span><span class="p">)</span>
+
+    <span class="c1"># Загружаем профиль (парсинг YAML + базовые проверки структуры внутри load_profile)</span>
+    <span class="k">try</span><span class="p">:</span>
+        <span class="n">profile</span> <span class="o">=</span> <span class="n">load_profile</span><span class="p">(</span><span class="n">profile_path</span><span class="p">)</span>
+    <span class="k">except</span> <span class="n">MissingDependencyError</span> <span class="k">as</span> <span class="n">exc</span><span class="p">:</span>
+        <span class="n">log_fail</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Отсутствует зависимость: </span><span class="si">{</span><span class="n">exc</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+        <span class="n">sys</span><span class="o">.</span><span class="n">exit</span><span class="p">(</span><span class="mi">3</span><span class="p">)</span>
+    <span class="k">except</span> <span class="ne">FileNotFoundError</span><span class="p">:</span>
+        <span class="n">log_fail</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Файл профиля не найден: </span><span class="si">{</span><span class="n">profile_path</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+        <span class="n">sys</span><span class="o">.</span><span class="n">exit</span><span class="p">(</span><span class="mi">1</span><span class="p">)</span>
+    <span class="k">except</span> <span class="ne">Exception</span> <span class="k">as</span> <span class="n">exc</span><span class="p">:</span>
+        <span class="n">log_fail</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Ошибка загрузки профиля: </span><span class="si">{</span><span class="n">exc</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+        <span class="n">sys</span><span class="o">.</span><span class="n">exit</span><span class="p">(</span><span class="mi">1</span><span class="p">)</span>
+
+    <span class="c1"># Валидация по JSON-схеме перед любыми действиями</span>
+    <span class="n">is_valid</span><span class="p">,</span> <span class="n">val_errors</span> <span class="o">=</span> <span class="n">validate_profile</span><span class="p">(</span><span class="n">profile</span><span class="p">)</span>
+
+    <span class="c1"># Команды, которым нужен только чтение профиля и/или мягкая реакция на ошибки</span>
+    <span class="k">if</span> <span class="n">args</span><span class="o">.</span><span class="n">command</span> <span class="ow">in</span> <span class="p">(</span><span class="s2">&quot;list-modules&quot;</span><span class="p">,</span> <span class="s2">&quot;list-checks&quot;</span><span class="p">,</span> <span class="s2">&quot;describe-check&quot;</span><span class="p">):</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="n">is_valid</span><span class="p">:</span>
+            <span class="n">log_warn</span><span class="p">(</span><span class="s2">&quot;Профиль содержит ошибки валидации, вывод может быть неполным.&quot;</span><span class="p">)</span>
+        <span class="k">if</span> <span class="n">args</span><span class="o">.</span><span class="n">command</span> <span class="o">==</span> <span class="s2">&quot;list-modules&quot;</span><span class="p">:</span>
+            <span class="n">list_modules</span><span class="p">(</span><span class="n">profile</span><span class="p">)</span>
+            <span class="k">return</span>
+        <span class="k">if</span> <span class="n">args</span><span class="o">.</span><span class="n">command</span> <span class="o">==</span> <span class="s2">&quot;list-checks&quot;</span><span class="p">:</span>
+            <span class="k">try</span><span class="p">:</span>
+                <span class="n">tag_filters</span> <span class="o">=</span> <span class="n">parse_tag_filters</span><span class="p">(</span><span class="nb">getattr</span><span class="p">(</span><span class="n">args</span><span class="p">,</span> <span class="s2">&quot;tags&quot;</span><span class="p">,</span> <span class="kc">None</span><span class="p">))</span>
+            <span class="k">except</span> <span class="ne">ValueError</span> <span class="k">as</span> <span class="n">exc</span><span class="p">:</span>
+                <span class="n">log_fail</span><span class="p">(</span><span class="nb">str</span><span class="p">(</span><span class="n">exc</span><span class="p">))</span>
+                <span class="n">sys</span><span class="o">.</span><span class="n">exit</span><span class="p">(</span><span class="mi">2</span><span class="p">)</span>
+            <span class="n">list_checks</span><span class="p">(</span><span class="n">profile</span><span class="p">,</span> <span class="nb">getattr</span><span class="p">(</span><span class="n">args</span><span class="p">,</span> <span class="s2">&quot;module&quot;</span><span class="p">,</span> <span class="kc">None</span><span class="p">),</span> <span class="n">tag_filters</span><span class="p">)</span>
+            <span class="k">return</span>
+        <span class="k">if</span> <span class="n">args</span><span class="o">.</span><span class="n">command</span> <span class="o">==</span> <span class="s2">&quot;describe-check&quot;</span><span class="p">:</span>
+            <span class="n">describe_check</span><span class="p">(</span><span class="n">profile</span><span class="p">,</span> <span class="n">args</span><span class="o">.</span><span class="n">check_id</span><span class="p">)</span>
+            <span class="k">return</span>
+
+    <span class="c1"># Команда validate — выводим результат проверки схемы</span>
+    <span class="k">if</span> <span class="n">args</span><span class="o">.</span><span class="n">command</span> <span class="o">==</span> <span class="s2">&quot;validate&quot;</span><span class="p">:</span>
+        <span class="k">if</span> <span class="n">is_valid</span><span class="p">:</span>
+            <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;OK: Профиль соответствует схеме.&quot;</span><span class="p">)</span>
+            <span class="k">return</span>
+        <span class="n">strict</span> <span class="o">=</span> <span class="nb">getattr</span><span class="p">(</span><span class="n">args</span><span class="p">,</span> <span class="s2">&quot;strict&quot;</span><span class="p">,</span> <span class="kc">False</span><span class="p">)</span>
+        <span class="k">if</span> <span class="n">strict</span><span class="p">:</span>
+            <span class="n">_print_and_exit_validation_errors</span><span class="p">(</span><span class="n">profile_path</span><span class="p">,</span> <span class="n">val_errors</span><span class="p">,</span> <span class="n">strict_exit_code</span><span class="o">=</span><span class="mi">2</span><span class="p">)</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="n">_print_and_exit_validation_errors</span><span class="p">(</span><span class="n">profile_path</span><span class="p">,</span> <span class="n">val_errors</span><span class="p">,</span> <span class="n">strict_exit_code</span><span class="o">=</span><span class="mi">1</span><span class="p">)</span>
+
+    <span class="k">if</span> <span class="n">args</span><span class="o">.</span><span class="n">command</span> <span class="o">==</span> <span class="s2">&quot;compare&quot;</span><span class="p">:</span>
+        <span class="k">try</span><span class="p">:</span>
+            <span class="n">diff</span> <span class="o">=</span> <span class="n">compare_reports</span><span class="p">(</span><span class="n">args</span><span class="o">.</span><span class="n">before</span><span class="p">,</span> <span class="n">args</span><span class="o">.</span><span class="n">after</span><span class="p">,</span> <span class="n">fail_only</span><span class="o">=</span><span class="nb">getattr</span><span class="p">(</span><span class="n">args</span><span class="p">,</span> <span class="s2">&quot;fail_only&quot;</span><span class="p">,</span> <span class="kc">False</span><span class="p">))</span>
+            <span class="nb">print</span><span class="p">(</span><span class="n">format_report_diff</span><span class="p">(</span><span class="n">diff</span><span class="p">))</span>
+            <span class="n">output_path</span> <span class="o">=</span> <span class="nb">getattr</span><span class="p">(</span><span class="n">args</span><span class="p">,</span> <span class="s2">&quot;output&quot;</span><span class="p">,</span> <span class="kc">None</span><span class="p">)</span>
+            <span class="k">if</span> <span class="n">output_path</span><span class="p">:</span>
+                <span class="n">Path</span><span class="p">(</span><span class="n">output_path</span><span class="p">)</span><span class="o">.</span><span class="n">write_text</span><span class="p">(</span>
+                    <span class="n">json</span><span class="o">.</span><span class="n">dumps</span><span class="p">(</span><span class="n">diff</span><span class="p">,</span> <span class="n">indent</span><span class="o">=</span><span class="mi">2</span><span class="p">,</span> <span class="n">ensure_ascii</span><span class="o">=</span><span class="kc">False</span><span class="p">),</span>
+                    <span class="n">encoding</span><span class="o">=</span><span class="s2">&quot;utf-8&quot;</span><span class="p">,</span>
+                <span class="p">)</span>
+            <span class="n">log_info</span><span class="p">(</span><span class="s2">&quot;Сравнение отчетов завершено&quot;</span><span class="p">)</span>
+            <span class="k">return</span>
+        <span class="k">except</span> <span class="ne">FileNotFoundError</span> <span class="k">as</span> <span class="n">exc</span><span class="p">:</span>
+            <span class="n">log_fail</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Файл отчета не найден: </span><span class="si">{</span><span class="n">exc</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+            <span class="n">sys</span><span class="o">.</span><span class="n">exit</span><span class="p">(</span><span class="mi">1</span><span class="p">)</span>
+        <span class="k">except</span> <span class="ne">Exception</span> <span class="k">as</span> <span class="n">exc</span><span class="p">:</span>
+            <span class="n">log_fail</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Ошибка сравнения отчетов: </span><span class="si">{</span><span class="n">exc</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+            <span class="n">sys</span><span class="o">.</span><span class="n">exit</span><span class="p">(</span><span class="mi">1</span><span class="p">)</span>
+
+    <span class="c1"># Команда scan — сканирование сети</span>
+    <span class="k">if</span> <span class="n">args</span><span class="o">.</span><span class="n">command</span> <span class="o">==</span> <span class="s2">&quot;scan&quot;</span><span class="p">:</span>
+        <span class="kn">from</span><span class="w"> </span><span class="nn">modules.network_scanner</span><span class="w"> </span><span class="kn">import</span> <span class="n">scan_networks</span><span class="p">,</span> <span class="n">export_results_json</span><span class="p">,</span> <span class="n">export_results_yaml</span><span class="p">,</span> <span class="n">print_scan_summary</span>
+        
+        <span class="n">networks</span> <span class="o">=</span> <span class="p">[</span><span class="n">n</span><span class="o">.</span><span class="n">strip</span><span class="p">()</span> <span class="k">for</span> <span class="n">n</span> <span class="ow">in</span> <span class="n">args</span><span class="o">.</span><span class="n">networks</span><span class="o">.</span><span class="n">split</span><span class="p">(</span><span class="s2">&quot;,&quot;</span><span class="p">)</span> <span class="k">if</span> <span class="n">n</span><span class="o">.</span><span class="n">strip</span><span class="p">()]</span>
+        <span class="n">ssh_ports</span> <span class="o">=</span> <span class="p">[</span><span class="nb">int</span><span class="p">(</span><span class="n">p</span><span class="o">.</span><span class="n">strip</span><span class="p">())</span> <span class="k">for</span> <span class="n">p</span> <span class="ow">in</span> <span class="n">args</span><span class="o">.</span><span class="n">ssh_ports</span><span class="o">.</span><span class="n">split</span><span class="p">(</span><span class="s2">&quot;,&quot;</span><span class="p">)</span> <span class="k">if</span> <span class="n">p</span><span class="o">.</span><span class="n">strip</span><span class="p">()]</span>
+        
+        <span class="n">log_info</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Сканирование сетей: </span><span class="si">{</span><span class="s1">&#39;, &#39;</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">networks</span><span class="p">)</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+        
+        <span class="k">try</span><span class="p">:</span>
+            <span class="n">results</span> <span class="o">=</span> <span class="n">scan_networks</span><span class="p">(</span>
+                <span class="n">networks</span><span class="o">=</span><span class="n">networks</span><span class="p">,</span>
+                <span class="n">ssh_ports</span><span class="o">=</span><span class="n">ssh_ports</span><span class="p">,</span>
+                <span class="n">timeout</span><span class="o">=</span><span class="n">args</span><span class="o">.</span><span class="n">timeout</span><span class="p">,</span>
+                <span class="n">workers</span><span class="o">=</span><span class="n">args</span><span class="o">.</span><span class="n">workers</span><span class="p">,</span>
+                <span class="n">ping_method</span><span class="o">=</span><span class="n">args</span><span class="o">.</span><span class="n">ping_method</span><span class="p">,</span>
+                <span class="n">resolve_hostnames</span><span class="o">=</span><span class="ow">not</span> <span class="n">args</span><span class="o">.</span><span class="n">no_resolve</span><span class="p">,</span>
+                <span class="n">detect_os</span><span class="o">=</span><span class="ow">not</span> <span class="n">args</span><span class="o">.</span><span class="n">no_detect_os</span><span class="p">,</span>
+            <span class="p">)</span>
+            
+            <span class="c1"># Фильтрация по ОС если указано</span>
+            <span class="k">if</span> <span class="nb">hasattr</span><span class="p">(</span><span class="n">args</span><span class="p">,</span> <span class="s2">&quot;filter_os&quot;</span><span class="p">)</span> <span class="ow">and</span> <span class="n">args</span><span class="o">.</span><span class="n">filter_os</span><span class="p">:</span>
+                <span class="n">os_filters</span> <span class="o">=</span> <span class="p">[</span><span class="n">f</span><span class="o">.</span><span class="n">strip</span><span class="p">()</span><span class="o">.</span><span class="n">lower</span><span class="p">()</span> <span class="k">for</span> <span class="n">f</span> <span class="ow">in</span> <span class="n">args</span><span class="o">.</span><span class="n">filter_os</span><span class="o">.</span><span class="n">split</span><span class="p">(</span><span class="s2">&quot;,&quot;</span><span class="p">)]</span>
+                <span class="n">results</span> <span class="o">=</span> <span class="p">[</span>
+                    <span class="n">r</span> <span class="k">for</span> <span class="n">r</span> <span class="ow">in</span> <span class="n">results</span> 
+                    <span class="k">if</span> <span class="n">r</span><span class="o">.</span><span class="n">os_detected</span> <span class="ow">and</span> <span class="nb">any</span><span class="p">(</span><span class="n">f</span> <span class="ow">in</span> <span class="n">r</span><span class="o">.</span><span class="n">os_detected</span><span class="o">.</span><span class="n">lower</span><span class="p">()</span> <span class="k">for</span> <span class="n">f</span> <span class="ow">in</span> <span class="n">os_filters</span><span class="p">)</span>
+                <span class="p">]</span>
+                <span class="n">log_info</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Отфильтровано по ОС: </span><span class="si">{</span><span class="nb">len</span><span class="p">(</span><span class="n">results</span><span class="p">)</span><span class="si">}</span><span class="s2"> хостов&quot;</span><span class="p">)</span>
+            
+            <span class="c1"># Сохранение результатов</span>
+            <span class="n">output_path</span> <span class="o">=</span> <span class="n">Path</span><span class="p">(</span><span class="n">args</span><span class="o">.</span><span class="n">output</span><span class="p">)</span>
+            <span class="k">if</span> <span class="n">output_path</span><span class="o">.</span><span class="n">suffix</span><span class="o">.</span><span class="n">lower</span><span class="p">()</span> <span class="ow">in</span> <span class="p">[</span><span class="s2">&quot;.yml&quot;</span><span class="p">,</span> <span class="s2">&quot;.yaml&quot;</span><span class="p">]:</span>
+                <span class="n">export_results_yaml</span><span class="p">(</span><span class="n">results</span><span class="p">,</span> <span class="n">output_path</span><span class="p">)</span>
+            <span class="k">else</span><span class="p">:</span>
+                <span class="n">export_results_json</span><span class="p">(</span><span class="n">results</span><span class="p">,</span> <span class="n">output_path</span><span class="p">)</span>
+            
+            <span class="c1"># Вывод сводки</span>
+            <span class="n">print_scan_summary</span><span class="p">(</span><span class="n">results</span><span class="p">)</span>
+            
+            <span class="k">return</span>
+            
+        <span class="k">except</span> <span class="ne">Exception</span> <span class="k">as</span> <span class="n">exc</span><span class="p">:</span>
+            <span class="n">log_fail</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Ошибка сканирования: </span><span class="si">{</span><span class="n">exc</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+            <span class="n">sys</span><span class="o">.</span><span class="n">exit</span><span class="p">(</span><span class="mi">1</span><span class="p">)</span>
+    
+    <span class="c1"># Команда inventory — управление инвентори</span>
+    <span class="k">if</span> <span class="n">args</span><span class="o">.</span><span class="n">command</span> <span class="o">==</span> <span class="s2">&quot;inventory&quot;</span><span class="p">:</span>
+        <span class="kn">from</span><span class="w"> </span><span class="nn">modules.inventory_manager</span><span class="w"> </span><span class="kn">import</span> <span class="n">InventoryManager</span><span class="p">,</span> <span class="n">HostEntry</span>
+        <span class="kn">from</span><span class="w"> </span><span class="nn">modules.network_scanner</span><span class="w"> </span><span class="kn">import</span> <span class="n">ScanResult</span>
+        
+        <span class="k">if</span> <span class="n">args</span><span class="o">.</span><span class="n">inventory_command</span> <span class="o">==</span> <span class="s2">&quot;create&quot;</span><span class="p">:</span>
+            <span class="c1"># Создание инвентори из сканирования</span>
+            <span class="k">try</span><span class="p">:</span>
+                <span class="k">with</span> <span class="nb">open</span><span class="p">(</span><span class="n">args</span><span class="o">.</span><span class="n">from_scan</span><span class="p">,</span> <span class="s1">&#39;r&#39;</span><span class="p">,</span> <span class="n">encoding</span><span class="o">=</span><span class="s1">&#39;utf-8&#39;</span><span class="p">)</span> <span class="k">as</span> <span class="n">f</span><span class="p">:</span>
+                    <span class="n">scan_data</span> <span class="o">=</span> <span class="n">json</span><span class="o">.</span><span class="n">load</span><span class="p">(</span><span class="n">f</span><span class="p">)</span>
+                
+                <span class="c1"># Конвертируем в ScanResult объекты</span>
+                <span class="n">scan_results</span> <span class="o">=</span> <span class="p">[]</span>
+                <span class="k">for</span> <span class="n">host_data</span> <span class="ow">in</span> <span class="n">scan_data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;hosts&quot;</span><span class="p">,</span> <span class="p">[]):</span>
+                    <span class="n">result</span> <span class="o">=</span> <span class="n">ScanResult</span><span class="p">(</span>
+                        <span class="n">ip</span><span class="o">=</span><span class="n">host_data</span><span class="p">[</span><span class="s2">&quot;ip&quot;</span><span class="p">],</span>
+                        <span class="n">hostname</span><span class="o">=</span><span class="n">host_data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;hostname&quot;</span><span class="p">),</span>
+                        <span class="n">is_alive</span><span class="o">=</span><span class="n">host_data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;is_alive&quot;</span><span class="p">,</span> <span class="kc">False</span><span class="p">),</span>
+                        <span class="n">ssh_port</span><span class="o">=</span><span class="n">host_data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;ssh_port&quot;</span><span class="p">),</span>
+                        <span class="n">ssh_banner</span><span class="o">=</span><span class="n">host_data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;ssh_banner&quot;</span><span class="p">),</span>
+                        <span class="n">os_detected</span><span class="o">=</span><span class="n">host_data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;os_detected&quot;</span><span class="p">),</span>
+                    <span class="p">)</span>
+                    <span class="n">scan_results</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">result</span><span class="p">)</span>
+                
+                <span class="n">manager</span> <span class="o">=</span> <span class="n">InventoryManager</span><span class="p">()</span>
+                <span class="n">manager</span><span class="o">.</span><span class="n">create_from_scan</span><span class="p">(</span>
+                    <span class="n">scan_results</span><span class="p">,</span>
+                    <span class="n">auto_group</span><span class="o">=</span><span class="n">args</span><span class="o">.</span><span class="n">auto_group</span><span class="p">,</span>
+                    <span class="n">default_group</span><span class="o">=</span><span class="n">args</span><span class="o">.</span><span class="n">default_group</span><span class="p">,</span>
+                    <span class="n">ssh_user</span><span class="o">=</span><span class="n">args</span><span class="o">.</span><span class="n">ssh_user</span><span class="p">,</span>
+                    <span class="n">ssh_key</span><span class="o">=</span><span class="n">args</span><span class="o">.</span><span class="n">ssh_key</span><span class="p">,</span>
+                    <span class="n">default_profile</span><span class="o">=</span><span class="n">args</span><span class="o">.</span><span class="n">profile</span><span class="p">,</span>
+                <span class="p">)</span>
+                
+                <span class="n">manager</span><span class="o">.</span><span class="n">save</span><span class="p">(</span><span class="n">Path</span><span class="p">(</span><span class="n">args</span><span class="o">.</span><span class="n">output</span><span class="p">))</span>
+                <span class="n">manager</span><span class="o">.</span><span class="n">print_summary</span><span class="p">()</span>
+                
+                <span class="n">log_info</span><span class="p">(</span><span class="s2">&quot;Инвентори успешно создан&quot;</span><span class="p">)</span>
+                <span class="k">return</span>
+                
+            <span class="k">except</span> <span class="ne">Exception</span> <span class="k">as</span> <span class="n">exc</span><span class="p">:</span>
+                <span class="n">log_fail</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Ошибка создания инвентори: </span><span class="si">{</span><span class="n">exc</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+                <span class="n">sys</span><span class="o">.</span><span class="n">exit</span><span class="p">(</span><span class="mi">1</span><span class="p">)</span>
+        
+        <span class="k">elif</span> <span class="n">args</span><span class="o">.</span><span class="n">inventory_command</span> <span class="o">==</span> <span class="s2">&quot;add-host&quot;</span><span class="p">:</span>
+            <span class="c1"># Добавление хоста в инвентори</span>
+            <span class="k">try</span><span class="p">:</span>
+                <span class="n">manager</span> <span class="o">=</span> <span class="n">InventoryManager</span><span class="p">(</span><span class="n">Path</span><span class="p">(</span><span class="n">args</span><span class="o">.</span><span class="n">inventory</span><span class="p">))</span>
+                <span class="n">manager</span><span class="o">.</span><span class="n">load</span><span class="p">()</span>
+                
+                <span class="n">tags</span> <span class="o">=</span> <span class="p">[</span><span class="n">t</span><span class="o">.</span><span class="n">strip</span><span class="p">()</span> <span class="k">for</span> <span class="n">t</span> <span class="ow">in</span> <span class="n">args</span><span class="o">.</span><span class="n">tags</span><span class="o">.</span><span class="n">split</span><span class="p">(</span><span class="s2">&quot;,&quot;</span><span class="p">)]</span> <span class="k">if</span> <span class="n">args</span><span class="o">.</span><span class="n">tags</span> <span class="k">else</span> <span class="p">[]</span>
+                
+                <span class="n">host</span> <span class="o">=</span> <span class="n">HostEntry</span><span class="p">(</span>
+                    <span class="n">ip</span><span class="o">=</span><span class="n">args</span><span class="o">.</span><span class="n">ip</span><span class="p">,</span>
+                    <span class="n">hostname</span><span class="o">=</span><span class="n">args</span><span class="o">.</span><span class="n">hostname</span><span class="p">,</span>
+                    <span class="n">ssh_port</span><span class="o">=</span><span class="n">args</span><span class="o">.</span><span class="n">ssh_port</span><span class="p">,</span>
+                    <span class="n">ssh_user</span><span class="o">=</span><span class="n">args</span><span class="o">.</span><span class="n">ssh_user</span><span class="p">,</span>
+                    <span class="n">ssh_key</span><span class="o">=</span><span class="n">args</span><span class="o">.</span><span class="n">ssh_key</span><span class="p">,</span>
+                    <span class="n">profile</span><span class="o">=</span><span class="n">args</span><span class="o">.</span><span class="n">profile</span><span class="p">,</span>
+                    <span class="n">tags</span><span class="o">=</span><span class="n">tags</span><span class="p">,</span>
+                <span class="p">)</span>
+                
+                <span class="n">manager</span><span class="o">.</span><span class="n">inventory</span><span class="o">.</span><span class="n">add_host</span><span class="p">(</span><span class="n">host</span><span class="p">,</span> <span class="n">args</span><span class="o">.</span><span class="n">group</span><span class="p">)</span>
+                <span class="n">manager</span><span class="o">.</span><span class="n">save</span><span class="p">()</span>
+                
+                <span class="n">log_info</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Хост </span><span class="si">{</span><span class="n">args</span><span class="o">.</span><span class="n">ip</span><span class="si">}</span><span class="s2"> добавлен в группу </span><span class="si">{</span><span class="n">args</span><span class="o">.</span><span class="n">group</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+                <span class="k">return</span>
+                
+            <span class="k">except</span> <span class="ne">Exception</span> <span class="k">as</span> <span class="n">exc</span><span class="p">:</span>
+                <span class="n">log_fail</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Ошибка добавления хоста: </span><span class="si">{</span><span class="n">exc</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+                <span class="n">sys</span><span class="o">.</span><span class="n">exit</span><span class="p">(</span><span class="mi">1</span><span class="p">)</span>
+        
+        <span class="k">elif</span> <span class="n">args</span><span class="o">.</span><span class="n">inventory_command</span> <span class="o">==</span> <span class="s2">&quot;list&quot;</span><span class="p">:</span>
+            <span class="c1"># Показ хостов из инвентори</span>
+            <span class="k">try</span><span class="p">:</span>
+                <span class="n">manager</span> <span class="o">=</span> <span class="n">InventoryManager</span><span class="p">(</span><span class="n">Path</span><span class="p">(</span><span class="n">args</span><span class="o">.</span><span class="n">inventory</span><span class="p">))</span>
+                <span class="n">manager</span><span class="o">.</span><span class="n">load</span><span class="p">()</span>
+                
+                <span class="n">tags</span> <span class="o">=</span> <span class="p">[</span><span class="n">t</span><span class="o">.</span><span class="n">strip</span><span class="p">()</span> <span class="k">for</span> <span class="n">t</span> <span class="ow">in</span> <span class="n">args</span><span class="o">.</span><span class="n">tags</span><span class="o">.</span><span class="n">split</span><span class="p">(</span><span class="s2">&quot;,&quot;</span><span class="p">)]</span> <span class="k">if</span> <span class="n">args</span><span class="o">.</span><span class="n">tags</span> <span class="k">else</span> <span class="kc">None</span>
+                
+                <span class="n">manager</span><span class="o">.</span><span class="n">list_hosts</span><span class="p">(</span>
+                    <span class="n">group</span><span class="o">=</span><span class="n">args</span><span class="o">.</span><span class="n">group</span><span class="p">,</span>
+                    <span class="n">tags</span><span class="o">=</span><span class="n">tags</span><span class="p">,</span>
+                    <span class="n">os_filter</span><span class="o">=</span><span class="n">args</span><span class="o">.</span><span class="n">os</span><span class="p">,</span>
+                    <span class="n">verbose</span><span class="o">=</span><span class="n">args</span><span class="o">.</span><span class="n">verbose</span><span class="p">,</span>
+                <span class="p">)</span>
+                
+                <span class="k">return</span>
+                
+            <span class="k">except</span> <span class="ne">Exception</span> <span class="k">as</span> <span class="n">exc</span><span class="p">:</span>
+                <span class="n">log_fail</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Ошибка чтения инвентори: </span><span class="si">{</span><span class="n">exc</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+                <span class="n">sys</span><span class="o">.</span><span class="n">exit</span><span class="p">(</span><span class="mi">1</span><span class="p">)</span>
+        
+        <span class="k">elif</span> <span class="n">args</span><span class="o">.</span><span class="n">inventory_command</span> <span class="o">==</span> <span class="s2">&quot;update&quot;</span><span class="p">:</span>
+            <span class="c1"># Обновление инвентори</span>
+            <span class="k">try</span><span class="p">:</span>
+                <span class="n">manager</span> <span class="o">=</span> <span class="n">InventoryManager</span><span class="p">(</span><span class="n">Path</span><span class="p">(</span><span class="n">args</span><span class="o">.</span><span class="n">inventory</span><span class="p">))</span>
+                <span class="n">manager</span><span class="o">.</span><span class="n">load</span><span class="p">()</span>
+                
+                <span class="k">if</span> <span class="n">args</span><span class="o">.</span><span class="n">scan</span> <span class="ow">and</span> <span class="n">args</span><span class="o">.</span><span class="n">networks</span><span class="p">:</span>
+                    <span class="kn">from</span><span class="w"> </span><span class="nn">modules.network_scanner</span><span class="w"> </span><span class="kn">import</span> <span class="n">scan_networks</span>
+                    
+                    <span class="n">networks</span> <span class="o">=</span> <span class="p">[</span><span class="n">n</span><span class="o">.</span><span class="n">strip</span><span class="p">()</span> <span class="k">for</span> <span class="n">n</span> <span class="ow">in</span> <span class="n">args</span><span class="o">.</span><span class="n">networks</span><span class="o">.</span><span class="n">split</span><span class="p">(</span><span class="s2">&quot;,&quot;</span><span class="p">)]</span>
+                    <span class="n">log_info</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Сканирование для обновления: </span><span class="si">{</span><span class="s1">&#39;, &#39;</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">networks</span><span class="p">)</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+                    
+                    <span class="n">scan_results</span> <span class="o">=</span> <span class="n">scan_networks</span><span class="p">(</span><span class="n">networks</span><span class="o">=</span><span class="n">networks</span><span class="p">)</span>
+                    
+                    <span class="c1"># Обновляем существующие хосты и добавляем новые</span>
+                    <span class="k">for</span> <span class="n">result</span> <span class="ow">in</span> <span class="n">scan_results</span><span class="p">:</span>
+                        <span class="k">if</span> <span class="ow">not</span> <span class="n">result</span><span class="o">.</span><span class="n">is_alive</span><span class="p">:</span>
+                            <span class="k">continue</span>
+                        
+                        <span class="n">existing</span> <span class="o">=</span> <span class="n">manager</span><span class="o">.</span><span class="n">inventory</span><span class="o">.</span><span class="n">get_host</span><span class="p">(</span><span class="n">result</span><span class="o">.</span><span class="n">ip</span><span class="p">)</span>
+                        <span class="k">if</span> <span class="n">existing</span><span class="p">:</span>
+                            <span class="c1"># Обновляем информацию</span>
+                            <span class="n">host</span><span class="p">,</span> <span class="n">group_name</span> <span class="o">=</span> <span class="n">existing</span>
+                            <span class="k">if</span> <span class="n">result</span><span class="o">.</span><span class="n">hostname</span><span class="p">:</span>
+                                <span class="n">host</span><span class="o">.</span><span class="n">hostname</span> <span class="o">=</span> <span class="n">result</span><span class="o">.</span><span class="n">hostname</span>
+                            <span class="k">if</span> <span class="n">result</span><span class="o">.</span><span class="n">ssh_port</span><span class="p">:</span>
+                                <span class="n">host</span><span class="o">.</span><span class="n">ssh_port</span> <span class="o">=</span> <span class="n">result</span><span class="o">.</span><span class="n">ssh_port</span>
+                            <span class="k">if</span> <span class="n">result</span><span class="o">.</span><span class="n">os_detected</span><span class="p">:</span>
+                                <span class="n">host</span><span class="o">.</span><span class="n">os</span> <span class="o">=</span> <span class="n">result</span><span class="o">.</span><span class="n">os_detected</span>
+                        <span class="k">else</span><span class="p">:</span>
+                            <span class="c1"># Добавляем новый хост</span>
+                            <span class="n">host</span> <span class="o">=</span> <span class="n">HostEntry</span><span class="p">(</span>
+                                <span class="n">ip</span><span class="o">=</span><span class="n">result</span><span class="o">.</span><span class="n">ip</span><span class="p">,</span>
+                                <span class="n">hostname</span><span class="o">=</span><span class="n">result</span><span class="o">.</span><span class="n">hostname</span><span class="p">,</span>
+                                <span class="n">ssh_port</span><span class="o">=</span><span class="n">result</span><span class="o">.</span><span class="n">ssh_port</span> <span class="ow">or</span> <span class="mi">22</span><span class="p">,</span>
+                                <span class="n">os</span><span class="o">=</span><span class="n">result</span><span class="o">.</span><span class="n">os_detected</span><span class="p">,</span>
+                            <span class="p">)</span>
+                            <span class="n">manager</span><span class="o">.</span><span class="n">inventory</span><span class="o">.</span><span class="n">add_host</span><span class="p">(</span><span class="n">host</span><span class="p">,</span> <span class="s2">&quot;discovered&quot;</span><span class="p">)</span>
+                    
+                    <span class="n">manager</span><span class="o">.</span><span class="n">save</span><span class="p">()</span>
+                    <span class="n">log_info</span><span class="p">(</span><span class="s2">&quot;Инвентори обновлён&quot;</span><span class="p">)</span>
+                
+                <span class="n">manager</span><span class="o">.</span><span class="n">print_summary</span><span class="p">()</span>
+                <span class="k">return</span>
+                
+            <span class="k">except</span> <span class="ne">Exception</span> <span class="k">as</span> <span class="n">exc</span><span class="p">:</span>
+                <span class="n">log_fail</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Ошибка обновления инвентори: </span><span class="si">{</span><span class="n">exc</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+                <span class="n">sys</span><span class="o">.</span><span class="n">exit</span><span class="p">(</span><span class="mi">1</span><span class="p">)</span>
+    
+    <span class="c1"># Команда audit-remote — удалённый аудит</span>
+    <span class="k">if</span> <span class="n">args</span><span class="o">.</span><span class="n">command</span> <span class="o">==</span> <span class="s2">&quot;audit-remote&quot;</span><span class="p">:</span>
+        <span class="kn">from</span><span class="w"> </span><span class="nn">modules.inventory_manager</span><span class="w"> </span><span class="kn">import</span> <span class="n">load_inventory</span>
+        <span class="kn">from</span><span class="w"> </span><span class="nn">modules.remote_executor</span><span class="w"> </span><span class="kn">import</span> <span class="n">execute_remote_audit</span>
+        
+        <span class="k">try</span><span class="p">:</span>
+            <span class="c1"># Загружаем инвентори</span>
+            <span class="n">inventory</span> <span class="o">=</span> <span class="n">load_inventory</span><span class="p">(</span><span class="n">Path</span><span class="p">(</span><span class="n">args</span><span class="o">.</span><span class="n">inventory</span><span class="p">))</span>
+            <span class="n">log_info</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Загружен инвентори с </span><span class="si">{</span><span class="n">inventory</span><span class="o">.</span><span class="n">get_host_count</span><span class="p">()</span><span class="si">}</span><span class="s2"> хостами&quot;</span><span class="p">)</span>
+            
+            <span class="c1"># Парсим теги если указаны</span>
+            <span class="n">tags</span> <span class="o">=</span> <span class="p">[</span><span class="n">t</span><span class="o">.</span><span class="n">strip</span><span class="p">()</span> <span class="k">for</span> <span class="n">t</span> <span class="ow">in</span> <span class="n">args</span><span class="o">.</span><span class="n">tags</span><span class="o">.</span><span class="n">split</span><span class="p">(</span><span class="s2">&quot;,&quot;</span><span class="p">)]</span> <span class="k">if</span> <span class="n">args</span><span class="o">.</span><span class="n">tags</span> <span class="k">else</span> <span class="kc">None</span>
+            
+            <span class="c1"># Выполняем удалённый аудит</span>
+            <span class="n">results</span> <span class="o">=</span> <span class="n">execute_remote_audit</span><span class="p">(</span>
+                <span class="n">inventory</span><span class="o">=</span><span class="n">inventory</span><span class="p">,</span>
+                <span class="n">output_dir</span><span class="o">=</span><span class="n">Path</span><span class="p">(</span><span class="n">args</span><span class="o">.</span><span class="n">output_dir</span><span class="p">),</span>
+                <span class="n">workers</span><span class="o">=</span><span class="n">args</span><span class="o">.</span><span class="n">workers</span><span class="p">,</span>
+                <span class="n">profile</span><span class="o">=</span><span class="n">args</span><span class="o">.</span><span class="n">profile</span><span class="p">,</span>
+                <span class="n">level</span><span class="o">=</span><span class="n">args</span><span class="o">.</span><span class="n">level</span><span class="p">,</span>
+                <span class="n">fail_level</span><span class="o">=</span><span class="n">args</span><span class="o">.</span><span class="n">fail_level</span><span class="p">,</span>
+                <span class="n">evidence</span><span class="o">=</span><span class="n">args</span><span class="o">.</span><span class="n">evidence</span><span class="p">,</span>
+                <span class="n">group</span><span class="o">=</span><span class="n">args</span><span class="o">.</span><span class="n">group</span><span class="p">,</span>
+                <span class="n">tags</span><span class="o">=</span><span class="n">tags</span><span class="p">,</span>
+                <span class="n">os_filter</span><span class="o">=</span><span class="n">args</span><span class="o">.</span><span class="n">os_filter</span><span class="p">,</span>
+            <span class="p">)</span>
+            
+            <span class="c1"># Выводим сводку</span>
+            <span class="n">successful</span> <span class="o">=</span> <span class="nb">sum</span><span class="p">(</span><span class="mi">1</span> <span class="k">for</span> <span class="n">r</span> <span class="ow">in</span> <span class="n">results</span> <span class="k">if</span> <span class="n">r</span><span class="o">.</span><span class="n">success</span><span class="p">)</span>
+            <span class="n">failed</span> <span class="o">=</span> <span class="nb">len</span><span class="p">(</span><span class="n">results</span><span class="p">)</span> <span class="o">-</span> <span class="n">successful</span>
+            
+            <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;</span><span class="se">\n</span><span class="s2">&quot;</span> <span class="o">+</span> <span class="s2">&quot;=&quot;</span><span class="o">*</span><span class="mi">60</span><span class="p">)</span>
+            <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;СВОДКА УДАЛЁННОГО АУДИТА&quot;</span><span class="p">)</span>
+            <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;=&quot;</span><span class="o">*</span><span class="mi">60</span><span class="p">)</span>
+            <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Всего хостов: </span><span class="si">{</span><span class="nb">len</span><span class="p">(</span><span class="n">results</span><span class="p">)</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+            <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Успешно: </span><span class="si">{</span><span class="n">successful</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+            <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;С ошибками: </span><span class="si">{</span><span class="n">failed</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+            <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;=&quot;</span><span class="o">*</span><span class="mi">60</span> <span class="o">+</span> <span class="s2">&quot;</span><span class="se">\n</span><span class="s2">&quot;</span><span class="p">)</span>
+            
+            <span class="c1"># Код возврата</span>
+            <span class="k">if</span> <span class="n">failed</span> <span class="o">&gt;</span> <span class="mi">0</span><span class="p">:</span>
+                <span class="n">sys</span><span class="o">.</span><span class="n">exit</span><span class="p">(</span><span class="mi">2</span><span class="p">)</span>
+            
+            <span class="k">return</span>
+            
+        <span class="k">except</span> <span class="ne">Exception</span> <span class="k">as</span> <span class="n">exc</span><span class="p">:</span>
+            <span class="n">log_fail</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Ошибка удалённого аудита: </span><span class="si">{</span><span class="n">exc</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+            <span class="kn">import</span><span class="w"> </span><span class="nn">traceback</span>
+            <span class="n">traceback</span><span class="o">.</span><span class="n">print_exc</span><span class="p">()</span>
+            <span class="n">sys</span><span class="o">.</span><span class="n">exit</span><span class="p">(</span><span class="mi">1</span><span class="p">)</span>
+    
+    <span class="c1"># Команда audit-agentless — agentless аудит (рекомендуется)</span>
+    <span class="k">if</span> <span class="n">args</span><span class="o">.</span><span class="n">command</span> <span class="o">==</span> <span class="s2">&quot;audit-agentless&quot;</span><span class="p">:</span>
+        <span class="kn">from</span><span class="w"> </span><span class="nn">modules.inventory_manager</span><span class="w"> </span><span class="kn">import</span> <span class="n">load_inventory</span>
+        <span class="kn">from</span><span class="w"> </span><span class="nn">modules.agentless_executor</span><span class="w"> </span><span class="kn">import</span> <span class="n">execute_agentless_audit</span>
+        
+        <span class="k">try</span><span class="p">:</span>
+            <span class="c1"># Загружаем инвентори</span>
+            <span class="n">inventory</span> <span class="o">=</span> <span class="n">load_inventory</span><span class="p">(</span><span class="n">Path</span><span class="p">(</span><span class="n">args</span><span class="o">.</span><span class="n">inventory</span><span class="p">))</span>
+            <span class="n">log_info</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;[Agentless] Загружен инвентори с </span><span class="si">{</span><span class="n">inventory</span><span class="o">.</span><span class="n">get_host_count</span><span class="p">()</span><span class="si">}</span><span class="s2"> хостами&quot;</span><span class="p">)</span>
+            
+            <span class="c1"># Парсим теги если указаны</span>
+            <span class="n">tags</span> <span class="o">=</span> <span class="p">[</span><span class="n">t</span><span class="o">.</span><span class="n">strip</span><span class="p">()</span> <span class="k">for</span> <span class="n">t</span> <span class="ow">in</span> <span class="n">args</span><span class="o">.</span><span class="n">tags</span><span class="o">.</span><span class="n">split</span><span class="p">(</span><span class="s2">&quot;,&quot;</span><span class="p">)]</span> <span class="k">if</span> <span class="n">args</span><span class="o">.</span><span class="n">tags</span> <span class="k">else</span> <span class="kc">None</span>
+            
+            <span class="c1"># Выполняем agentless аудит</span>
+            <span class="n">results</span> <span class="o">=</span> <span class="n">execute_agentless_audit</span><span class="p">(</span>
+                <span class="n">inventory</span><span class="o">=</span><span class="n">inventory</span><span class="p">,</span>
+                <span class="n">output_dir</span><span class="o">=</span><span class="n">Path</span><span class="p">(</span><span class="n">args</span><span class="o">.</span><span class="n">output_dir</span><span class="p">),</span>
+                <span class="n">profile_path</span><span class="o">=</span><span class="n">args</span><span class="o">.</span><span class="n">profile</span><span class="p">,</span>
+                <span class="n">level</span><span class="o">=</span><span class="n">args</span><span class="o">.</span><span class="n">level</span><span class="p">,</span>
+                <span class="n">workers</span><span class="o">=</span><span class="n">args</span><span class="o">.</span><span class="n">workers</span><span class="p">,</span>
+                <span class="n">timeout</span><span class="o">=</span><span class="n">args</span><span class="o">.</span><span class="n">timeout</span><span class="p">,</span>
+                <span class="n">group</span><span class="o">=</span><span class="n">args</span><span class="o">.</span><span class="n">group</span><span class="p">,</span>
+                <span class="n">tags</span><span class="o">=</span><span class="n">tags</span><span class="p">,</span>
+                <span class="n">os_filter</span><span class="o">=</span><span class="n">args</span><span class="o">.</span><span class="n">os_filter</span><span class="p">,</span>
+            <span class="p">)</span>
+            
+            <span class="c1"># Выводим сводку</span>
+            <span class="n">successful</span> <span class="o">=</span> <span class="nb">sum</span><span class="p">(</span><span class="mi">1</span> <span class="k">for</span> <span class="n">r</span> <span class="ow">in</span> <span class="n">results</span> <span class="k">if</span> <span class="n">r</span><span class="o">.</span><span class="n">success</span><span class="p">)</span>
+            <span class="n">failed</span> <span class="o">=</span> <span class="nb">len</span><span class="p">(</span><span class="n">results</span><span class="p">)</span> <span class="o">-</span> <span class="n">successful</span>
+            <span class="n">avg_score</span> <span class="o">=</span> <span class="nb">sum</span><span class="p">(</span><span class="n">r</span><span class="o">.</span><span class="n">score</span> <span class="k">for</span> <span class="n">r</span> <span class="ow">in</span> <span class="n">results</span> <span class="k">if</span> <span class="n">r</span><span class="o">.</span><span class="n">success</span><span class="p">)</span> <span class="o">/</span> <span class="nb">max</span><span class="p">(</span><span class="n">successful</span><span class="p">,</span> <span class="mi">1</span><span class="p">)</span>
+            
+            <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;</span><span class="se">\n</span><span class="s2">&quot;</span> <span class="o">+</span> <span class="s2">&quot;=&quot;</span><span class="o">*</span><span class="mi">60</span><span class="p">)</span>
+            <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;СВОДКА AGENTLESS АУДИТА&quot;</span><span class="p">)</span>
+            <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;=&quot;</span><span class="o">*</span><span class="mi">60</span><span class="p">)</span>
+            <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Всего хостов: </span><span class="si">{</span><span class="nb">len</span><span class="p">(</span><span class="n">results</span><span class="p">)</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+            <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Успешно: </span><span class="si">{</span><span class="n">successful</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+            <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;С ошибками: </span><span class="si">{</span><span class="n">failed</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+            <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Средний security score: </span><span class="si">{</span><span class="n">avg_score</span><span class="si">:</span><span class="s2">.1f</span><span class="si">}</span><span class="s2">/100&quot;</span><span class="p">)</span>
+            <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;=&quot;</span><span class="o">*</span><span class="mi">60</span><span class="p">)</span>
+            
+            <span class="c1"># Детализация по хостам</span>
+            <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;</span><span class="se">\n</span><span class="s2">Результаты по хостам:&quot;</span><span class="p">)</span>
+            <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="s1">&#39;Хост&#39;</span><span class="si">:</span><span class="s2">&lt;30</span><span class="si">}</span><span class="s2"> </span><span class="si">{</span><span class="s1">&#39;Score&#39;</span><span class="si">:</span><span class="s2">&lt;10</span><span class="si">}</span><span class="s2"> </span><span class="si">{</span><span class="s1">&#39;Pass/Fail/Undef&#39;</span><span class="si">:</span><span class="s2">&lt;20</span><span class="si">}</span><span class="s2"> </span><span class="si">{</span><span class="s1">&#39;Status&#39;</span><span class="si">:</span><span class="s2">&lt;10</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+            <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;-&quot;</span> <span class="o">*</span> <span class="mi">80</span><span class="p">)</span>
+            <span class="k">for</span> <span class="n">r</span> <span class="ow">in</span> <span class="n">results</span><span class="p">:</span>
+                <span class="k">if</span> <span class="n">r</span><span class="o">.</span><span class="n">success</span><span class="p">:</span>
+                    <span class="n">status</span> <span class="o">=</span> <span class="s2">&quot;✓ OK&quot;</span>
+                    <span class="n">stats</span> <span class="o">=</span> <span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">r</span><span class="o">.</span><span class="n">checks_pass</span><span class="si">}</span><span class="s2">/</span><span class="si">{</span><span class="n">r</span><span class="o">.</span><span class="n">checks_fail</span><span class="si">}</span><span class="s2">/</span><span class="si">{</span><span class="n">r</span><span class="o">.</span><span class="n">checks_undef</span><span class="si">}</span><span class="s2">&quot;</span>
+                <span class="k">else</span><span class="p">:</span>
+                    <span class="n">status</span> <span class="o">=</span> <span class="s2">&quot;✗ ERROR&quot;</span>
+                    <span class="n">stats</span> <span class="o">=</span> <span class="s2">&quot;-&quot;</span>
+                <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">r</span><span class="o">.</span><span class="n">host</span><span class="si">:</span><span class="s2">&lt;30</span><span class="si">}</span><span class="s2"> </span><span class="si">{</span><span class="n">r</span><span class="o">.</span><span class="n">score</span><span class="si">:</span><span class="s2">&gt;6.1f</span><span class="si">}</span><span class="s2">/100  </span><span class="si">{</span><span class="n">stats</span><span class="si">:</span><span class="s2">&lt;20</span><span class="si">}</span><span class="s2"> </span><span class="si">{</span><span class="n">status</span><span class="si">:</span><span class="s2">&lt;10</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+            
+            <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;</span><span class="se">\n</span><span class="s2">Отчёты сохранены в:&quot;</span><span class="p">,</span> <span class="n">args</span><span class="o">.</span><span class="n">output_dir</span><span class="p">)</span>
+            <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;=&quot;</span><span class="o">*</span><span class="mi">60</span> <span class="o">+</span> <span class="s2">&quot;</span><span class="se">\n</span><span class="s2">&quot;</span><span class="p">)</span>
+            
+            <span class="c1"># Код возврата</span>
+            <span class="k">if</span> <span class="n">failed</span> <span class="o">&gt;</span> <span class="mi">0</span><span class="p">:</span>
+                <span class="n">sys</span><span class="o">.</span><span class="n">exit</span><span class="p">(</span><span class="mi">2</span><span class="p">)</span>
+            
+            <span class="k">return</span>
+            
+        <span class="k">except</span> <span class="ne">Exception</span> <span class="k">as</span> <span class="n">exc</span><span class="p">:</span>
+            <span class="n">log_fail</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;[Agentless] Ошибка аудита: </span><span class="si">{</span><span class="n">exc</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+            <span class="kn">import</span><span class="w"> </span><span class="nn">traceback</span>
+            <span class="n">traceback</span><span class="o">.</span><span class="n">print_exc</span><span class="p">()</span>
+            <span class="n">sys</span><span class="o">.</span><span class="n">exit</span><span class="p">(</span><span class="mi">1</span><span class="p">)</span>
+    
+    <span class="c1"># Команда audit — полный запуск проверок</span>
+    <span class="k">if</span> <span class="n">args</span><span class="o">.</span><span class="n">command</span> <span class="o">==</span> <span class="s2">&quot;audit&quot;</span><span class="p">:</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="n">is_valid</span><span class="p">:</span>
+            <span class="c1"># Для аудита ошибки профиля критичны</span>
+            <span class="n">_print_and_exit_validation_errors</span><span class="p">(</span><span class="n">profile_path</span><span class="p">,</span> <span class="n">val_errors</span><span class="p">,</span> <span class="n">strict_exit_code</span><span class="o">=</span><span class="mi">2</span><span class="p">)</span>
+
+        <span class="c1"># Фильтрация модулей, если указано --module</span>
+        <span class="n">selected_modules</span> <span class="o">=</span> <span class="p">[]</span>
+        <span class="k">if</span> <span class="nb">getattr</span><span class="p">(</span><span class="n">args</span><span class="p">,</span> <span class="s2">&quot;module&quot;</span><span class="p">,</span> <span class="kc">None</span><span class="p">):</span>
+            <span class="n">selected_modules</span> <span class="o">=</span> <span class="p">[</span><span class="n">m</span><span class="o">.</span><span class="n">strip</span><span class="p">()</span> <span class="k">for</span> <span class="n">m</span> <span class="ow">in</span> <span class="n">args</span><span class="o">.</span><span class="n">module</span><span class="o">.</span><span class="n">split</span><span class="p">(</span><span class="s2">&quot;,&quot;</span><span class="p">)</span> <span class="k">if</span> <span class="n">m</span><span class="o">.</span><span class="n">strip</span><span class="p">()]</span>
+            <span class="k">if</span> <span class="n">selected_modules</span><span class="p">:</span>
+                <span class="n">log_info</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Выбраны модули: </span><span class="si">{</span><span class="n">selected_modules</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+
+        <span class="c1"># Запуск проверок</span>
+        <span class="n">evidence_dir</span> <span class="o">=</span> <span class="nb">getattr</span><span class="p">(</span><span class="n">args</span><span class="p">,</span> <span class="s2">&quot;evidence&quot;</span><span class="p">,</span> <span class="kc">None</span><span class="p">)</span>
+        <span class="n">outcome</span> <span class="o">=</span> <span class="n">run_checks</span><span class="p">(</span>
+            <span class="n">profile</span><span class="p">,</span>
+            <span class="n">selected_modules</span><span class="p">,</span>
+            <span class="n">evidence_dir</span><span class="p">,</span>
+            <span class="n">profile_path</span><span class="o">=</span><span class="n">profile_path</span><span class="p">,</span>
+            <span class="n">level</span><span class="o">=</span><span class="nb">getattr</span><span class="p">(</span><span class="n">args</span><span class="p">,</span> <span class="s2">&quot;level&quot;</span><span class="p">,</span> <span class="s2">&quot;baseline&quot;</span><span class="p">),</span>
+            <span class="n">variables_override</span><span class="o">=</span><span class="nb">getattr</span><span class="p">(</span><span class="n">args</span><span class="p">,</span> <span class="s2">&quot;vars&quot;</span><span class="p">,</span> <span class="p">{}),</span>
+            <span class="n">workers</span><span class="o">=</span><span class="nb">getattr</span><span class="p">(</span><span class="n">args</span><span class="p">,</span> <span class="s2">&quot;workers&quot;</span><span class="p">,</span> <span class="mi">0</span><span class="p">),</span>
+        <span class="p">)</span>
+        <span class="n">results</span> <span class="o">=</span> <span class="n">outcome</span><span class="o">.</span><span class="n">results</span>
+        <span class="n">summary</span> <span class="o">=</span> <span class="n">outcome</span><span class="o">.</span><span class="n">summary</span>
+
+        <span class="c1"># Директория результатов</span>
+        <span class="k">try</span><span class="p">:</span>
+            <span class="n">Path</span><span class="p">(</span><span class="s2">&quot;results&quot;</span><span class="p">)</span><span class="o">.</span><span class="n">mkdir</span><span class="p">(</span><span class="n">exist_ok</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+        <span class="k">except</span> <span class="ne">OSError</span> <span class="k">as</span> <span class="n">exc</span><span class="p">:</span>
+            <span class="n">log_fail</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Не удалось создать директорию results: </span><span class="si">{</span><span class="n">exc</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+            <span class="n">sys</span><span class="o">.</span><span class="n">exit</span><span class="p">(</span><span class="mi">1</span><span class="p">)</span>
+
+        <span class="c1"># Полный список результатов (плоский)</span>
+        <span class="k">try</span><span class="p">:</span>
+            <span class="k">with</span> <span class="nb">open</span><span class="p">(</span><span class="s2">&quot;results/report.json&quot;</span><span class="p">,</span> <span class="s2">&quot;w&quot;</span><span class="p">,</span> <span class="n">encoding</span><span class="o">=</span><span class="s2">&quot;utf-8&quot;</span><span class="p">)</span> <span class="k">as</span> <span class="n">f</span><span class="p">:</span>
+                <span class="n">json</span><span class="o">.</span><span class="n">dump</span><span class="p">({</span><span class="s2">&quot;results&quot;</span><span class="p">:</span> <span class="n">results</span><span class="p">,</span> <span class="s2">&quot;summary&quot;</span><span class="p">:</span> <span class="n">summary</span><span class="p">},</span> <span class="n">f</span><span class="p">,</span> <span class="n">indent</span><span class="o">=</span><span class="mi">2</span><span class="p">,</span> <span class="n">ensure_ascii</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span>
+            <span class="n">log_info</span><span class="p">(</span><span class="s2">&quot;Сохранен results/report.json&quot;</span><span class="p">)</span>
+        <span class="k">except</span> <span class="ne">OSError</span> <span class="k">as</span> <span class="n">exc</span><span class="p">:</span>
+            <span class="n">log_fail</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Ошибка записи results/report.json: </span><span class="si">{</span><span class="n">exc</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+
+        <span class="c1"># Группировка результатов по модулям</span>
+        <span class="k">try</span><span class="p">:</span>
+            <span class="n">generate_json_report</span><span class="p">(</span><span class="n">results</span><span class="p">,</span> <span class="s2">&quot;results/report_grouped.json&quot;</span><span class="p">,</span> <span class="n">summary</span><span class="o">=</span><span class="n">summary</span><span class="p">)</span>
+            <span class="n">log_info</span><span class="p">(</span><span class="s2">&quot;Сохранен results/report_grouped.json&quot;</span><span class="p">)</span>
+        <span class="k">except</span> <span class="ne">Exception</span> <span class="k">as</span> <span class="n">exc</span><span class="p">:</span>
+            <span class="n">log_fail</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Ошибка генерации report_grouped.json: </span><span class="si">{</span><span class="n">exc</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+
+        <span class="c1"># Логируем в консоль краткую сводку</span>
+        <span class="n">score</span> <span class="o">=</span> <span class="n">summary</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;score&quot;</span><span class="p">)</span>
+        <span class="k">if</span> <span class="n">score</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+            <span class="n">coverage</span> <span class="o">=</span> <span class="n">summary</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;coverage&quot;</span><span class="p">,</span> <span class="mi">0</span><span class="p">)</span> <span class="o">*</span> <span class="mi">100</span>
+            <span class="n">log_info</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Итоговый балл: </span><span class="si">{</span><span class="n">score</span><span class="si">:</span><span class="s2">.1f</span><span class="si">}</span><span class="s2">% (покрытие </span><span class="si">{</span><span class="n">coverage</span><span class="si">:</span><span class="s2">.1f</span><span class="si">}</span><span class="s2">%)&quot;</span><span class="p">)</span>
+        <span class="k">for</span> <span class="n">r</span> <span class="ow">in</span> <span class="n">results</span><span class="p">:</span>
+            <span class="n">name</span> <span class="o">=</span> <span class="n">r</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;name&quot;</span><span class="p">,</span> <span class="n">r</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;id&quot;</span><span class="p">,</span> <span class="s2">&quot;&lt;no-name&gt;&quot;</span><span class="p">))</span>
+            <span class="n">out</span> <span class="o">=</span> <span class="n">r</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;output&quot;</span><span class="p">,</span> <span class="s2">&quot;&quot;</span><span class="p">)</span>
+            <span class="n">status</span> <span class="o">=</span> <span class="n">r</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;result&quot;</span><span class="p">,</span> <span class="s2">&quot;UNDEF&quot;</span><span class="p">)</span>
+            <span class="k">if</span> <span class="n">status</span> <span class="o">==</span> <span class="s2">&quot;PASS&quot;</span><span class="p">:</span>
+                <span class="n">log_pass</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">name</span><span class="si">}</span><span class="s2"> → </span><span class="si">{</span><span class="n">out</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+            <span class="k">elif</span> <span class="n">status</span> <span class="o">==</span> <span class="s2">&quot;FAIL&quot;</span><span class="p">:</span>
+                <span class="n">log_fail</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">name</span><span class="si">}</span><span class="s2"> → </span><span class="si">{</span><span class="n">out</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+            <span class="k">elif</span> <span class="n">status</span> <span class="o">==</span> <span class="s2">&quot;WARN&quot;</span><span class="p">:</span>
+                <span class="n">log_warn</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">name</span><span class="si">}</span><span class="s2"> → </span><span class="si">{</span><span class="n">out</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+            <span class="k">else</span><span class="p">:</span>
+                <span class="n">log_warn</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">name</span><span class="si">}</span><span class="s2"> [</span><span class="si">{</span><span class="n">status</span><span class="si">}</span><span class="s2">] → </span><span class="si">{</span><span class="n">out</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+
+        <span class="k">for</span> <span class="n">failure</span> <span class="ow">in</span> <span class="n">summary</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;top_failures&quot;</span><span class="p">,</span> <span class="p">[])</span> <span class="ow">or</span> <span class="p">[]:</span>
+            <span class="n">log_warn</span><span class="p">(</span>
+                <span class="sa">f</span><span class="s2">&quot;ТОП-провал: </span><span class="si">{</span><span class="n">failure</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;id&#39;</span><span class="p">)</span><span class="si">}</span><span class="s2"> (</span><span class="si">{</span><span class="n">failure</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;result&#39;</span><span class="p">)</span><span class="si">}</span><span class="s2">) → </span><span class="si">{</span><span class="n">failure</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;reason&#39;</span><span class="p">)</span><span class="si">}</span><span class="s2">&quot;</span>
+            <span class="p">)</span>
+
+        <span class="c1"># Метаданные хоста для отчётов и имени файла</span>
+        <span class="n">host_info</span> <span class="o">=</span> <span class="n">collect_host_metadata</span><span class="p">(</span><span class="n">profile</span><span class="p">,</span> <span class="n">results</span><span class="p">,</span> <span class="n">summary</span><span class="o">=</span><span class="n">summary</span><span class="p">)</span>
+        <span class="n">hostname_component</span> <span class="o">=</span> <span class="n">_sanitize_filename_component</span><span class="p">(</span><span class="n">host_info</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;hostname&quot;</span><span class="p">))</span>
+        <span class="n">date_component</span> <span class="o">=</span> <span class="n">datetime</span><span class="o">.</span><span class="n">now</span><span class="p">()</span><span class="o">.</span><span class="n">strftime</span><span class="p">(</span><span class="s2">&quot;%Y%m</span><span class="si">%d</span><span class="s2">_%H%M%S&quot;</span><span class="p">)</span>
+        <span class="n">html_report_path</span> <span class="o">=</span> <span class="n">Path</span><span class="p">(</span><span class="s2">&quot;results&quot;</span><span class="p">)</span> <span class="o">/</span> <span class="sa">f</span><span class="s2">&quot;report_</span><span class="si">{</span><span class="n">hostname_component</span><span class="si">}</span><span class="s2">_</span><span class="si">{</span><span class="n">date_component</span><span class="si">}</span><span class="s2">.html&quot;</span>
+
+        <span class="c1"># Параллельная генерация отчетов</span>
+        <span class="n">log_info</span><span class="p">(</span><span class="s2">&quot;Генерация отчетов...&quot;</span><span class="p">)</span>
+        <span class="n">report_tasks</span> <span class="o">=</span> <span class="p">[</span>
+            <span class="p">(</span><span class="n">generate_report</span><span class="p">,</span> <span class="p">(</span><span class="n">profile</span><span class="p">,</span> <span class="n">results</span><span class="p">,</span> <span class="s2">&quot;report_template.md.j2&quot;</span><span class="p">,</span>
+                               <span class="n">Path</span><span class="p">(</span><span class="s2">&quot;results/report.md&quot;</span><span class="p">)),</span>
+             <span class="p">{</span><span class="s2">&quot;host_info&quot;</span><span class="p">:</span> <span class="n">host_info</span><span class="p">,</span> <span class="s2">&quot;summary&quot;</span><span class="p">:</span> <span class="n">summary</span><span class="p">}),</span>
+            <span class="p">(</span><span class="n">generate_report</span><span class="p">,</span> <span class="p">(</span><span class="n">profile</span><span class="p">,</span> <span class="n">results</span><span class="p">,</span> <span class="s2">&quot;report_template.html.j2&quot;</span><span class="p">,</span>
+                               <span class="n">html_report_path</span><span class="p">),</span>
+             <span class="p">{</span><span class="s2">&quot;host_info&quot;</span><span class="p">:</span> <span class="n">host_info</span><span class="p">,</span> <span class="s2">&quot;summary&quot;</span><span class="p">:</span> <span class="n">summary</span><span class="p">}),</span>
+            <span class="p">(</span><span class="n">generate_sarif_report</span><span class="p">,</span> <span class="p">(</span><span class="n">profile</span><span class="p">,</span> <span class="n">results</span><span class="p">,</span>
+                                     <span class="n">Path</span><span class="p">(</span><span class="s2">&quot;results/report.sarif&quot;</span><span class="p">)),</span>
+             <span class="p">{</span><span class="s2">&quot;summary&quot;</span><span class="p">:</span> <span class="n">summary</span><span class="p">,</span> <span class="s2">&quot;host_info&quot;</span><span class="p">:</span> <span class="n">host_info</span><span class="p">}),</span>
+            <span class="p">(</span><span class="n">generate_junit_report</span><span class="p">,</span> <span class="p">(</span><span class="n">profile</span><span class="p">,</span> <span class="n">results</span><span class="p">,</span>
+                                     <span class="n">Path</span><span class="p">(</span><span class="s2">&quot;results/report.junit.xml&quot;</span><span class="p">)),</span>
+             <span class="p">{</span><span class="s2">&quot;summary&quot;</span><span class="p">:</span> <span class="n">summary</span><span class="p">,</span> <span class="s2">&quot;host_info&quot;</span><span class="p">:</span> <span class="n">host_info</span><span class="p">}),</span>
+            <span class="p">(</span><span class="n">generate_prometheus_metrics</span><span class="p">,</span> <span class="p">(</span><span class="n">profile</span><span class="p">,</span> <span class="n">results</span><span class="p">,</span>
+                                           <span class="n">Path</span><span class="p">(</span><span class="s2">&quot;results/report.prom&quot;</span><span class="p">)),</span>
+             <span class="p">{</span><span class="s2">&quot;summary&quot;</span><span class="p">:</span> <span class="n">summary</span><span class="p">,</span> <span class="s2">&quot;host_info&quot;</span><span class="p">:</span> <span class="n">host_info</span><span class="p">}),</span>
+            <span class="p">(</span><span class="n">generate_elastic_export</span><span class="p">,</span> <span class="p">(</span><span class="n">profile</span><span class="p">,</span> <span class="n">results</span><span class="p">,</span>
+                                       <span class="n">Path</span><span class="p">(</span><span class="s2">&quot;results/report.elastic.ndjson&quot;</span><span class="p">)),</span>
+             <span class="p">{</span><span class="s2">&quot;summary&quot;</span><span class="p">:</span> <span class="n">summary</span><span class="p">,</span> <span class="s2">&quot;host_info&quot;</span><span class="p">:</span> <span class="n">host_info</span><span class="p">}),</span>
+        <span class="p">]</span>
+
+        <span class="k">with</span> <span class="n">ThreadPoolExecutor</span><span class="p">(</span><span class="n">max_workers</span><span class="o">=</span><span class="nb">len</span><span class="p">(</span><span class="n">report_tasks</span><span class="p">))</span> <span class="k">as</span> <span class="n">executor</span><span class="p">:</span>
+            <span class="n">futures</span> <span class="o">=</span> <span class="p">{</span><span class="n">executor</span><span class="o">.</span><span class="n">submit</span><span class="p">(</span><span class="n">func</span><span class="p">,</span> <span class="o">*</span><span class="n">args</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">)</span> <span class="k">for</span> <span class="n">func</span><span class="p">,</span> <span class="n">args</span><span class="p">,</span> <span class="n">kwargs</span> <span class="ow">in</span> <span class="n">report_tasks</span><span class="p">}</span>
+            <span class="k">for</span> <span class="n">future</span> <span class="ow">in</span> <span class="n">as_completed</span><span class="p">(</span><span class="n">futures</span><span class="p">):</span>
+                <span class="k">try</span><span class="p">:</span>
+                    <span class="n">future</span><span class="o">.</span><span class="n">result</span><span class="p">()</span>
+                <span class="k">except</span> <span class="ne">Exception</span> <span class="k">as</span> <span class="n">exc</span><span class="p">:</span>
+                    <span class="n">log_fail</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Ошибка при генерации отчета: </span><span class="si">{</span><span class="n">exc</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+
+        <span class="c1"># Политика завершения по --fail-level / --fail-on-undef</span>
+        <span class="n">fail_level</span> <span class="o">=</span> <span class="nb">getattr</span><span class="p">(</span><span class="n">args</span><span class="p">,</span> <span class="s2">&quot;fail_level&quot;</span><span class="p">,</span> <span class="s2">&quot;none&quot;</span><span class="p">)</span>
+        <span class="n">fail_on_undef</span> <span class="o">=</span> <span class="nb">getattr</span><span class="p">(</span><span class="n">args</span><span class="p">,</span> <span class="s2">&quot;fail_on_undef&quot;</span><span class="p">,</span> <span class="kc">False</span><span class="p">)</span>
+        <span class="n">exit_code</span> <span class="o">=</span> <span class="n">_apply_exit_policy</span><span class="p">(</span><span class="n">results</span><span class="p">,</span> <span class="n">fail_level</span><span class="p">,</span> <span class="n">fail_on_undef</span><span class="p">)</span>
+
+        <span class="k">if</span> <span class="n">exit_code</span><span class="p">:</span>
+            <span class="n">sys</span><span class="o">.</span><span class="n">exit</span><span class="p">(</span><span class="n">exit_code</span><span class="p">)</span>
+        <span class="k">return</span>
+
+    <span class="c1"># Если сюда дошли — неизвестная команда</span>
+    <span class="n">log_warn</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Неизвестная команда: </span><span class="si">{</span><span class="n">args</span><span class="o">.</span><span class="n">command</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+    <span class="n">sys</span><span class="o">.</span><span class="n">exit</span><span class="p">(</span><span class="mi">1</span><span class="p">)</span></div>
+
+
+
+<span class="k">if</span> <span class="vm">__name__</span> <span class="o">==</span> <span class="s2">&quot;__main__&quot;</span><span class="p">:</span>
+    <span class="n">main</span><span class="p">()</span>
+</pre></div>
+
+           </div>
+          </div>
+          <footer>
+
+  <hr/>
+
+  <div role="contentinfo">
+    <p>&#169; Copyright 2025, Alex Hellberg.</p>
+  </div>
+
+  Built with <a href="https://www.sphinx-doc.org/">Sphinx</a> using a
+    <a href="https://github.com/readthedocs/sphinx_rtd_theme">theme</a>
+    provided by <a href="https://readthedocs.org">Read the Docs</a>.
+   
+
+</footer>
+        </div>
+      </div>
+    </section>
+  </div>
+  <script>
+      jQuery(function () {
+          SphinxRtdTheme.Navigation.enable(true);
+      });
+  </script> 
+
+</body>
+</html>

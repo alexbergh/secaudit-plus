@@ -1,0 +1,193 @@
+
+
+<!DOCTYPE html>
+<html class="writer-html5" lang="en" data-content_root="../../">
+<head>
+  <meta charset="utf-8" /><meta name="viewport" content="width=device-width, initial-scale=1" />
+
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>utils &mdash; SecAudit+ 1.0.0 Documentation</title>
+      <link rel="stylesheet" type="text/css" href="../../_static/pygments.css?v=b86133f3" />
+      <link rel="stylesheet" type="text/css" href="../../_static/css/theme.css?v=e59714d7" />
+
+  
+      <script src="../../_static/jquery.js?v=5d32c60e"></script>
+      <script src="../../_static/_sphinx_javascript_frameworks_compat.js?v=2cd50e6c"></script>
+      <script src="../../_static/documentation_options.js?v=8d563738"></script>
+      <script src="../../_static/doctools.js?v=9bcbadda"></script>
+      <script src="../../_static/sphinx_highlight.js?v=dc90522c"></script>
+    <script src="../../_static/js/theme.js"></script>
+    <link rel="index" title="Index" href="../../genindex.html" />
+    <link rel="search" title="Search" href="../../search.html" /> 
+</head>
+
+<body class="wy-body-for-nav"> 
+  <div class="wy-grid-for-nav">
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-scroll">
+        <div class="wy-side-nav-search" >
+
+          
+          
+          <a href="../../index.html" class="icon icon-home">
+            SecAudit+
+          </a>
+<div role="search">
+  <form id="rtd-search-form" class="wy-form" action="../../search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" aria-label="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+        </div><div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="Navigation menu">
+              <p class="caption" role="heading"><span class="caption-text">Contents:</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../modules.html">modules</a></li>
+</ul>
+
+        </div>
+      </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap"><nav class="wy-nav-top" aria-label="Mobile navigation menu" >
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="../../index.html">SecAudit+</a>
+      </nav>
+
+      <div class="wy-nav-content">
+        <div class="rst-content">
+          <div role="navigation" aria-label="Page navigation">
+  <ul class="wy-breadcrumbs">
+      <li><a href="../../index.html" class="icon icon-home" aria-label="Home"></a></li>
+      <li class="breadcrumb-item active">utils</li>
+      <li class="wy-breadcrumbs-aside">
+            <a href="../../_sources/modules/utils/modules.rst.txt" rel="nofollow"> View page source</a>
+      </li>
+  </ul>
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+           <div itemprop="articleBody">
+             
+  <section id="utils">
+<h1>utils<a class="headerlink" href="#utils" title="Link to this heading"></a></h1>
+<div class="toctree-wrapper compound">
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="utils.html">utils package</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="utils.html#submodules">Submodules</a></li>
+<li class="toctree-l2"><a class="reference internal" href="utils.html#module-utils.audit_logger">utils.audit_logger module</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="utils.html#utils.audit_logger.AuditEventType"><code class="docutils literal notranslate"><span class="pre">AuditEventType</span></code></a><ul>
+<li class="toctree-l4"><a class="reference internal" href="utils.html#utils.audit_logger.AuditEventType.AUTH_SUCCESS"><code class="docutils literal notranslate"><span class="pre">AuditEventType.AUTH_SUCCESS</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="utils.html#utils.audit_logger.AuditEventType.AUTH_FAILURE"><code class="docutils literal notranslate"><span class="pre">AuditEventType.AUTH_FAILURE</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="utils.html#utils.audit_logger.AuditEventType.AUTH_LOGOUT"><code class="docutils literal notranslate"><span class="pre">AuditEventType.AUTH_LOGOUT</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="utils.html#utils.audit_logger.AuditEventType.AUDIT_START"><code class="docutils literal notranslate"><span class="pre">AuditEventType.AUDIT_START</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="utils.html#utils.audit_logger.AuditEventType.AUDIT_COMPLETE"><code class="docutils literal notranslate"><span class="pre">AuditEventType.AUDIT_COMPLETE</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="utils.html#utils.audit_logger.AuditEventType.AUDIT_FAILED"><code class="docutils literal notranslate"><span class="pre">AuditEventType.AUDIT_FAILED</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="utils.html#utils.audit_logger.AuditEventType.AUDIT_CANCELLED"><code class="docutils literal notranslate"><span class="pre">AuditEventType.AUDIT_CANCELLED</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="utils.html#utils.audit_logger.AuditEventType.RESULTS_VIEW"><code class="docutils literal notranslate"><span class="pre">AuditEventType.RESULTS_VIEW</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="utils.html#utils.audit_logger.AuditEventType.RESULTS_DOWNLOAD"><code class="docutils literal notranslate"><span class="pre">AuditEventType.RESULTS_DOWNLOAD</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="utils.html#utils.audit_logger.AuditEventType.RESULTS_DELETE"><code class="docutils literal notranslate"><span class="pre">AuditEventType.RESULTS_DELETE</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="utils.html#utils.audit_logger.AuditEventType.CONFIG_VIEW"><code class="docutils literal notranslate"><span class="pre">AuditEventType.CONFIG_VIEW</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="utils.html#utils.audit_logger.AuditEventType.CONFIG_UPDATE"><code class="docutils literal notranslate"><span class="pre">AuditEventType.CONFIG_UPDATE</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="utils.html#utils.audit_logger.AuditEventType.PROFILE_LOAD"><code class="docutils literal notranslate"><span class="pre">AuditEventType.PROFILE_LOAD</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="utils.html#utils.audit_logger.AuditEventType.USER_CREATE"><code class="docutils literal notranslate"><span class="pre">AuditEventType.USER_CREATE</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="utils.html#utils.audit_logger.AuditEventType.USER_UPDATE"><code class="docutils literal notranslate"><span class="pre">AuditEventType.USER_UPDATE</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="utils.html#utils.audit_logger.AuditEventType.USER_DELETE"><code class="docutils literal notranslate"><span class="pre">AuditEventType.USER_DELETE</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="utils.html#utils.audit_logger.AuditEventType.ROLE_ASSIGN"><code class="docutils literal notranslate"><span class="pre">AuditEventType.ROLE_ASSIGN</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="utils.html#utils.audit_logger.AuditEventType.ROLE_REVOKE"><code class="docutils literal notranslate"><span class="pre">AuditEventType.ROLE_REVOKE</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="utils.html#utils.audit_logger.AuditEventType.SYSTEM_START"><code class="docutils literal notranslate"><span class="pre">AuditEventType.SYSTEM_START</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="utils.html#utils.audit_logger.AuditEventType.SYSTEM_STOP"><code class="docutils literal notranslate"><span class="pre">AuditEventType.SYSTEM_STOP</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="utils.html#utils.audit_logger.AuditEventType.SYSTEM_ERROR"><code class="docutils literal notranslate"><span class="pre">AuditEventType.SYSTEM_ERROR</span></code></a></li>
+</ul>
+</li>
+<li class="toctree-l3"><a class="reference internal" href="utils.html#utils.audit_logger.AuditSeverity"><code class="docutils literal notranslate"><span class="pre">AuditSeverity</span></code></a><ul>
+<li class="toctree-l4"><a class="reference internal" href="utils.html#utils.audit_logger.AuditSeverity.DEBUG"><code class="docutils literal notranslate"><span class="pre">AuditSeverity.DEBUG</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="utils.html#utils.audit_logger.AuditSeverity.INFO"><code class="docutils literal notranslate"><span class="pre">AuditSeverity.INFO</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="utils.html#utils.audit_logger.AuditSeverity.WARNING"><code class="docutils literal notranslate"><span class="pre">AuditSeverity.WARNING</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="utils.html#utils.audit_logger.AuditSeverity.ERROR"><code class="docutils literal notranslate"><span class="pre">AuditSeverity.ERROR</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="utils.html#utils.audit_logger.AuditSeverity.CRITICAL"><code class="docutils literal notranslate"><span class="pre">AuditSeverity.CRITICAL</span></code></a></li>
+</ul>
+</li>
+<li class="toctree-l3"><a class="reference internal" href="utils.html#utils.audit_logger.AuditEvent"><code class="docutils literal notranslate"><span class="pre">AuditEvent</span></code></a><ul>
+<li class="toctree-l4"><a class="reference internal" href="utils.html#utils.audit_logger.AuditEvent.timestamp"><code class="docutils literal notranslate"><span class="pre">AuditEvent.timestamp</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="utils.html#utils.audit_logger.AuditEvent.event_type"><code class="docutils literal notranslate"><span class="pre">AuditEvent.event_type</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="utils.html#utils.audit_logger.AuditEvent.severity"><code class="docutils literal notranslate"><span class="pre">AuditEvent.severity</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="utils.html#utils.audit_logger.AuditEvent.username"><code class="docutils literal notranslate"><span class="pre">AuditEvent.username</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="utils.html#utils.audit_logger.AuditEvent.source_ip"><code class="docutils literal notranslate"><span class="pre">AuditEvent.source_ip</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="utils.html#utils.audit_logger.AuditEvent.action"><code class="docutils literal notranslate"><span class="pre">AuditEvent.action</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="utils.html#utils.audit_logger.AuditEvent.resource"><code class="docutils literal notranslate"><span class="pre">AuditEvent.resource</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="utils.html#utils.audit_logger.AuditEvent.result"><code class="docutils literal notranslate"><span class="pre">AuditEvent.result</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="utils.html#utils.audit_logger.AuditEvent.details"><code class="docutils literal notranslate"><span class="pre">AuditEvent.details</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="utils.html#utils.audit_logger.AuditEvent.session_id"><code class="docutils literal notranslate"><span class="pre">AuditEvent.session_id</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="utils.html#utils.audit_logger.AuditEvent.to_dict"><code class="docutils literal notranslate"><span class="pre">AuditEvent.to_dict()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="utils.html#utils.audit_logger.AuditEvent.to_json"><code class="docutils literal notranslate"><span class="pre">AuditEvent.to_json()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="utils.html#utils.audit_logger.AuditEvent.__init__"><code class="docutils literal notranslate"><span class="pre">AuditEvent.__init__()</span></code></a></li>
+</ul>
+</li>
+<li class="toctree-l3"><a class="reference internal" href="utils.html#utils.audit_logger.AuditLogger"><code class="docutils literal notranslate"><span class="pre">AuditLogger</span></code></a><ul>
+<li class="toctree-l4"><a class="reference internal" href="utils.html#utils.audit_logger.AuditLogger.__init__"><code class="docutils literal notranslate"><span class="pre">AuditLogger.__init__()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="utils.html#utils.audit_logger.AuditLogger.log_event"><code class="docutils literal notranslate"><span class="pre">AuditLogger.log_event()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="utils.html#utils.audit_logger.AuditLogger.log_auth_success"><code class="docutils literal notranslate"><span class="pre">AuditLogger.log_auth_success()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="utils.html#utils.audit_logger.AuditLogger.log_auth_failure"><code class="docutils literal notranslate"><span class="pre">AuditLogger.log_auth_failure()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="utils.html#utils.audit_logger.AuditLogger.log_audit_start"><code class="docutils literal notranslate"><span class="pre">AuditLogger.log_audit_start()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="utils.html#utils.audit_logger.AuditLogger.log_audit_complete"><code class="docutils literal notranslate"><span class="pre">AuditLogger.log_audit_complete()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="utils.html#utils.audit_logger.AuditLogger.log_audit_failed"><code class="docutils literal notranslate"><span class="pre">AuditLogger.log_audit_failed()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="utils.html#utils.audit_logger.AuditLogger.log_results_view"><code class="docutils literal notranslate"><span class="pre">AuditLogger.log_results_view()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="utils.html#utils.audit_logger.AuditLogger.log_config_update"><code class="docutils literal notranslate"><span class="pre">AuditLogger.log_config_update()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="utils.html#utils.audit_logger.AuditLogger.log_user_create"><code class="docutils literal notranslate"><span class="pre">AuditLogger.log_user_create()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="utils.html#utils.audit_logger.AuditLogger.log_role_assign"><code class="docutils literal notranslate"><span class="pre">AuditLogger.log_role_assign()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="utils.html#utils.audit_logger.AuditLogger.log_system_error"><code class="docutils literal notranslate"><span class="pre">AuditLogger.log_system_error()</span></code></a></li>
+</ul>
+</li>
+<li class="toctree-l3"><a class="reference internal" href="utils.html#utils.audit_logger.get_audit_logger"><code class="docutils literal notranslate"><span class="pre">get_audit_logger()</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="utils.html#utils.audit_logger.configure_audit_logger"><code class="docutils literal notranslate"><span class="pre">configure_audit_logger()</span></code></a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="utils.html#module-utils.logger">utils.logger module</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="utils.html#utils.logger.configure_logging"><code class="docutils literal notranslate"><span class="pre">configure_logging()</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="utils.html#utils.logger.log_debug"><code class="docutils literal notranslate"><span class="pre">log_debug()</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="utils.html#utils.logger.log_info"><code class="docutils literal notranslate"><span class="pre">log_info()</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="utils.html#utils.logger.log_pass"><code class="docutils literal notranslate"><span class="pre">log_pass()</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="utils.html#utils.logger.log_fail"><code class="docutils literal notranslate"><span class="pre">log_fail()</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="utils.html#utils.logger.log_warn"><code class="docutils literal notranslate"><span class="pre">log_warn()</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="utils.html#utils.logger.log_error"><code class="docutils literal notranslate"><span class="pre">log_error()</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="utils.html#utils.logger.log_critical"><code class="docutils literal notranslate"><span class="pre">log_critical()</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="utils.html#utils.logger.log_section"><code class="docutils literal notranslate"><span class="pre">log_section()</span></code></a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="utils.html#module-utils">Module contents</a></li>
+</ul>
+</li>
+</ul>
+</div>
+</section>
+
+
+           </div>
+          </div>
+          <footer>
+
+  <hr/>
+
+  <div role="contentinfo">
+    <p>&#169; Copyright 2025, Alex Hellberg.</p>
+  </div>
+
+  Built with <a href="https://www.sphinx-doc.org/">Sphinx</a> using a
+    <a href="https://github.com/readthedocs/sphinx_rtd_theme">theme</a>
+    provided by <a href="https://readthedocs.org">Read the Docs</a>.
+   
+
+</footer>
+        </div>
+      </div>
+    </section>
+  </div>
+  <script>
+      jQuery(function () {
+          SphinxRtdTheme.Navigation.enable(true);
+      });
+  </script> 
+
+</body>
+</html>

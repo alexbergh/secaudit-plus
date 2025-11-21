@@ -1,0 +1,579 @@
+
+
+<!DOCTYPE html>
+<html class="writer-html5" lang="en" data-content_root="../../">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>utils.audit_logger &mdash; SecAudit+ 1.0.0 Documentation</title>
+      <link rel="stylesheet" type="text/css" href="../../_static/pygments.css?v=b86133f3" />
+      <link rel="stylesheet" type="text/css" href="../../_static/css/theme.css?v=e59714d7" />
+
+  
+      <script src="../../_static/jquery.js?v=5d32c60e"></script>
+      <script src="../../_static/_sphinx_javascript_frameworks_compat.js?v=2cd50e6c"></script>
+      <script src="../../_static/documentation_options.js?v=8d563738"></script>
+      <script src="../../_static/doctools.js?v=9bcbadda"></script>
+      <script src="../../_static/sphinx_highlight.js?v=dc90522c"></script>
+    <script src="../../_static/js/theme.js"></script>
+    <link rel="index" title="Index" href="../../genindex.html" />
+    <link rel="search" title="Search" href="../../search.html" /> 
+</head>
+
+<body class="wy-body-for-nav"> 
+  <div class="wy-grid-for-nav">
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-scroll">
+        <div class="wy-side-nav-search" >
+
+          
+          
+          <a href="../../index.html" class="icon icon-home">
+            SecAudit+
+          </a>
+<div role="search">
+  <form id="rtd-search-form" class="wy-form" action="../../search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" aria-label="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+        </div><div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="Navigation menu">
+              <p class="caption" role="heading"><span class="caption-text">Contents:</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../modules/modules.html">modules</a></li>
+</ul>
+
+        </div>
+      </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap"><nav class="wy-nav-top" aria-label="Mobile navigation menu" >
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="../../index.html">SecAudit+</a>
+      </nav>
+
+      <div class="wy-nav-content">
+        <div class="rst-content">
+          <div role="navigation" aria-label="Page navigation">
+  <ul class="wy-breadcrumbs">
+      <li><a href="../../index.html" class="icon icon-home" aria-label="Home"></a></li>
+          <li class="breadcrumb-item"><a href="../index.html">Module code</a></li>
+      <li class="breadcrumb-item active">utils.audit_logger</li>
+      <li class="wy-breadcrumbs-aside">
+      </li>
+  </ul>
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+           <div itemprop="articleBody">
+             
+  <h1>Source code for utils.audit_logger</h1><div class="highlight"><pre>
+<span></span><span class="sd">&quot;&quot;&quot;Audit logging для SecAudit+.&quot;&quot;&quot;</span>
+
+<span class="kn">import</span><span class="w"> </span><span class="nn">json</span>
+<span class="kn">import</span><span class="w"> </span><span class="nn">logging</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">datetime</span><span class="w"> </span><span class="kn">import</span> <span class="n">datetime</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">typing</span><span class="w"> </span><span class="kn">import</span> <span class="n">Optional</span><span class="p">,</span> <span class="n">Dict</span><span class="p">,</span> <span class="n">Any</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">pathlib</span><span class="w"> </span><span class="kn">import</span> <span class="n">Path</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">dataclasses</span><span class="w"> </span><span class="kn">import</span> <span class="n">dataclass</span><span class="p">,</span> <span class="n">asdict</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">enum</span><span class="w"> </span><span class="kn">import</span> <span class="n">Enum</span>
+
+
+<div class="viewcode-block" id="AuditEventType">
+<a class="viewcode-back" href="../../modules/utils/utils.html#utils.audit_logger.AuditEventType">[docs]</a>
+<span class="k">class</span><span class="w"> </span><span class="nc">AuditEventType</span><span class="p">(</span><span class="n">Enum</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Types of audit events.&quot;&quot;&quot;</span>
+    <span class="c1"># Authentication events</span>
+    <span class="n">AUTH_SUCCESS</span> <span class="o">=</span> <span class="s2">&quot;auth.success&quot;</span>
+    <span class="n">AUTH_FAILURE</span> <span class="o">=</span> <span class="s2">&quot;auth.failure&quot;</span>
+    <span class="n">AUTH_LOGOUT</span> <span class="o">=</span> <span class="s2">&quot;auth.logout&quot;</span>
+    
+    <span class="c1"># Audit execution events</span>
+    <span class="n">AUDIT_START</span> <span class="o">=</span> <span class="s2">&quot;audit.start&quot;</span>
+    <span class="n">AUDIT_COMPLETE</span> <span class="o">=</span> <span class="s2">&quot;audit.complete&quot;</span>
+    <span class="n">AUDIT_FAILED</span> <span class="o">=</span> <span class="s2">&quot;audit.failed&quot;</span>
+    <span class="n">AUDIT_CANCELLED</span> <span class="o">=</span> <span class="s2">&quot;audit.cancelled&quot;</span>
+    
+    <span class="c1"># Resource access events</span>
+    <span class="n">RESULTS_VIEW</span> <span class="o">=</span> <span class="s2">&quot;results.view&quot;</span>
+    <span class="n">RESULTS_DOWNLOAD</span> <span class="o">=</span> <span class="s2">&quot;results.download&quot;</span>
+    <span class="n">RESULTS_DELETE</span> <span class="o">=</span> <span class="s2">&quot;results.delete&quot;</span>
+    
+    <span class="c1"># Configuration events</span>
+    <span class="n">CONFIG_VIEW</span> <span class="o">=</span> <span class="s2">&quot;config.view&quot;</span>
+    <span class="n">CONFIG_UPDATE</span> <span class="o">=</span> <span class="s2">&quot;config.update&quot;</span>
+    <span class="n">PROFILE_LOAD</span> <span class="o">=</span> <span class="s2">&quot;profile.load&quot;</span>
+    
+    <span class="c1"># User management events</span>
+    <span class="n">USER_CREATE</span> <span class="o">=</span> <span class="s2">&quot;user.create&quot;</span>
+    <span class="n">USER_UPDATE</span> <span class="o">=</span> <span class="s2">&quot;user.update&quot;</span>
+    <span class="n">USER_DELETE</span> <span class="o">=</span> <span class="s2">&quot;user.delete&quot;</span>
+    <span class="n">ROLE_ASSIGN</span> <span class="o">=</span> <span class="s2">&quot;role.assign&quot;</span>
+    <span class="n">ROLE_REVOKE</span> <span class="o">=</span> <span class="s2">&quot;role.revoke&quot;</span>
+    
+    <span class="c1"># System events</span>
+    <span class="n">SYSTEM_START</span> <span class="o">=</span> <span class="s2">&quot;system.start&quot;</span>
+    <span class="n">SYSTEM_STOP</span> <span class="o">=</span> <span class="s2">&quot;system.stop&quot;</span>
+    <span class="n">SYSTEM_ERROR</span> <span class="o">=</span> <span class="s2">&quot;system.error&quot;</span></div>
+
+
+
+<div class="viewcode-block" id="AuditSeverity">
+<a class="viewcode-back" href="../../modules/utils/utils.html#utils.audit_logger.AuditSeverity">[docs]</a>
+<span class="k">class</span><span class="w"> </span><span class="nc">AuditSeverity</span><span class="p">(</span><span class="n">Enum</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Severity levels for audit events.&quot;&quot;&quot;</span>
+    <span class="n">DEBUG</span> <span class="o">=</span> <span class="s2">&quot;debug&quot;</span>
+    <span class="n">INFO</span> <span class="o">=</span> <span class="s2">&quot;info&quot;</span>
+    <span class="n">WARNING</span> <span class="o">=</span> <span class="s2">&quot;warning&quot;</span>
+    <span class="n">ERROR</span> <span class="o">=</span> <span class="s2">&quot;error&quot;</span>
+    <span class="n">CRITICAL</span> <span class="o">=</span> <span class="s2">&quot;critical&quot;</span></div>
+
+
+
+<div class="viewcode-block" id="AuditEvent">
+<a class="viewcode-back" href="../../modules/utils/utils.html#utils.audit_logger.AuditEvent">[docs]</a>
+<span class="nd">@dataclass</span>
+<span class="k">class</span><span class="w"> </span><span class="nc">AuditEvent</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Audit event.&quot;&quot;&quot;</span>
+    <span class="n">timestamp</span><span class="p">:</span> <span class="nb">str</span>
+    <span class="n">event_type</span><span class="p">:</span> <span class="nb">str</span>
+    <span class="n">severity</span><span class="p">:</span> <span class="nb">str</span>
+    <span class="n">username</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span>
+    <span class="n">source_ip</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span>
+    <span class="n">action</span><span class="p">:</span> <span class="nb">str</span>
+    <span class="n">resource</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span>
+    <span class="n">result</span><span class="p">:</span> <span class="nb">str</span>  <span class="c1"># success, failure, error</span>
+    <span class="n">details</span><span class="p">:</span> <span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">]</span>
+    <span class="n">session_id</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span>
+    
+<div class="viewcode-block" id="AuditEvent.to_dict">
+<a class="viewcode-back" href="../../modules/utils/utils.html#utils.audit_logger.AuditEvent.to_dict">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">to_dict</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">]:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Convert to dictionary.&quot;&quot;&quot;</span>
+        <span class="k">return</span> <span class="n">asdict</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span></div>
+
+    
+<div class="viewcode-block" id="AuditEvent.to_json">
+<a class="viewcode-back" href="../../modules/utils/utils.html#utils.audit_logger.AuditEvent.to_json">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">to_json</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">str</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Convert to JSON string.&quot;&quot;&quot;</span>
+        <span class="k">return</span> <span class="n">json</span><span class="o">.</span><span class="n">dumps</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">to_dict</span><span class="p">())</span></div>
+</div>
+
+
+
+<div class="viewcode-block" id="AuditLogger">
+<a class="viewcode-back" href="../../modules/utils/utils.html#utils.audit_logger.AuditLogger">[docs]</a>
+<span class="k">class</span><span class="w"> </span><span class="nc">AuditLogger</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    Audit logger for security events.</span>
+<span class="sd">    </span>
+<span class="sd">    Logs all security-relevant events including:</span>
+<span class="sd">    - Authentication attempts</span>
+<span class="sd">    - Audit executions</span>
+<span class="sd">    - Resource access</span>
+<span class="sd">    - Configuration changes</span>
+<span class="sd">    - User management</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    
+<div class="viewcode-block" id="AuditLogger.__init__">
+<a class="viewcode-back" href="../../modules/utils/utils.html#utils.audit_logger.AuditLogger.__init__">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="fm">__init__</span><span class="p">(</span>
+        <span class="bp">self</span><span class="p">,</span>
+        <span class="n">log_file</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="n">Path</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+        <span class="n">log_level</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">&quot;INFO&quot;</span><span class="p">,</span>
+        <span class="n">enable_syslog</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span><span class="p">,</span>
+        <span class="n">syslog_host</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+        <span class="n">syslog_port</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">514</span><span class="p">,</span>
+    <span class="p">):</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        Initialize audit logger.</span>
+<span class="sd">        </span>
+<span class="sd">        Args:</span>
+<span class="sd">            log_file: Path to audit log file</span>
+<span class="sd">            log_level: Minimum log level</span>
+<span class="sd">            enable_syslog: Enable syslog output</span>
+<span class="sd">            syslog_host: Syslog server host</span>
+<span class="sd">            syslog_port: Syslog server port</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">log_file</span> <span class="o">=</span> <span class="n">log_file</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">log_level</span> <span class="o">=</span> <span class="nb">getattr</span><span class="p">(</span><span class="n">logging</span><span class="p">,</span> <span class="n">log_level</span><span class="o">.</span><span class="n">upper</span><span class="p">())</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">enable_syslog</span> <span class="o">=</span> <span class="n">enable_syslog</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">syslog_host</span> <span class="o">=</span> <span class="n">syslog_host</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">syslog_port</span> <span class="o">=</span> <span class="n">syslog_port</span>
+        
+        <span class="c1"># Setup logger</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">logger</span> <span class="o">=</span> <span class="n">logging</span><span class="o">.</span><span class="n">getLogger</span><span class="p">(</span><span class="s2">&quot;secaudit.audit&quot;</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">logger</span><span class="o">.</span><span class="n">setLevel</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">log_level</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">logger</span><span class="o">.</span><span class="n">propagate</span> <span class="o">=</span> <span class="kc">False</span>
+        
+        <span class="c1"># File handler</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">log_file</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">log_file</span><span class="o">.</span><span class="n">parent</span><span class="o">.</span><span class="n">mkdir</span><span class="p">(</span><span class="n">parents</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">exist_ok</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+            <span class="n">file_handler</span> <span class="o">=</span> <span class="n">logging</span><span class="o">.</span><span class="n">FileHandler</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">log_file</span><span class="p">)</span>
+            <span class="n">file_handler</span><span class="o">.</span><span class="n">setLevel</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">log_level</span><span class="p">)</span>
+            <span class="n">file_handler</span><span class="o">.</span><span class="n">setFormatter</span><span class="p">(</span>
+                <span class="n">logging</span><span class="o">.</span><span class="n">Formatter</span><span class="p">(</span><span class="s1">&#39;</span><span class="si">%(message)s</span><span class="s1">&#39;</span><span class="p">)</span>  <span class="c1"># JSON format</span>
+            <span class="p">)</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">logger</span><span class="o">.</span><span class="n">addHandler</span><span class="p">(</span><span class="n">file_handler</span><span class="p">)</span>
+        
+        <span class="c1"># Syslog handler</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">enable_syslog</span> <span class="ow">and</span> <span class="bp">self</span><span class="o">.</span><span class="n">syslog_host</span><span class="p">:</span>
+            <span class="kn">from</span><span class="w"> </span><span class="nn">logging.handlers</span><span class="w"> </span><span class="kn">import</span> <span class="n">SysLogHandler</span>
+            <span class="n">syslog_handler</span> <span class="o">=</span> <span class="n">SysLogHandler</span><span class="p">(</span>
+                <span class="n">address</span><span class="o">=</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">syslog_host</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">syslog_port</span><span class="p">)</span>
+            <span class="p">)</span>
+            <span class="n">syslog_handler</span><span class="o">.</span><span class="n">setLevel</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">log_level</span><span class="p">)</span>
+            <span class="n">syslog_handler</span><span class="o">.</span><span class="n">setFormatter</span><span class="p">(</span>
+                <span class="n">logging</span><span class="o">.</span><span class="n">Formatter</span><span class="p">(</span><span class="s1">&#39;secaudit: </span><span class="si">%(message)s</span><span class="s1">&#39;</span><span class="p">)</span>
+            <span class="p">)</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">logger</span><span class="o">.</span><span class="n">addHandler</span><span class="p">(</span><span class="n">syslog_handler</span><span class="p">)</span></div>
+
+    
+<div class="viewcode-block" id="AuditLogger.log_event">
+<a class="viewcode-back" href="../../modules/utils/utils.html#utils.audit_logger.AuditLogger.log_event">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">log_event</span><span class="p">(</span>
+        <span class="bp">self</span><span class="p">,</span>
+        <span class="n">event_type</span><span class="p">:</span> <span class="n">AuditEventType</span><span class="p">,</span>
+        <span class="n">action</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span>
+        <span class="n">result</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span>
+        <span class="n">username</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+        <span class="n">source_ip</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+        <span class="n">resource</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+        <span class="n">details</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">]]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+        <span class="n">severity</span><span class="p">:</span> <span class="n">AuditSeverity</span> <span class="o">=</span> <span class="n">AuditSeverity</span><span class="o">.</span><span class="n">INFO</span><span class="p">,</span>
+        <span class="n">session_id</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+    <span class="p">):</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        Log an audit event.</span>
+<span class="sd">        </span>
+<span class="sd">        Args:</span>
+<span class="sd">            event_type: Type of event</span>
+<span class="sd">            action: Action performed</span>
+<span class="sd">            result: Result (success, failure, error)</span>
+<span class="sd">            username: Username who performed action</span>
+<span class="sd">            source_ip: Source IP address</span>
+<span class="sd">            resource: Resource affected</span>
+<span class="sd">            details: Additional details</span>
+<span class="sd">            severity: Event severity</span>
+<span class="sd">            session_id: Session identifier</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="n">event</span> <span class="o">=</span> <span class="n">AuditEvent</span><span class="p">(</span>
+            <span class="n">timestamp</span><span class="o">=</span><span class="n">datetime</span><span class="o">.</span><span class="n">utcnow</span><span class="p">()</span><span class="o">.</span><span class="n">isoformat</span><span class="p">()</span> <span class="o">+</span> <span class="s2">&quot;Z&quot;</span><span class="p">,</span>
+            <span class="n">event_type</span><span class="o">=</span><span class="n">event_type</span><span class="o">.</span><span class="n">value</span><span class="p">,</span>
+            <span class="n">severity</span><span class="o">=</span><span class="n">severity</span><span class="o">.</span><span class="n">value</span><span class="p">,</span>
+            <span class="n">username</span><span class="o">=</span><span class="n">username</span><span class="p">,</span>
+            <span class="n">source_ip</span><span class="o">=</span><span class="n">source_ip</span><span class="p">,</span>
+            <span class="n">action</span><span class="o">=</span><span class="n">action</span><span class="p">,</span>
+            <span class="n">resource</span><span class="o">=</span><span class="n">resource</span><span class="p">,</span>
+            <span class="n">result</span><span class="o">=</span><span class="n">result</span><span class="p">,</span>
+            <span class="n">details</span><span class="o">=</span><span class="n">details</span> <span class="ow">or</span> <span class="p">{},</span>
+            <span class="n">session_id</span><span class="o">=</span><span class="n">session_id</span><span class="p">,</span>
+        <span class="p">)</span>
+        
+        <span class="c1"># Log as JSON</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">logger</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="n">event</span><span class="o">.</span><span class="n">to_json</span><span class="p">())</span></div>
+
+    
+    <span class="c1"># Convenience methods for common events</span>
+    
+<div class="viewcode-block" id="AuditLogger.log_auth_success">
+<a class="viewcode-back" href="../../modules/utils/utils.html#utils.audit_logger.AuditLogger.log_auth_success">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">log_auth_success</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">username</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">source_ip</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">):</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Log successful authentication.&quot;&quot;&quot;</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">log_event</span><span class="p">(</span>
+            <span class="n">AuditEventType</span><span class="o">.</span><span class="n">AUTH_SUCCESS</span><span class="p">,</span>
+            <span class="n">action</span><span class="o">=</span><span class="s2">&quot;authenticate&quot;</span><span class="p">,</span>
+            <span class="n">result</span><span class="o">=</span><span class="s2">&quot;success&quot;</span><span class="p">,</span>
+            <span class="n">username</span><span class="o">=</span><span class="n">username</span><span class="p">,</span>
+            <span class="n">source_ip</span><span class="o">=</span><span class="n">source_ip</span><span class="p">,</span>
+            <span class="n">severity</span><span class="o">=</span><span class="n">AuditSeverity</span><span class="o">.</span><span class="n">INFO</span><span class="p">,</span>
+            <span class="o">**</span><span class="n">kwargs</span>
+        <span class="p">)</span></div>
+
+    
+<div class="viewcode-block" id="AuditLogger.log_auth_failure">
+<a class="viewcode-back" href="../../modules/utils/utils.html#utils.audit_logger.AuditLogger.log_auth_failure">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">log_auth_failure</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">username</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">source_ip</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span> <span class="n">reason</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">&quot;&quot;</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">):</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Log failed authentication.&quot;&quot;&quot;</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">log_event</span><span class="p">(</span>
+            <span class="n">AuditEventType</span><span class="o">.</span><span class="n">AUTH_FAILURE</span><span class="p">,</span>
+            <span class="n">action</span><span class="o">=</span><span class="s2">&quot;authenticate&quot;</span><span class="p">,</span>
+            <span class="n">result</span><span class="o">=</span><span class="s2">&quot;failure&quot;</span><span class="p">,</span>
+            <span class="n">username</span><span class="o">=</span><span class="n">username</span><span class="p">,</span>
+            <span class="n">source_ip</span><span class="o">=</span><span class="n">source_ip</span><span class="p">,</span>
+            <span class="n">details</span><span class="o">=</span><span class="p">{</span><span class="s2">&quot;reason&quot;</span><span class="p">:</span> <span class="n">reason</span><span class="p">},</span>
+            <span class="n">severity</span><span class="o">=</span><span class="n">AuditSeverity</span><span class="o">.</span><span class="n">WARNING</span><span class="p">,</span>
+            <span class="o">**</span><span class="n">kwargs</span>
+        <span class="p">)</span></div>
+
+    
+<div class="viewcode-block" id="AuditLogger.log_audit_start">
+<a class="viewcode-back" href="../../modules/utils/utils.html#utils.audit_logger.AuditLogger.log_audit_start">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">log_audit_start</span><span class="p">(</span>
+        <span class="bp">self</span><span class="p">,</span>
+        <span class="n">username</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span>
+        <span class="n">profile</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span>
+        <span class="n">level</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span>
+        <span class="n">source_ip</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+        <span class="o">**</span><span class="n">kwargs</span>
+    <span class="p">):</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Log audit start.&quot;&quot;&quot;</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">log_event</span><span class="p">(</span>
+            <span class="n">AuditEventType</span><span class="o">.</span><span class="n">AUDIT_START</span><span class="p">,</span>
+            <span class="n">action</span><span class="o">=</span><span class="s2">&quot;start_audit&quot;</span><span class="p">,</span>
+            <span class="n">result</span><span class="o">=</span><span class="s2">&quot;success&quot;</span><span class="p">,</span>
+            <span class="n">username</span><span class="o">=</span><span class="n">username</span><span class="p">,</span>
+            <span class="n">source_ip</span><span class="o">=</span><span class="n">source_ip</span><span class="p">,</span>
+            <span class="n">resource</span><span class="o">=</span><span class="n">profile</span><span class="p">,</span>
+            <span class="n">details</span><span class="o">=</span><span class="p">{</span><span class="s2">&quot;level&quot;</span><span class="p">:</span> <span class="n">level</span><span class="p">},</span>
+            <span class="n">severity</span><span class="o">=</span><span class="n">AuditSeverity</span><span class="o">.</span><span class="n">INFO</span><span class="p">,</span>
+            <span class="o">**</span><span class="n">kwargs</span>
+        <span class="p">)</span></div>
+
+    
+<div class="viewcode-block" id="AuditLogger.log_audit_complete">
+<a class="viewcode-back" href="../../modules/utils/utils.html#utils.audit_logger.AuditLogger.log_audit_complete">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">log_audit_complete</span><span class="p">(</span>
+        <span class="bp">self</span><span class="p">,</span>
+        <span class="n">username</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span>
+        <span class="n">profile</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span>
+        <span class="n">duration</span><span class="p">:</span> <span class="nb">float</span><span class="p">,</span>
+        <span class="n">score</span><span class="p">:</span> <span class="nb">float</span><span class="p">,</span>
+        <span class="n">checks_total</span><span class="p">:</span> <span class="nb">int</span><span class="p">,</span>
+        <span class="n">checks_passed</span><span class="p">:</span> <span class="nb">int</span><span class="p">,</span>
+        <span class="n">checks_failed</span><span class="p">:</span> <span class="nb">int</span><span class="p">,</span>
+        <span class="n">source_ip</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+        <span class="o">**</span><span class="n">kwargs</span>
+    <span class="p">):</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Log audit completion.&quot;&quot;&quot;</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">log_event</span><span class="p">(</span>
+            <span class="n">AuditEventType</span><span class="o">.</span><span class="n">AUDIT_COMPLETE</span><span class="p">,</span>
+            <span class="n">action</span><span class="o">=</span><span class="s2">&quot;complete_audit&quot;</span><span class="p">,</span>
+            <span class="n">result</span><span class="o">=</span><span class="s2">&quot;success&quot;</span><span class="p">,</span>
+            <span class="n">username</span><span class="o">=</span><span class="n">username</span><span class="p">,</span>
+            <span class="n">source_ip</span><span class="o">=</span><span class="n">source_ip</span><span class="p">,</span>
+            <span class="n">resource</span><span class="o">=</span><span class="n">profile</span><span class="p">,</span>
+            <span class="n">details</span><span class="o">=</span><span class="p">{</span>
+                <span class="s2">&quot;duration_seconds&quot;</span><span class="p">:</span> <span class="n">duration</span><span class="p">,</span>
+                <span class="s2">&quot;score&quot;</span><span class="p">:</span> <span class="n">score</span><span class="p">,</span>
+                <span class="s2">&quot;checks_total&quot;</span><span class="p">:</span> <span class="n">checks_total</span><span class="p">,</span>
+                <span class="s2">&quot;checks_passed&quot;</span><span class="p">:</span> <span class="n">checks_passed</span><span class="p">,</span>
+                <span class="s2">&quot;checks_failed&quot;</span><span class="p">:</span> <span class="n">checks_failed</span><span class="p">,</span>
+            <span class="p">},</span>
+            <span class="n">severity</span><span class="o">=</span><span class="n">AuditSeverity</span><span class="o">.</span><span class="n">INFO</span><span class="p">,</span>
+            <span class="o">**</span><span class="n">kwargs</span>
+        <span class="p">)</span></div>
+
+    
+<div class="viewcode-block" id="AuditLogger.log_audit_failed">
+<a class="viewcode-back" href="../../modules/utils/utils.html#utils.audit_logger.AuditLogger.log_audit_failed">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">log_audit_failed</span><span class="p">(</span>
+        <span class="bp">self</span><span class="p">,</span>
+        <span class="n">username</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span>
+        <span class="n">profile</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span>
+        <span class="n">error</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span>
+        <span class="n">source_ip</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+        <span class="o">**</span><span class="n">kwargs</span>
+    <span class="p">):</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Log audit failure.&quot;&quot;&quot;</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">log_event</span><span class="p">(</span>
+            <span class="n">AuditEventType</span><span class="o">.</span><span class="n">AUDIT_FAILED</span><span class="p">,</span>
+            <span class="n">action</span><span class="o">=</span><span class="s2">&quot;run_audit&quot;</span><span class="p">,</span>
+            <span class="n">result</span><span class="o">=</span><span class="s2">&quot;error&quot;</span><span class="p">,</span>
+            <span class="n">username</span><span class="o">=</span><span class="n">username</span><span class="p">,</span>
+            <span class="n">source_ip</span><span class="o">=</span><span class="n">source_ip</span><span class="p">,</span>
+            <span class="n">resource</span><span class="o">=</span><span class="n">profile</span><span class="p">,</span>
+            <span class="n">details</span><span class="o">=</span><span class="p">{</span><span class="s2">&quot;error&quot;</span><span class="p">:</span> <span class="n">error</span><span class="p">},</span>
+            <span class="n">severity</span><span class="o">=</span><span class="n">AuditSeverity</span><span class="o">.</span><span class="n">ERROR</span><span class="p">,</span>
+            <span class="o">**</span><span class="n">kwargs</span>
+        <span class="p">)</span></div>
+
+    
+<div class="viewcode-block" id="AuditLogger.log_results_view">
+<a class="viewcode-back" href="../../modules/utils/utils.html#utils.audit_logger.AuditLogger.log_results_view">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">log_results_view</span><span class="p">(</span>
+        <span class="bp">self</span><span class="p">,</span>
+        <span class="n">username</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span>
+        <span class="n">report_id</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span>
+        <span class="n">source_ip</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+        <span class="o">**</span><span class="n">kwargs</span>
+    <span class="p">):</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Log results viewing.&quot;&quot;&quot;</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">log_event</span><span class="p">(</span>
+            <span class="n">AuditEventType</span><span class="o">.</span><span class="n">RESULTS_VIEW</span><span class="p">,</span>
+            <span class="n">action</span><span class="o">=</span><span class="s2">&quot;view_results&quot;</span><span class="p">,</span>
+            <span class="n">result</span><span class="o">=</span><span class="s2">&quot;success&quot;</span><span class="p">,</span>
+            <span class="n">username</span><span class="o">=</span><span class="n">username</span><span class="p">,</span>
+            <span class="n">source_ip</span><span class="o">=</span><span class="n">source_ip</span><span class="p">,</span>
+            <span class="n">resource</span><span class="o">=</span><span class="n">report_id</span><span class="p">,</span>
+            <span class="n">severity</span><span class="o">=</span><span class="n">AuditSeverity</span><span class="o">.</span><span class="n">INFO</span><span class="p">,</span>
+            <span class="o">**</span><span class="n">kwargs</span>
+        <span class="p">)</span></div>
+
+    
+<div class="viewcode-block" id="AuditLogger.log_config_update">
+<a class="viewcode-back" href="../../modules/utils/utils.html#utils.audit_logger.AuditLogger.log_config_update">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">log_config_update</span><span class="p">(</span>
+        <span class="bp">self</span><span class="p">,</span>
+        <span class="n">username</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span>
+        <span class="n">config_key</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span>
+        <span class="n">old_value</span><span class="p">:</span> <span class="n">Any</span><span class="p">,</span>
+        <span class="n">new_value</span><span class="p">:</span> <span class="n">Any</span><span class="p">,</span>
+        <span class="n">source_ip</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+        <span class="o">**</span><span class="n">kwargs</span>
+    <span class="p">):</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Log configuration update.&quot;&quot;&quot;</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">log_event</span><span class="p">(</span>
+            <span class="n">AuditEventType</span><span class="o">.</span><span class="n">CONFIG_UPDATE</span><span class="p">,</span>
+            <span class="n">action</span><span class="o">=</span><span class="s2">&quot;update_config&quot;</span><span class="p">,</span>
+            <span class="n">result</span><span class="o">=</span><span class="s2">&quot;success&quot;</span><span class="p">,</span>
+            <span class="n">username</span><span class="o">=</span><span class="n">username</span><span class="p">,</span>
+            <span class="n">source_ip</span><span class="o">=</span><span class="n">source_ip</span><span class="p">,</span>
+            <span class="n">resource</span><span class="o">=</span><span class="n">config_key</span><span class="p">,</span>
+            <span class="n">details</span><span class="o">=</span><span class="p">{</span>
+                <span class="s2">&quot;old_value&quot;</span><span class="p">:</span> <span class="nb">str</span><span class="p">(</span><span class="n">old_value</span><span class="p">),</span>
+                <span class="s2">&quot;new_value&quot;</span><span class="p">:</span> <span class="nb">str</span><span class="p">(</span><span class="n">new_value</span><span class="p">),</span>
+            <span class="p">},</span>
+            <span class="n">severity</span><span class="o">=</span><span class="n">AuditSeverity</span><span class="o">.</span><span class="n">WARNING</span><span class="p">,</span>
+            <span class="o">**</span><span class="n">kwargs</span>
+        <span class="p">)</span></div>
+
+    
+<div class="viewcode-block" id="AuditLogger.log_user_create">
+<a class="viewcode-back" href="../../modules/utils/utils.html#utils.audit_logger.AuditLogger.log_user_create">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">log_user_create</span><span class="p">(</span>
+        <span class="bp">self</span><span class="p">,</span>
+        <span class="n">admin_username</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span>
+        <span class="n">new_username</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span>
+        <span class="n">roles</span><span class="p">:</span> <span class="nb">list</span><span class="p">,</span>
+        <span class="n">source_ip</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+        <span class="o">**</span><span class="n">kwargs</span>
+    <span class="p">):</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Log user creation.&quot;&quot;&quot;</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">log_event</span><span class="p">(</span>
+            <span class="n">AuditEventType</span><span class="o">.</span><span class="n">USER_CREATE</span><span class="p">,</span>
+            <span class="n">action</span><span class="o">=</span><span class="s2">&quot;create_user&quot;</span><span class="p">,</span>
+            <span class="n">result</span><span class="o">=</span><span class="s2">&quot;success&quot;</span><span class="p">,</span>
+            <span class="n">username</span><span class="o">=</span><span class="n">admin_username</span><span class="p">,</span>
+            <span class="n">source_ip</span><span class="o">=</span><span class="n">source_ip</span><span class="p">,</span>
+            <span class="n">resource</span><span class="o">=</span><span class="n">new_username</span><span class="p">,</span>
+            <span class="n">details</span><span class="o">=</span><span class="p">{</span><span class="s2">&quot;roles&quot;</span><span class="p">:</span> <span class="n">roles</span><span class="p">},</span>
+            <span class="n">severity</span><span class="o">=</span><span class="n">AuditSeverity</span><span class="o">.</span><span class="n">WARNING</span><span class="p">,</span>
+            <span class="o">**</span><span class="n">kwargs</span>
+        <span class="p">)</span></div>
+
+    
+<div class="viewcode-block" id="AuditLogger.log_role_assign">
+<a class="viewcode-back" href="../../modules/utils/utils.html#utils.audit_logger.AuditLogger.log_role_assign">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">log_role_assign</span><span class="p">(</span>
+        <span class="bp">self</span><span class="p">,</span>
+        <span class="n">admin_username</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span>
+        <span class="n">target_username</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span>
+        <span class="n">role</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span>
+        <span class="n">source_ip</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+        <span class="o">**</span><span class="n">kwargs</span>
+    <span class="p">):</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Log role assignment.&quot;&quot;&quot;</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">log_event</span><span class="p">(</span>
+            <span class="n">AuditEventType</span><span class="o">.</span><span class="n">ROLE_ASSIGN</span><span class="p">,</span>
+            <span class="n">action</span><span class="o">=</span><span class="s2">&quot;assign_role&quot;</span><span class="p">,</span>
+            <span class="n">result</span><span class="o">=</span><span class="s2">&quot;success&quot;</span><span class="p">,</span>
+            <span class="n">username</span><span class="o">=</span><span class="n">admin_username</span><span class="p">,</span>
+            <span class="n">source_ip</span><span class="o">=</span><span class="n">source_ip</span><span class="p">,</span>
+            <span class="n">resource</span><span class="o">=</span><span class="n">target_username</span><span class="p">,</span>
+            <span class="n">details</span><span class="o">=</span><span class="p">{</span><span class="s2">&quot;role&quot;</span><span class="p">:</span> <span class="n">role</span><span class="p">},</span>
+            <span class="n">severity</span><span class="o">=</span><span class="n">AuditSeverity</span><span class="o">.</span><span class="n">WARNING</span><span class="p">,</span>
+            <span class="o">**</span><span class="n">kwargs</span>
+        <span class="p">)</span></div>
+
+    
+<div class="viewcode-block" id="AuditLogger.log_system_error">
+<a class="viewcode-back" href="../../modules/utils/utils.html#utils.audit_logger.AuditLogger.log_system_error">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">log_system_error</span><span class="p">(</span>
+        <span class="bp">self</span><span class="p">,</span>
+        <span class="n">error</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span>
+        <span class="n">details</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">]]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+        <span class="o">**</span><span class="n">kwargs</span>
+    <span class="p">):</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Log system error.&quot;&quot;&quot;</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">log_event</span><span class="p">(</span>
+            <span class="n">AuditEventType</span><span class="o">.</span><span class="n">SYSTEM_ERROR</span><span class="p">,</span>
+            <span class="n">action</span><span class="o">=</span><span class="s2">&quot;system_operation&quot;</span><span class="p">,</span>
+            <span class="n">result</span><span class="o">=</span><span class="s2">&quot;error&quot;</span><span class="p">,</span>
+            <span class="n">details</span><span class="o">=</span><span class="p">{</span><span class="s2">&quot;error&quot;</span><span class="p">:</span> <span class="n">error</span><span class="p">,</span> <span class="o">**</span><span class="p">(</span><span class="n">details</span> <span class="ow">or</span> <span class="p">{})},</span>
+            <span class="n">severity</span><span class="o">=</span><span class="n">AuditSeverity</span><span class="o">.</span><span class="n">ERROR</span><span class="p">,</span>
+            <span class="o">**</span><span class="n">kwargs</span>
+        <span class="p">)</span></div>
+</div>
+
+
+
+<span class="c1"># Global audit logger instance</span>
+<span class="n">_audit_logger</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="n">AuditLogger</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span>
+
+
+<div class="viewcode-block" id="get_audit_logger">
+<a class="viewcode-back" href="../../modules/utils/utils.html#utils.audit_logger.get_audit_logger">[docs]</a>
+<span class="k">def</span><span class="w"> </span><span class="nf">get_audit_logger</span><span class="p">()</span> <span class="o">-&gt;</span> <span class="n">AuditLogger</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Get global audit logger instance.&quot;&quot;&quot;</span>
+    <span class="k">global</span> <span class="n">_audit_logger</span>
+    <span class="k">if</span> <span class="n">_audit_logger</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+        <span class="n">_audit_logger</span> <span class="o">=</span> <span class="n">AuditLogger</span><span class="p">(</span>
+            <span class="n">log_file</span><span class="o">=</span><span class="n">Path</span><span class="p">(</span><span class="s2">&quot;/app/logs/audit.log&quot;</span><span class="p">),</span>
+            <span class="n">log_level</span><span class="o">=</span><span class="s2">&quot;INFO&quot;</span>
+        <span class="p">)</span>
+    <span class="k">return</span> <span class="n">_audit_logger</span></div>
+
+
+
+<div class="viewcode-block" id="configure_audit_logger">
+<a class="viewcode-back" href="../../modules/utils/utils.html#utils.audit_logger.configure_audit_logger">[docs]</a>
+<span class="k">def</span><span class="w"> </span><span class="nf">configure_audit_logger</span><span class="p">(</span>
+    <span class="n">log_file</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="n">Path</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+    <span class="n">log_level</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">&quot;INFO&quot;</span><span class="p">,</span>
+    <span class="n">enable_syslog</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span><span class="p">,</span>
+    <span class="n">syslog_host</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+    <span class="n">syslog_port</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">514</span><span class="p">,</span>
+<span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Configure global audit logger.&quot;&quot;&quot;</span>
+    <span class="k">global</span> <span class="n">_audit_logger</span>
+    <span class="n">_audit_logger</span> <span class="o">=</span> <span class="n">AuditLogger</span><span class="p">(</span>
+        <span class="n">log_file</span><span class="o">=</span><span class="n">log_file</span><span class="p">,</span>
+        <span class="n">log_level</span><span class="o">=</span><span class="n">log_level</span><span class="p">,</span>
+        <span class="n">enable_syslog</span><span class="o">=</span><span class="n">enable_syslog</span><span class="p">,</span>
+        <span class="n">syslog_host</span><span class="o">=</span><span class="n">syslog_host</span><span class="p">,</span>
+        <span class="n">syslog_port</span><span class="o">=</span><span class="n">syslog_port</span><span class="p">,</span>
+    <span class="p">)</span></div>
+
+</pre></div>
+
+           </div>
+          </div>
+          <footer>
+
+  <hr/>
+
+  <div role="contentinfo">
+    <p>&#169; Copyright 2025, Alex Hellberg.</p>
+  </div>
+
+  Built with <a href="https://www.sphinx-doc.org/">Sphinx</a> using a
+    <a href="https://github.com/readthedocs/sphinx_rtd_theme">theme</a>
+    provided by <a href="https://readthedocs.org">Read the Docs</a>.
+   
+
+</footer>
+        </div>
+      </div>
+    </section>
+  </div>
+  <script>
+      jQuery(function () {
+          SphinxRtdTheme.Navigation.enable(true);
+      });
+  </script> 
+
+</body>
+</html>

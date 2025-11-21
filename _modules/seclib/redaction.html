@@ -1,0 +1,406 @@
+
+
+<!DOCTYPE html>
+<html class="writer-html5" lang="en" data-content_root="../../">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>seclib.redaction &mdash; SecAudit+ 1.0.0 Documentation</title>
+      <link rel="stylesheet" type="text/css" href="../../_static/pygments.css?v=b86133f3" />
+      <link rel="stylesheet" type="text/css" href="../../_static/css/theme.css?v=e59714d7" />
+
+  
+      <script src="../../_static/jquery.js?v=5d32c60e"></script>
+      <script src="../../_static/_sphinx_javascript_frameworks_compat.js?v=2cd50e6c"></script>
+      <script src="../../_static/documentation_options.js?v=8d563738"></script>
+      <script src="../../_static/doctools.js?v=9bcbadda"></script>
+      <script src="../../_static/sphinx_highlight.js?v=dc90522c"></script>
+    <script src="../../_static/js/theme.js"></script>
+    <link rel="index" title="Index" href="../../genindex.html" />
+    <link rel="search" title="Search" href="../../search.html" /> 
+</head>
+
+<body class="wy-body-for-nav"> 
+  <div class="wy-grid-for-nav">
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-scroll">
+        <div class="wy-side-nav-search" >
+
+          
+          
+          <a href="../../index.html" class="icon icon-home">
+            SecAudit+
+          </a>
+<div role="search">
+  <form id="rtd-search-form" class="wy-form" action="../../search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" aria-label="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+        </div><div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="Navigation menu">
+              <p class="caption" role="heading"><span class="caption-text">Contents:</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../modules/modules.html">modules</a></li>
+</ul>
+
+        </div>
+      </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap"><nav class="wy-nav-top" aria-label="Mobile navigation menu" >
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="../../index.html">SecAudit+</a>
+      </nav>
+
+      <div class="wy-nav-content">
+        <div class="rst-content">
+          <div role="navigation" aria-label="Page navigation">
+  <ul class="wy-breadcrumbs">
+      <li><a href="../../index.html" class="icon icon-home" aria-label="Home"></a></li>
+          <li class="breadcrumb-item"><a href="../index.html">Module code</a></li>
+      <li class="breadcrumb-item active">seclib.redaction</li>
+      <li class="wy-breadcrumbs-aside">
+      </li>
+  </ul>
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+           <div itemprop="articleBody">
+             
+  <h1>Source code for seclib.redaction</h1><div class="highlight"><pre>
+<span></span><span class="sd">&quot;&quot;&quot;Sensitive data redaction module for SecAudit+ reports.</span>
+
+<span class="sd">This module provides functionality to detect and redact sensitive information</span>
+<span class="sd">from audit results, evidence, and reports to prevent accidental data leakage.</span>
+<span class="sd">&quot;&quot;&quot;</span>
+
+<span class="kn">import</span><span class="w"> </span><span class="nn">re</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">typing</span><span class="w"> </span><span class="kn">import</span> <span class="n">Any</span><span class="p">,</span> <span class="n">Dict</span><span class="p">,</span> <span class="n">List</span><span class="p">,</span> <span class="n">Pattern</span><span class="p">,</span> <span class="n">Union</span>
+
+
+<span class="c1"># Sensitive data patterns</span>
+<span class="n">SENSITIVE_PATTERNS</span><span class="p">:</span> <span class="n">List</span><span class="p">[</span><span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Union</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Pattern</span><span class="p">]]]</span> <span class="o">=</span> <span class="p">[</span>
+    <span class="c1"># Passwords</span>
+    <span class="p">{</span>
+        <span class="s2">&quot;name&quot;</span><span class="p">:</span> <span class="s2">&quot;password&quot;</span><span class="p">,</span>
+        <span class="s2">&quot;pattern&quot;</span><span class="p">:</span> <span class="n">re</span><span class="o">.</span><span class="n">compile</span><span class="p">(</span>
+            <span class="sa">r</span><span class="s1">&#39;(?i)(password|passwd|pwd)[&quot;\s:=]+[\w\S]{3,}&#39;</span><span class="p">,</span>
+            <span class="n">re</span><span class="o">.</span><span class="n">IGNORECASE</span> <span class="o">|</span> <span class="n">re</span><span class="o">.</span><span class="n">MULTILINE</span>
+        <span class="p">),</span>
+        <span class="s2">&quot;replacement&quot;</span><span class="p">:</span> <span class="sa">r</span><span class="s1">&#39;\1=***REDACTED***&#39;</span>
+    <span class="p">},</span>
+    <span class="c1"># API Keys and Tokens</span>
+    <span class="p">{</span>
+        <span class="s2">&quot;name&quot;</span><span class="p">:</span> <span class="s2">&quot;api_key&quot;</span><span class="p">,</span>
+        <span class="s2">&quot;pattern&quot;</span><span class="p">:</span> <span class="n">re</span><span class="o">.</span><span class="n">compile</span><span class="p">(</span>
+            <span class="sa">r</span><span class="s1">&#39;(?i)(api[_-]?key|apikey|token|bearer)[&quot;\s:=]+[\w\S]{10,}&#39;</span><span class="p">,</span>
+            <span class="n">re</span><span class="o">.</span><span class="n">IGNORECASE</span> <span class="o">|</span> <span class="n">re</span><span class="o">.</span><span class="n">MULTILINE</span>
+        <span class="p">),</span>
+        <span class="s2">&quot;replacement&quot;</span><span class="p">:</span> <span class="sa">r</span><span class="s1">&#39;\1=***REDACTED***&#39;</span>
+    <span class="p">},</span>
+    <span class="c1"># Secrets</span>
+    <span class="p">{</span>
+        <span class="s2">&quot;name&quot;</span><span class="p">:</span> <span class="s2">&quot;secret&quot;</span><span class="p">,</span>
+        <span class="s2">&quot;pattern&quot;</span><span class="p">:</span> <span class="n">re</span><span class="o">.</span><span class="n">compile</span><span class="p">(</span>
+            <span class="sa">r</span><span class="s1">&#39;(?i)(secret|secret[_-]?key)[&quot;\s:=]+[\w\S]{8,}&#39;</span><span class="p">,</span>
+            <span class="n">re</span><span class="o">.</span><span class="n">IGNORECASE</span> <span class="o">|</span> <span class="n">re</span><span class="o">.</span><span class="n">MULTILINE</span>
+        <span class="p">),</span>
+        <span class="s2">&quot;replacement&quot;</span><span class="p">:</span> <span class="sa">r</span><span class="s1">&#39;\1=***REDACTED***&#39;</span>
+    <span class="p">},</span>
+    <span class="c1"># Private Keys (PEM format)</span>
+    <span class="p">{</span>
+        <span class="s2">&quot;name&quot;</span><span class="p">:</span> <span class="s2">&quot;private_key&quot;</span><span class="p">,</span>
+        <span class="s2">&quot;pattern&quot;</span><span class="p">:</span> <span class="n">re</span><span class="o">.</span><span class="n">compile</span><span class="p">(</span>
+            <span class="sa">r</span><span class="s1">&#39;-----BEGIN[\s\w]+PRIVATE KEY-----[\s\S]+?-----END[\s\w]+PRIVATE KEY-----&#39;</span><span class="p">,</span>
+            <span class="n">re</span><span class="o">.</span><span class="n">MULTILINE</span>
+        <span class="p">),</span>
+        <span class="s2">&quot;replacement&quot;</span><span class="p">:</span> <span class="s1">&#39;-----BEGIN PRIVATE KEY-----</span><span class="se">\n</span><span class="s1">***REDACTED***</span><span class="se">\n</span><span class="s1">-----END PRIVATE KEY-----&#39;</span>
+    <span class="p">},</span>
+    <span class="c1"># SSH Keys</span>
+    <span class="p">{</span>
+        <span class="s2">&quot;name&quot;</span><span class="p">:</span> <span class="s2">&quot;ssh_key&quot;</span><span class="p">,</span>
+        <span class="s2">&quot;pattern&quot;</span><span class="p">:</span> <span class="n">re</span><span class="o">.</span><span class="n">compile</span><span class="p">(</span>
+            <span class="sa">r</span><span class="s1">&#39;(ssh-rsa|ssh-dss|ssh-ed25519|ecdsa-sha2-nistp\d+)\s+[A-Za-z0-9+/=]{50,}&#39;</span><span class="p">,</span>
+            <span class="n">re</span><span class="o">.</span><span class="n">MULTILINE</span>
+        <span class="p">),</span>
+        <span class="s2">&quot;replacement&quot;</span><span class="p">:</span> <span class="sa">r</span><span class="s1">&#39;\1 ***REDACTED***&#39;</span>
+    <span class="p">},</span>
+    <span class="c1"># AWS Access Keys</span>
+    <span class="p">{</span>
+        <span class="s2">&quot;name&quot;</span><span class="p">:</span> <span class="s2">&quot;aws_access_key&quot;</span><span class="p">,</span>
+        <span class="s2">&quot;pattern&quot;</span><span class="p">:</span> <span class="n">re</span><span class="o">.</span><span class="n">compile</span><span class="p">(</span>
+            <span class="sa">r</span><span class="s1">&#39;(A3T[A-Z0-9]|AKIA|AGPA|AIDA|AROA|AIPA|ANPA|ANVA|ASIA)[A-Z0-9]</span><span class="si">{16}</span><span class="s1">&#39;</span><span class="p">,</span>
+            <span class="n">re</span><span class="o">.</span><span class="n">MULTILINE</span>
+        <span class="p">),</span>
+        <span class="s2">&quot;replacement&quot;</span><span class="p">:</span> <span class="s1">&#39;***REDACTED_AWS_KEY***&#39;</span>
+    <span class="p">},</span>
+    <span class="c1"># AWS Secret Keys</span>
+    <span class="p">{</span>
+        <span class="s2">&quot;name&quot;</span><span class="p">:</span> <span class="s2">&quot;aws_secret_key&quot;</span><span class="p">,</span>
+        <span class="s2">&quot;pattern&quot;</span><span class="p">:</span> <span class="n">re</span><span class="o">.</span><span class="n">compile</span><span class="p">(</span>
+            <span class="sa">r</span><span class="s1">&#39;(?i)aws[_-]?secret[_-]?access[_-]?key[&quot;\s:=]+[A-Za-z0-9/+=]</span><span class="si">{40}</span><span class="s1">&#39;</span><span class="p">,</span>
+            <span class="n">re</span><span class="o">.</span><span class="n">IGNORECASE</span> <span class="o">|</span> <span class="n">re</span><span class="o">.</span><span class="n">MULTILINE</span>
+        <span class="p">),</span>
+        <span class="s2">&quot;replacement&quot;</span><span class="p">:</span> <span class="s1">&#39;aws_secret_access_key=***REDACTED***&#39;</span>
+    <span class="p">},</span>
+    <span class="c1"># GitHub Tokens</span>
+    <span class="p">{</span>
+        <span class="s2">&quot;name&quot;</span><span class="p">:</span> <span class="s2">&quot;github_token&quot;</span><span class="p">,</span>
+        <span class="s2">&quot;pattern&quot;</span><span class="p">:</span> <span class="n">re</span><span class="o">.</span><span class="n">compile</span><span class="p">(</span>
+            <span class="sa">r</span><span class="s1">&#39;gh[pousr]_[A-Za-z0-9_]{36,}&#39;</span><span class="p">,</span>
+            <span class="n">re</span><span class="o">.</span><span class="n">MULTILINE</span>
+        <span class="p">),</span>
+        <span class="s2">&quot;replacement&quot;</span><span class="p">:</span> <span class="s1">&#39;***REDACTED_GITHUB_TOKEN***&#39;</span>
+    <span class="p">},</span>
+    <span class="c1"># Generic tokens (long alphanumeric strings)</span>
+    <span class="p">{</span>
+        <span class="s2">&quot;name&quot;</span><span class="p">:</span> <span class="s2">&quot;generic_token&quot;</span><span class="p">,</span>
+        <span class="s2">&quot;pattern&quot;</span><span class="p">:</span> <span class="n">re</span><span class="o">.</span><span class="n">compile</span><span class="p">(</span>
+            <span class="sa">r</span><span class="s1">&#39;(?i)(token|auth|authorization)[&quot;\s:=]+[A-Za-z0-9_\-\.]{32,}&#39;</span><span class="p">,</span>
+            <span class="n">re</span><span class="o">.</span><span class="n">IGNORECASE</span> <span class="o">|</span> <span class="n">re</span><span class="o">.</span><span class="n">MULTILINE</span>
+        <span class="p">),</span>
+        <span class="s2">&quot;replacement&quot;</span><span class="p">:</span> <span class="sa">r</span><span class="s1">&#39;\1=***REDACTED***&#39;</span>
+    <span class="p">},</span>
+    <span class="c1"># Database connection strings</span>
+    <span class="p">{</span>
+        <span class="s2">&quot;name&quot;</span><span class="p">:</span> <span class="s2">&quot;db_connection&quot;</span><span class="p">,</span>
+        <span class="s2">&quot;pattern&quot;</span><span class="p">:</span> <span class="n">re</span><span class="o">.</span><span class="n">compile</span><span class="p">(</span>
+            <span class="sa">r</span><span class="s1">&#39;(?i)(mysql|postgresql|mongodb|redis)://[^:]+:[^@]+@&#39;</span><span class="p">,</span>
+            <span class="n">re</span><span class="o">.</span><span class="n">IGNORECASE</span> <span class="o">|</span> <span class="n">re</span><span class="o">.</span><span class="n">MULTILINE</span>
+        <span class="p">),</span>
+        <span class="s2">&quot;replacement&quot;</span><span class="p">:</span> <span class="sa">r</span><span class="s1">&#39;\1://***REDACTED***:***REDACTED***@&#39;</span>
+    <span class="p">},</span>
+    <span class="c1"># Email addresses (optional, may be needed for compliance)</span>
+    <span class="p">{</span>
+        <span class="s2">&quot;name&quot;</span><span class="p">:</span> <span class="s2">&quot;email&quot;</span><span class="p">,</span>
+        <span class="s2">&quot;pattern&quot;</span><span class="p">:</span> <span class="n">re</span><span class="o">.</span><span class="n">compile</span><span class="p">(</span>
+            <span class="sa">r</span><span class="s1">&#39;\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,}\b&#39;</span><span class="p">,</span>
+            <span class="n">re</span><span class="o">.</span><span class="n">MULTILINE</span>
+        <span class="p">),</span>
+        <span class="s2">&quot;replacement&quot;</span><span class="p">:</span> <span class="s1">&#39;***REDACTED_EMAIL***&#39;</span>
+    <span class="p">},</span>
+    <span class="c1"># IP addresses (private ranges only)</span>
+    <span class="p">{</span>
+        <span class="s2">&quot;name&quot;</span><span class="p">:</span> <span class="s2">&quot;private_ip&quot;</span><span class="p">,</span>
+        <span class="s2">&quot;pattern&quot;</span><span class="p">:</span> <span class="n">re</span><span class="o">.</span><span class="n">compile</span><span class="p">(</span>
+            <span class="sa">r</span><span class="s1">&#39;\b(10\.\d{1,3}\.\d{1,3}\.\d{1,3}|172\.(1[6-9]|2[0-9]|3[01])\.\d{1,3}\.\d{1,3}|192\.168\.\d{1,3}\.\d{1,3})\b&#39;</span><span class="p">,</span>
+            <span class="n">re</span><span class="o">.</span><span class="n">MULTILINE</span>
+        <span class="p">),</span>
+        <span class="s2">&quot;replacement&quot;</span><span class="p">:</span> <span class="s1">&#39;***REDACTED_IP***&#39;</span>
+    <span class="p">},</span>
+<span class="p">]</span>
+
+
+<div class="viewcode-block" id="SensitiveDataRedactor">
+<a class="viewcode-back" href="../../modules/seclib/seclib.html#seclib.redaction.SensitiveDataRedactor">[docs]</a>
+<span class="k">class</span><span class="w"> </span><span class="nc">SensitiveDataRedactor</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Redacts sensitive data from text and structured data.&quot;&quot;&quot;</span>
+
+<div class="viewcode-block" id="SensitiveDataRedactor.__init__">
+<a class="viewcode-back" href="../../modules/seclib/seclib.html#seclib.redaction.SensitiveDataRedactor.__init__">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">patterns</span><span class="p">:</span> <span class="n">List</span><span class="p">[</span><span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">]]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span> <span class="n">enabled</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">True</span><span class="p">):</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        Initialize the redactor.</span>
+
+<span class="sd">        Args:</span>
+<span class="sd">            patterns: Custom patterns to use. If None, uses default patterns.</span>
+<span class="sd">            enabled: Whether redaction is enabled. If False, data passes through unchanged.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">patterns</span> <span class="o">=</span> <span class="n">patterns</span> <span class="k">if</span> <span class="n">patterns</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span> <span class="k">else</span> <span class="n">SENSITIVE_PATTERNS</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">enabled</span> <span class="o">=</span> <span class="n">enabled</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">redaction_count</span> <span class="o">=</span> <span class="mi">0</span></div>
+
+
+<div class="viewcode-block" id="SensitiveDataRedactor.redact_text">
+<a class="viewcode-back" href="../../modules/seclib/seclib.html#seclib.redaction.SensitiveDataRedactor.redact_text">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">redact_text</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">text</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">skip_patterns</span><span class="p">:</span> <span class="n">List</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">str</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        Redact sensitive data from text.</span>
+
+<span class="sd">        Args:</span>
+<span class="sd">            text: Text to redact</span>
+<span class="sd">            skip_patterns: List of pattern names to skip</span>
+
+<span class="sd">        Returns:</span>
+<span class="sd">            Redacted text</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="bp">self</span><span class="o">.</span><span class="n">enabled</span> <span class="ow">or</span> <span class="ow">not</span> <span class="n">text</span><span class="p">:</span>
+            <span class="k">return</span> <span class="n">text</span>
+
+        <span class="n">skip_patterns</span> <span class="o">=</span> <span class="n">skip_patterns</span> <span class="ow">or</span> <span class="p">[]</span>
+        <span class="n">redacted</span> <span class="o">=</span> <span class="n">text</span>
+
+        <span class="k">for</span> <span class="n">pattern_def</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">patterns</span><span class="p">:</span>
+            <span class="n">pattern_name</span> <span class="o">=</span> <span class="n">pattern_def</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;name&quot;</span><span class="p">,</span> <span class="s2">&quot;&quot;</span><span class="p">)</span>
+            <span class="k">if</span> <span class="n">pattern_name</span> <span class="ow">in</span> <span class="n">skip_patterns</span><span class="p">:</span>
+                <span class="k">continue</span>
+
+            <span class="n">pattern</span> <span class="o">=</span> <span class="n">pattern_def</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;pattern&quot;</span><span class="p">)</span>
+            <span class="n">replacement</span> <span class="o">=</span> <span class="n">pattern_def</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;replacement&quot;</span><span class="p">,</span> <span class="s2">&quot;***REDACTED***&quot;</span><span class="p">)</span>
+
+            <span class="k">if</span> <span class="n">pattern</span><span class="p">:</span>
+                <span class="n">matches</span> <span class="o">=</span> <span class="n">pattern</span><span class="o">.</span><span class="n">findall</span><span class="p">(</span><span class="n">redacted</span><span class="p">)</span>
+                <span class="k">if</span> <span class="n">matches</span><span class="p">:</span>
+                    <span class="bp">self</span><span class="o">.</span><span class="n">redaction_count</span> <span class="o">+=</span> <span class="nb">len</span><span class="p">(</span><span class="n">matches</span><span class="p">)</span>
+                <span class="n">redacted</span> <span class="o">=</span> <span class="n">pattern</span><span class="o">.</span><span class="n">sub</span><span class="p">(</span><span class="n">replacement</span><span class="p">,</span> <span class="n">redacted</span><span class="p">)</span>
+
+        <span class="k">return</span> <span class="n">redacted</span></div>
+
+
+<div class="viewcode-block" id="SensitiveDataRedactor.redact_dict">
+<a class="viewcode-back" href="../../modules/seclib/seclib.html#seclib.redaction.SensitiveDataRedactor.redact_dict">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">redact_dict</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">data</span><span class="p">:</span> <span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">],</span> <span class="n">skip_keys</span><span class="p">:</span> <span class="n">List</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">]:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        Redact sensitive data from dictionary recursively.</span>
+
+<span class="sd">        Args:</span>
+<span class="sd">            data: Dictionary to redact</span>
+<span class="sd">            skip_keys: List of keys to skip redaction</span>
+
+<span class="sd">        Returns:</span>
+<span class="sd">            Redacted dictionary</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="bp">self</span><span class="o">.</span><span class="n">enabled</span> <span class="ow">or</span> <span class="ow">not</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">data</span><span class="p">,</span> <span class="nb">dict</span><span class="p">):</span>
+            <span class="k">return</span> <span class="n">data</span>
+
+        <span class="n">skip_keys</span> <span class="o">=</span> <span class="n">skip_keys</span> <span class="ow">or</span> <span class="p">[]</span>
+        <span class="n">redacted</span> <span class="o">=</span> <span class="p">{}</span>
+
+        <span class="k">for</span> <span class="n">key</span><span class="p">,</span> <span class="n">value</span> <span class="ow">in</span> <span class="n">data</span><span class="o">.</span><span class="n">items</span><span class="p">():</span>
+            <span class="k">if</span> <span class="n">key</span> <span class="ow">in</span> <span class="n">skip_keys</span><span class="p">:</span>
+                <span class="n">redacted</span><span class="p">[</span><span class="n">key</span><span class="p">]</span> <span class="o">=</span> <span class="n">value</span>
+            <span class="k">elif</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">value</span><span class="p">,</span> <span class="nb">str</span><span class="p">):</span>
+                <span class="n">redacted</span><span class="p">[</span><span class="n">key</span><span class="p">]</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">redact_text</span><span class="p">(</span><span class="n">value</span><span class="p">)</span>
+            <span class="k">elif</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">value</span><span class="p">,</span> <span class="nb">dict</span><span class="p">):</span>
+                <span class="n">redacted</span><span class="p">[</span><span class="n">key</span><span class="p">]</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">redact_dict</span><span class="p">(</span><span class="n">value</span><span class="p">,</span> <span class="n">skip_keys</span><span class="p">)</span>
+            <span class="k">elif</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">value</span><span class="p">,</span> <span class="nb">list</span><span class="p">):</span>
+                <span class="n">redacted</span><span class="p">[</span><span class="n">key</span><span class="p">]</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">redact_list</span><span class="p">(</span><span class="n">value</span><span class="p">,</span> <span class="n">skip_keys</span><span class="p">)</span>
+            <span class="k">else</span><span class="p">:</span>
+                <span class="n">redacted</span><span class="p">[</span><span class="n">key</span><span class="p">]</span> <span class="o">=</span> <span class="n">value</span>
+
+        <span class="k">return</span> <span class="n">redacted</span></div>
+
+
+<div class="viewcode-block" id="SensitiveDataRedactor.redact_list">
+<a class="viewcode-back" href="../../modules/seclib/seclib.html#seclib.redaction.SensitiveDataRedactor.redact_list">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">redact_list</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">data</span><span class="p">:</span> <span class="n">List</span><span class="p">[</span><span class="n">Any</span><span class="p">],</span> <span class="n">skip_keys</span><span class="p">:</span> <span class="n">List</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">List</span><span class="p">[</span><span class="n">Any</span><span class="p">]:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        Redact sensitive data from list recursively.</span>
+
+<span class="sd">        Args:</span>
+<span class="sd">            data: List to redact</span>
+<span class="sd">            skip_keys: List of keys to skip redaction in nested dicts</span>
+
+<span class="sd">        Returns:</span>
+<span class="sd">            Redacted list</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="bp">self</span><span class="o">.</span><span class="n">enabled</span> <span class="ow">or</span> <span class="ow">not</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">data</span><span class="p">,</span> <span class="nb">list</span><span class="p">):</span>
+            <span class="k">return</span> <span class="n">data</span>
+
+        <span class="n">skip_keys</span> <span class="o">=</span> <span class="n">skip_keys</span> <span class="ow">or</span> <span class="p">[]</span>
+        <span class="n">redacted</span> <span class="o">=</span> <span class="p">[]</span>
+
+        <span class="k">for</span> <span class="n">item</span> <span class="ow">in</span> <span class="n">data</span><span class="p">:</span>
+            <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">item</span><span class="p">,</span> <span class="nb">str</span><span class="p">):</span>
+                <span class="n">redacted</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">redact_text</span><span class="p">(</span><span class="n">item</span><span class="p">))</span>
+            <span class="k">elif</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">item</span><span class="p">,</span> <span class="nb">dict</span><span class="p">):</span>
+                <span class="n">redacted</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">redact_dict</span><span class="p">(</span><span class="n">item</span><span class="p">,</span> <span class="n">skip_keys</span><span class="p">))</span>
+            <span class="k">elif</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">item</span><span class="p">,</span> <span class="nb">list</span><span class="p">):</span>
+                <span class="n">redacted</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">redact_list</span><span class="p">(</span><span class="n">item</span><span class="p">,</span> <span class="n">skip_keys</span><span class="p">))</span>
+            <span class="k">else</span><span class="p">:</span>
+                <span class="n">redacted</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">item</span><span class="p">)</span>
+
+        <span class="k">return</span> <span class="n">redacted</span></div>
+
+
+<div class="viewcode-block" id="SensitiveDataRedactor.get_redaction_stats">
+<a class="viewcode-back" href="../../modules/seclib/seclib.html#seclib.redaction.SensitiveDataRedactor.get_redaction_stats">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">get_redaction_stats</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="nb">int</span><span class="p">]:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        Get statistics about redactions performed.</span>
+
+<span class="sd">        Returns:</span>
+<span class="sd">            Dictionary with redaction statistics</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="k">return</span> <span class="p">{</span>
+            <span class="s2">&quot;total_redactions&quot;</span><span class="p">:</span> <span class="bp">self</span><span class="o">.</span><span class="n">redaction_count</span><span class="p">,</span>
+            <span class="s2">&quot;enabled&quot;</span><span class="p">:</span> <span class="bp">self</span><span class="o">.</span><span class="n">enabled</span><span class="p">,</span>
+        <span class="p">}</span></div>
+
+
+<div class="viewcode-block" id="SensitiveDataRedactor.reset_stats">
+<a class="viewcode-back" href="../../modules/seclib/seclib.html#seclib.redaction.SensitiveDataRedactor.reset_stats">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">reset_stats</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Reset redaction statistics.&quot;&quot;&quot;</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">redaction_count</span> <span class="o">=</span> <span class="mi">0</span></div>
+</div>
+
+
+
+<div class="viewcode-block" id="redact_evidence">
+<a class="viewcode-back" href="../../modules/seclib/seclib.html#seclib.redaction.redact_evidence">[docs]</a>
+<span class="k">def</span><span class="w"> </span><span class="nf">redact_evidence</span><span class="p">(</span><span class="n">evidence</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">enabled</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">True</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">str</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    Convenience function to redact evidence text.</span>
+
+<span class="sd">    Args:</span>
+<span class="sd">        evidence: Evidence text to redact</span>
+<span class="sd">        enabled: Whether redaction is enabled</span>
+
+<span class="sd">    Returns:</span>
+<span class="sd">        Redacted evidence</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="n">redactor</span> <span class="o">=</span> <span class="n">SensitiveDataRedactor</span><span class="p">(</span><span class="n">enabled</span><span class="o">=</span><span class="n">enabled</span><span class="p">)</span>
+    <span class="k">return</span> <span class="n">redactor</span><span class="o">.</span><span class="n">redact_text</span><span class="p">(</span><span class="n">evidence</span><span class="p">)</span></div>
+
+
+
+<div class="viewcode-block" id="redact_results">
+<a class="viewcode-back" href="../../modules/seclib/seclib.html#seclib.redaction.redact_results">[docs]</a>
+<span class="k">def</span><span class="w"> </span><span class="nf">redact_results</span><span class="p">(</span><span class="n">results</span><span class="p">:</span> <span class="n">List</span><span class="p">[</span><span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">]],</span> <span class="n">enabled</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">True</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">List</span><span class="p">[</span><span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">]]:</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    Convenience function to redact audit results.</span>
+
+<span class="sd">    Args:</span>
+<span class="sd">        results: List of audit results</span>
+<span class="sd">        enabled: Whether redaction is enabled</span>
+
+<span class="sd">    Returns:</span>
+<span class="sd">        Redacted results</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="n">redactor</span> <span class="o">=</span> <span class="n">SensitiveDataRedactor</span><span class="p">(</span><span class="n">enabled</span><span class="o">=</span><span class="n">enabled</span><span class="p">)</span>
+    <span class="c1"># Skip redacting certain fields that need to remain intact</span>
+    <span class="n">skip_keys</span> <span class="o">=</span> <span class="p">[</span><span class="s2">&quot;id&quot;</span><span class="p">,</span> <span class="s2">&quot;module&quot;</span><span class="p">,</span> <span class="s2">&quot;severity&quot;</span><span class="p">,</span> <span class="s2">&quot;status&quot;</span><span class="p">,</span> <span class="s2">&quot;duration&quot;</span><span class="p">]</span>
+    <span class="k">return</span> <span class="n">redactor</span><span class="o">.</span><span class="n">redact_list</span><span class="p">(</span><span class="n">results</span><span class="p">,</span> <span class="n">skip_keys</span><span class="o">=</span><span class="n">skip_keys</span><span class="p">)</span></div>
+
+</pre></div>
+
+           </div>
+          </div>
+          <footer>
+
+  <hr/>
+
+  <div role="contentinfo">
+    <p>&#169; Copyright 2025, Alex Hellberg.</p>
+  </div>
+
+  Built with <a href="https://www.sphinx-doc.org/">Sphinx</a> using a
+    <a href="https://github.com/readthedocs/sphinx_rtd_theme">theme</a>
+    provided by <a href="https://readthedocs.org">Read the Docs</a>.
+   
+
+</footer>
+        </div>
+      </div>
+    </section>
+  </div>
+  <script>
+      jQuery(function () {
+          SphinxRtdTheme.Navigation.enable(true);
+      });
+  </script> 
+
+</body>
+</html>

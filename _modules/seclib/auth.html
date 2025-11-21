@@ -1,0 +1,492 @@
+
+
+<!DOCTYPE html>
+<html class="writer-html5" lang="en" data-content_root="../../">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>seclib.auth &mdash; SecAudit+ 1.0.0 Documentation</title>
+      <link rel="stylesheet" type="text/css" href="../../_static/pygments.css?v=b86133f3" />
+      <link rel="stylesheet" type="text/css" href="../../_static/css/theme.css?v=e59714d7" />
+
+  
+      <script src="../../_static/jquery.js?v=5d32c60e"></script>
+      <script src="../../_static/_sphinx_javascript_frameworks_compat.js?v=2cd50e6c"></script>
+      <script src="../../_static/documentation_options.js?v=8d563738"></script>
+      <script src="../../_static/doctools.js?v=9bcbadda"></script>
+      <script src="../../_static/sphinx_highlight.js?v=dc90522c"></script>
+    <script src="../../_static/js/theme.js"></script>
+    <link rel="index" title="Index" href="../../genindex.html" />
+    <link rel="search" title="Search" href="../../search.html" /> 
+</head>
+
+<body class="wy-body-for-nav"> 
+  <div class="wy-grid-for-nav">
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-scroll">
+        <div class="wy-side-nav-search" >
+
+          
+          
+          <a href="../../index.html" class="icon icon-home">
+            SecAudit+
+          </a>
+<div role="search">
+  <form id="rtd-search-form" class="wy-form" action="../../search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" aria-label="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+        </div><div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="Navigation menu">
+              <p class="caption" role="heading"><span class="caption-text">Contents:</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../modules/modules.html">modules</a></li>
+</ul>
+
+        </div>
+      </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap"><nav class="wy-nav-top" aria-label="Mobile navigation menu" >
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="../../index.html">SecAudit+</a>
+      </nav>
+
+      <div class="wy-nav-content">
+        <div class="rst-content">
+          <div role="navigation" aria-label="Page navigation">
+  <ul class="wy-breadcrumbs">
+      <li><a href="../../index.html" class="icon icon-home" aria-label="Home"></a></li>
+          <li class="breadcrumb-item"><a href="../index.html">Module code</a></li>
+      <li class="breadcrumb-item active">seclib.auth</li>
+      <li class="wy-breadcrumbs-aside">
+      </li>
+  </ul>
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+           <div itemprop="articleBody">
+             
+  <h1>Source code for seclib.auth</h1><div class="highlight"><pre>
+<span></span><span class="sd">&quot;&quot;&quot;Authentication and authorization для SecAudit+.&quot;&quot;&quot;</span>
+
+<span class="kn">import</span><span class="w"> </span><span class="nn">hashlib</span>
+<span class="kn">import</span><span class="w"> </span><span class="nn">hmac</span>
+<span class="kn">import</span><span class="w"> </span><span class="nn">secrets</span>
+<span class="kn">import</span><span class="w"> </span><span class="nn">time</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">typing</span><span class="w"> </span><span class="kn">import</span> <span class="n">Optional</span><span class="p">,</span> <span class="n">Dict</span><span class="p">,</span> <span class="n">List</span><span class="p">,</span> <span class="n">Any</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">dataclasses</span><span class="w"> </span><span class="kn">import</span> <span class="n">dataclass</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">enum</span><span class="w"> </span><span class="kn">import</span> <span class="n">Enum</span>
+
+
+<div class="viewcode-block" id="Role">
+<a class="viewcode-back" href="../../modules/seclib/seclib.html#seclib.auth.Role">[docs]</a>
+<span class="k">class</span><span class="w"> </span><span class="nc">Role</span><span class="p">(</span><span class="n">Enum</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;User roles.&quot;&quot;&quot;</span>
+    <span class="n">VIEWER</span> <span class="o">=</span> <span class="s2">&quot;viewer&quot;</span>
+    <span class="n">AUDITOR</span> <span class="o">=</span> <span class="s2">&quot;auditor&quot;</span>
+    <span class="n">ADMIN</span> <span class="o">=</span> <span class="s2">&quot;admin&quot;</span></div>
+
+
+
+<div class="viewcode-block" id="AuthError">
+<a class="viewcode-back" href="../../modules/seclib/seclib.html#seclib.auth.AuthError">[docs]</a>
+<span class="k">class</span><span class="w"> </span><span class="nc">AuthError</span><span class="p">(</span><span class="ne">Exception</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Authentication/Authorization error.&quot;&quot;&quot;</span>
+    <span class="k">pass</span></div>
+
+
+
+<div class="viewcode-block" id="User">
+<a class="viewcode-back" href="../../modules/seclib/seclib.html#seclib.auth.User">[docs]</a>
+<span class="nd">@dataclass</span>
+<span class="k">class</span><span class="w"> </span><span class="nc">User</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;User information.&quot;&quot;&quot;</span>
+    <span class="n">username</span><span class="p">:</span> <span class="nb">str</span>
+    <span class="n">roles</span><span class="p">:</span> <span class="n">List</span><span class="p">[</span><span class="n">Role</span><span class="p">]</span>
+    <span class="n">metadata</span><span class="p">:</span> <span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span>
+    
+<div class="viewcode-block" id="User.has_role">
+<a class="viewcode-back" href="../../modules/seclib/seclib.html#seclib.auth.User.has_role">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">has_role</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">role</span><span class="p">:</span> <span class="n">Role</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">bool</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Check if user has specific role.&quot;&quot;&quot;</span>
+        <span class="k">return</span> <span class="n">role</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">roles</span></div>
+
+    
+<div class="viewcode-block" id="User.has_any_role">
+<a class="viewcode-back" href="../../modules/seclib/seclib.html#seclib.auth.User.has_any_role">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">has_any_role</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">roles</span><span class="p">:</span> <span class="n">List</span><span class="p">[</span><span class="n">Role</span><span class="p">])</span> <span class="o">-&gt;</span> <span class="nb">bool</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Check if user has any of the specified roles.&quot;&quot;&quot;</span>
+        <span class="k">return</span> <span class="nb">any</span><span class="p">(</span><span class="n">role</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">roles</span> <span class="k">for</span> <span class="n">role</span> <span class="ow">in</span> <span class="n">roles</span><span class="p">)</span></div>
+
+    
+<div class="viewcode-block" id="User.can_view_results">
+<a class="viewcode-back" href="../../modules/seclib/seclib.html#seclib.auth.User.can_view_results">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">can_view_results</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">bool</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Check if user can view audit results.&quot;&quot;&quot;</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">has_any_role</span><span class="p">([</span><span class="n">Role</span><span class="o">.</span><span class="n">VIEWER</span><span class="p">,</span> <span class="n">Role</span><span class="o">.</span><span class="n">AUDITOR</span><span class="p">,</span> <span class="n">Role</span><span class="o">.</span><span class="n">ADMIN</span><span class="p">])</span></div>
+
+    
+<div class="viewcode-block" id="User.can_run_audit">
+<a class="viewcode-back" href="../../modules/seclib/seclib.html#seclib.auth.User.can_run_audit">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">can_run_audit</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">bool</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Check if user can run audits.&quot;&quot;&quot;</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">has_any_role</span><span class="p">([</span><span class="n">Role</span><span class="o">.</span><span class="n">AUDITOR</span><span class="p">,</span> <span class="n">Role</span><span class="o">.</span><span class="n">ADMIN</span><span class="p">])</span></div>
+
+    
+<div class="viewcode-block" id="User.can_manage_users">
+<a class="viewcode-back" href="../../modules/seclib/seclib.html#seclib.auth.User.can_manage_users">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">can_manage_users</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">bool</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Check if user can manage other users.&quot;&quot;&quot;</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">has_role</span><span class="p">(</span><span class="n">Role</span><span class="o">.</span><span class="n">ADMIN</span><span class="p">)</span></div>
+</div>
+
+
+
+<div class="viewcode-block" id="APIKeyAuth">
+<a class="viewcode-back" href="../../modules/seclib/seclib.html#seclib.auth.APIKeyAuth">[docs]</a>
+<span class="k">class</span><span class="w"> </span><span class="nc">APIKeyAuth</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;API Key authentication.&quot;&quot;&quot;</span>
+    
+<div class="viewcode-block" id="APIKeyAuth.__init__">
+<a class="viewcode-back" href="../../modules/seclib/seclib.html#seclib.auth.APIKeyAuth.__init__">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">keys</span><span class="p">:</span> <span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">]]):</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        Initialize API key authenticator.</span>
+<span class="sd">        </span>
+<span class="sd">        Args:</span>
+<span class="sd">            keys: Dictionary mapping API keys to user info</span>
+<span class="sd">                  Format: {</span>
+<span class="sd">                      &quot;key_hash&quot;: {</span>
+<span class="sd">                          &quot;username&quot;: &quot;ci-pipeline&quot;,</span>
+<span class="sd">                          &quot;roles&quot;: [&quot;auditor&quot;],</span>
+<span class="sd">                          &quot;metadata&quot;: {}</span>
+<span class="sd">                      }</span>
+<span class="sd">                  }</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">keys</span> <span class="o">=</span> <span class="n">keys</span></div>
+
+    
+<div class="viewcode-block" id="APIKeyAuth.generate_key">
+<a class="viewcode-back" href="../../modules/seclib/seclib.html#seclib.auth.APIKeyAuth.generate_key">[docs]</a>
+    <span class="nd">@staticmethod</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">generate_key</span><span class="p">()</span> <span class="o">-&gt;</span> <span class="nb">str</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        Generate a new API key.</span>
+<span class="sd">        </span>
+<span class="sd">        Returns:</span>
+<span class="sd">            str: Random API key (hex string)</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="k">return</span> <span class="n">secrets</span><span class="o">.</span><span class="n">token_hex</span><span class="p">(</span><span class="mi">32</span><span class="p">)</span></div>
+
+    
+<div class="viewcode-block" id="APIKeyAuth.hash_key">
+<a class="viewcode-back" href="../../modules/seclib/seclib.html#seclib.auth.APIKeyAuth.hash_key">[docs]</a>
+    <span class="nd">@staticmethod</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">hash_key</span><span class="p">(</span><span class="n">key</span><span class="p">:</span> <span class="nb">str</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">str</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        Hash an API key for storage.</span>
+<span class="sd">        </span>
+<span class="sd">        Args:</span>
+<span class="sd">            key: Plain API key</span>
+<span class="sd">            </span>
+<span class="sd">        Returns:</span>
+<span class="sd">            str: SHA256 hash of the key</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="k">return</span> <span class="n">hashlib</span><span class="o">.</span><span class="n">sha256</span><span class="p">(</span><span class="n">key</span><span class="o">.</span><span class="n">encode</span><span class="p">())</span><span class="o">.</span><span class="n">hexdigest</span><span class="p">()</span></div>
+
+    
+<div class="viewcode-block" id="APIKeyAuth.authenticate">
+<a class="viewcode-back" href="../../modules/seclib/seclib.html#seclib.auth.APIKeyAuth.authenticate">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">authenticate</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">api_key</span><span class="p">:</span> <span class="nb">str</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Optional</span><span class="p">[</span><span class="n">User</span><span class="p">]:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        Authenticate using API key.</span>
+<span class="sd">        </span>
+<span class="sd">        Args:</span>
+<span class="sd">            api_key: API key from request</span>
+<span class="sd">            </span>
+<span class="sd">        Returns:</span>
+<span class="sd">            User object if authenticated, None otherwise</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="n">key_hash</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">hash_key</span><span class="p">(</span><span class="n">api_key</span><span class="p">)</span>
+        
+        <span class="k">if</span> <span class="n">key_hash</span> <span class="ow">not</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">keys</span><span class="p">:</span>
+            <span class="k">return</span> <span class="kc">None</span>
+        
+        <span class="n">user_info</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">keys</span><span class="p">[</span><span class="n">key_hash</span><span class="p">]</span>
+        <span class="n">roles</span> <span class="o">=</span> <span class="p">[</span><span class="n">Role</span><span class="p">(</span><span class="n">r</span><span class="p">)</span> <span class="k">for</span> <span class="n">r</span> <span class="ow">in</span> <span class="n">user_info</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;roles&quot;</span><span class="p">,</span> <span class="p">[])]</span>
+        
+        <span class="k">return</span> <span class="n">User</span><span class="p">(</span>
+            <span class="n">username</span><span class="o">=</span><span class="n">user_info</span><span class="p">[</span><span class="s2">&quot;username&quot;</span><span class="p">],</span>
+            <span class="n">roles</span><span class="o">=</span><span class="n">roles</span><span class="p">,</span>
+            <span class="n">metadata</span><span class="o">=</span><span class="n">user_info</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;metadata&quot;</span><span class="p">,</span> <span class="p">{})</span>
+        <span class="p">)</span></div>
+</div>
+
+
+
+<div class="viewcode-block" id="JWTAuth">
+<a class="viewcode-back" href="../../modules/seclib/seclib.html#seclib.auth.JWTAuth">[docs]</a>
+<span class="k">class</span><span class="w"> </span><span class="nc">JWTAuth</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;JWT authentication (simplified).&quot;&quot;&quot;</span>
+    
+<div class="viewcode-block" id="JWTAuth.__init__">
+<a class="viewcode-back" href="../../modules/seclib/seclib.html#seclib.auth.JWTAuth.__init__">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">secret</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">issuer</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">&quot;secaudit&quot;</span><span class="p">,</span> <span class="n">expiration</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">86400</span><span class="p">):</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        Initialize JWT authenticator.</span>
+<span class="sd">        </span>
+<span class="sd">        Args:</span>
+<span class="sd">            secret: Secret key for signing</span>
+<span class="sd">            issuer: JWT issuer</span>
+<span class="sd">            expiration: Token expiration in seconds (default 24h)</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">secret</span> <span class="o">=</span> <span class="n">secret</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">issuer</span> <span class="o">=</span> <span class="n">issuer</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">expiration</span> <span class="o">=</span> <span class="n">expiration</span></div>
+
+    
+<div class="viewcode-block" id="JWTAuth.create_token">
+<a class="viewcode-back" href="../../modules/seclib/seclib.html#seclib.auth.JWTAuth.create_token">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">create_token</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">username</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">roles</span><span class="p">:</span> <span class="n">List</span><span class="p">[</span><span class="n">Role</span><span class="p">])</span> <span class="o">-&gt;</span> <span class="nb">str</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        Create JWT token (simplified - use PyJWT in production).</span>
+<span class="sd">        </span>
+<span class="sd">        Args:</span>
+<span class="sd">            username: Username</span>
+<span class="sd">            roles: User roles</span>
+<span class="sd">            </span>
+<span class="sd">        Returns:</span>
+<span class="sd">            str: JWT token</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="c1"># В production используйте библиотеку PyJWT</span>
+        <span class="c1"># Это упрощенная реализация для демонстрации</span>
+        
+        <span class="n">payload</span> <span class="o">=</span> <span class="p">{</span>
+            <span class="s2">&quot;iss&quot;</span><span class="p">:</span> <span class="bp">self</span><span class="o">.</span><span class="n">issuer</span><span class="p">,</span>
+            <span class="s2">&quot;sub&quot;</span><span class="p">:</span> <span class="n">username</span><span class="p">,</span>
+            <span class="s2">&quot;roles&quot;</span><span class="p">:</span> <span class="p">[</span><span class="n">r</span><span class="o">.</span><span class="n">value</span> <span class="k">for</span> <span class="n">r</span> <span class="ow">in</span> <span class="n">roles</span><span class="p">],</span>
+            <span class="s2">&quot;iat&quot;</span><span class="p">:</span> <span class="nb">int</span><span class="p">(</span><span class="n">time</span><span class="o">.</span><span class="n">time</span><span class="p">()),</span>
+            <span class="s2">&quot;exp&quot;</span><span class="p">:</span> <span class="nb">int</span><span class="p">(</span><span class="n">time</span><span class="o">.</span><span class="n">time</span><span class="p">())</span> <span class="o">+</span> <span class="bp">self</span><span class="o">.</span><span class="n">expiration</span>
+        <span class="p">}</span>
+        
+        <span class="c1"># Simplified signing (use PyJWT in production!)</span>
+        <span class="kn">import</span><span class="w"> </span><span class="nn">json</span>
+        <span class="kn">import</span><span class="w"> </span><span class="nn">base64</span>
+        
+        <span class="n">header</span> <span class="o">=</span> <span class="n">base64</span><span class="o">.</span><span class="n">b64encode</span><span class="p">(</span><span class="n">json</span><span class="o">.</span><span class="n">dumps</span><span class="p">({</span><span class="s2">&quot;alg&quot;</span><span class="p">:</span> <span class="s2">&quot;HS256&quot;</span><span class="p">,</span> <span class="s2">&quot;typ&quot;</span><span class="p">:</span> <span class="s2">&quot;JWT&quot;</span><span class="p">})</span><span class="o">.</span><span class="n">encode</span><span class="p">())</span><span class="o">.</span><span class="n">decode</span><span class="p">()</span>
+        <span class="n">payload_encoded</span> <span class="o">=</span> <span class="n">base64</span><span class="o">.</span><span class="n">b64encode</span><span class="p">(</span><span class="n">json</span><span class="o">.</span><span class="n">dumps</span><span class="p">(</span><span class="n">payload</span><span class="p">)</span><span class="o">.</span><span class="n">encode</span><span class="p">())</span><span class="o">.</span><span class="n">decode</span><span class="p">()</span>
+        
+        <span class="n">signature</span> <span class="o">=</span> <span class="n">hmac</span><span class="o">.</span><span class="n">new</span><span class="p">(</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">secret</span><span class="o">.</span><span class="n">encode</span><span class="p">(),</span>
+            <span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">header</span><span class="si">}</span><span class="s2">.</span><span class="si">{</span><span class="n">payload_encoded</span><span class="si">}</span><span class="s2">&quot;</span><span class="o">.</span><span class="n">encode</span><span class="p">(),</span>
+            <span class="n">hashlib</span><span class="o">.</span><span class="n">sha256</span>
+        <span class="p">)</span><span class="o">.</span><span class="n">hexdigest</span><span class="p">()</span>
+        
+        <span class="k">return</span> <span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">header</span><span class="si">}</span><span class="s2">.</span><span class="si">{</span><span class="n">payload_encoded</span><span class="si">}</span><span class="s2">.</span><span class="si">{</span><span class="n">signature</span><span class="si">}</span><span class="s2">&quot;</span></div>
+
+    
+<div class="viewcode-block" id="JWTAuth.verify_token">
+<a class="viewcode-back" href="../../modules/seclib/seclib.html#seclib.auth.JWTAuth.verify_token">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">verify_token</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">token</span><span class="p">:</span> <span class="nb">str</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Optional</span><span class="p">[</span><span class="n">User</span><span class="p">]:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        Verify JWT token (simplified - use PyJWT in production).</span>
+<span class="sd">        </span>
+<span class="sd">        Args:</span>
+<span class="sd">            token: JWT token</span>
+<span class="sd">            </span>
+<span class="sd">        Returns:</span>
+<span class="sd">            User object if valid, None otherwise</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="k">try</span><span class="p">:</span>
+            <span class="kn">import</span><span class="w"> </span><span class="nn">json</span>
+            <span class="kn">import</span><span class="w"> </span><span class="nn">base64</span>
+            
+            <span class="n">parts</span> <span class="o">=</span> <span class="n">token</span><span class="o">.</span><span class="n">split</span><span class="p">(</span><span class="s1">&#39;.&#39;</span><span class="p">)</span>
+            <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">parts</span><span class="p">)</span> <span class="o">!=</span> <span class="mi">3</span><span class="p">:</span>
+                <span class="k">return</span> <span class="kc">None</span>
+            
+            <span class="n">header</span><span class="p">,</span> <span class="n">payload_encoded</span><span class="p">,</span> <span class="n">signature</span> <span class="o">=</span> <span class="n">parts</span>
+            
+            <span class="c1"># Verify signature</span>
+            <span class="n">expected_signature</span> <span class="o">=</span> <span class="n">hmac</span><span class="o">.</span><span class="n">new</span><span class="p">(</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">secret</span><span class="o">.</span><span class="n">encode</span><span class="p">(),</span>
+                <span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">header</span><span class="si">}</span><span class="s2">.</span><span class="si">{</span><span class="n">payload_encoded</span><span class="si">}</span><span class="s2">&quot;</span><span class="o">.</span><span class="n">encode</span><span class="p">(),</span>
+                <span class="n">hashlib</span><span class="o">.</span><span class="n">sha256</span>
+            <span class="p">)</span><span class="o">.</span><span class="n">hexdigest</span><span class="p">()</span>
+            
+            <span class="k">if</span> <span class="ow">not</span> <span class="n">hmac</span><span class="o">.</span><span class="n">compare_digest</span><span class="p">(</span><span class="n">signature</span><span class="p">,</span> <span class="n">expected_signature</span><span class="p">):</span>
+                <span class="k">return</span> <span class="kc">None</span>
+            
+            <span class="c1"># Decode payload</span>
+            <span class="n">payload</span> <span class="o">=</span> <span class="n">json</span><span class="o">.</span><span class="n">loads</span><span class="p">(</span><span class="n">base64</span><span class="o">.</span><span class="n">b64decode</span><span class="p">(</span><span class="n">payload_encoded</span><span class="p">)</span><span class="o">.</span><span class="n">decode</span><span class="p">())</span>
+            
+            <span class="c1"># Check expiration</span>
+            <span class="k">if</span> <span class="n">payload</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;exp&quot;</span><span class="p">,</span> <span class="mi">0</span><span class="p">)</span> <span class="o">&lt;</span> <span class="n">time</span><span class="o">.</span><span class="n">time</span><span class="p">():</span>
+                <span class="k">return</span> <span class="kc">None</span>
+            
+            <span class="c1"># Check issuer</span>
+            <span class="k">if</span> <span class="n">payload</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;iss&quot;</span><span class="p">)</span> <span class="o">!=</span> <span class="bp">self</span><span class="o">.</span><span class="n">issuer</span><span class="p">:</span>
+                <span class="k">return</span> <span class="kc">None</span>
+            
+            <span class="c1"># Create user</span>
+            <span class="n">roles</span> <span class="o">=</span> <span class="p">[</span><span class="n">Role</span><span class="p">(</span><span class="n">r</span><span class="p">)</span> <span class="k">for</span> <span class="n">r</span> <span class="ow">in</span> <span class="n">payload</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;roles&quot;</span><span class="p">,</span> <span class="p">[])]</span>
+            <span class="k">return</span> <span class="n">User</span><span class="p">(</span>
+                <span class="n">username</span><span class="o">=</span><span class="n">payload</span><span class="p">[</span><span class="s2">&quot;sub&quot;</span><span class="p">],</span>
+                <span class="n">roles</span><span class="o">=</span><span class="n">roles</span><span class="p">,</span>
+                <span class="n">metadata</span><span class="o">=</span><span class="p">{</span><span class="s2">&quot;token_issued_at&quot;</span><span class="p">:</span> <span class="n">payload</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;iat&quot;</span><span class="p">)}</span>
+            <span class="p">)</span>
+            
+        <span class="k">except</span> <span class="ne">Exception</span><span class="p">:</span>
+            <span class="k">return</span> <span class="kc">None</span></div>
+</div>
+
+
+
+<div class="viewcode-block" id="AuthManager">
+<a class="viewcode-back" href="../../modules/seclib/seclib.html#seclib.auth.AuthManager">[docs]</a>
+<span class="k">class</span><span class="w"> </span><span class="nc">AuthManager</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Unified authentication manager.&quot;&quot;&quot;</span>
+    
+<div class="viewcode-block" id="AuthManager.__init__">
+<a class="viewcode-back" href="../../modules/seclib/seclib.html#seclib.auth.AuthManager.__init__">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Initialize auth manager.&quot;&quot;&quot;</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">api_key_auth</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="n">APIKeyAuth</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">jwt_auth</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="n">JWTAuth</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span></div>
+
+    
+<div class="viewcode-block" id="AuthManager.configure_api_keys">
+<a class="viewcode-back" href="../../modules/seclib/seclib.html#seclib.auth.AuthManager.configure_api_keys">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">configure_api_keys</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">keys</span><span class="p">:</span> <span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">]]):</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Configure API key authentication.&quot;&quot;&quot;</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">api_key_auth</span> <span class="o">=</span> <span class="n">APIKeyAuth</span><span class="p">(</span><span class="n">keys</span><span class="p">)</span></div>
+
+    
+<div class="viewcode-block" id="AuthManager.configure_jwt">
+<a class="viewcode-back" href="../../modules/seclib/seclib.html#seclib.auth.AuthManager.configure_jwt">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">configure_jwt</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">secret</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">issuer</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">&quot;secaudit&quot;</span><span class="p">,</span> <span class="n">expiration</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">86400</span><span class="p">):</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Configure JWT authentication.&quot;&quot;&quot;</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">jwt_auth</span> <span class="o">=</span> <span class="n">JWTAuth</span><span class="p">(</span><span class="n">secret</span><span class="p">,</span> <span class="n">issuer</span><span class="p">,</span> <span class="n">expiration</span><span class="p">)</span></div>
+
+    
+<div class="viewcode-block" id="AuthManager.authenticate">
+<a class="viewcode-back" href="../../modules/seclib/seclib.html#seclib.auth.AuthManager.authenticate">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">authenticate</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">credentials</span><span class="p">:</span> <span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="nb">str</span><span class="p">])</span> <span class="o">-&gt;</span> <span class="n">Optional</span><span class="p">[</span><span class="n">User</span><span class="p">]:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        Authenticate user with provided credentials.</span>
+<span class="sd">        </span>
+<span class="sd">        Args:</span>
+<span class="sd">            credentials: Dict with &#39;type&#39; and credential data</span>
+<span class="sd">                        Examples:</span>
+<span class="sd">                        - {&quot;type&quot;: &quot;api_key&quot;, &quot;key&quot;: &quot;...&quot;}</span>
+<span class="sd">                        - {&quot;type&quot;: &quot;jwt&quot;, &quot;token&quot;: &quot;...&quot;}</span>
+<span class="sd">        </span>
+<span class="sd">        Returns:</span>
+<span class="sd">            User object if authenticated, None otherwise</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="n">cred_type</span> <span class="o">=</span> <span class="n">credentials</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;type&quot;</span><span class="p">)</span>
+        
+        <span class="k">if</span> <span class="n">cred_type</span> <span class="o">==</span> <span class="s2">&quot;api_key&quot;</span> <span class="ow">and</span> <span class="bp">self</span><span class="o">.</span><span class="n">api_key_auth</span><span class="p">:</span>
+            <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">api_key_auth</span><span class="o">.</span><span class="n">authenticate</span><span class="p">(</span><span class="n">credentials</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;key&quot;</span><span class="p">,</span> <span class="s2">&quot;&quot;</span><span class="p">))</span>
+        
+        <span class="k">elif</span> <span class="n">cred_type</span> <span class="o">==</span> <span class="s2">&quot;jwt&quot;</span> <span class="ow">and</span> <span class="bp">self</span><span class="o">.</span><span class="n">jwt_auth</span><span class="p">:</span>
+            <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">jwt_auth</span><span class="o">.</span><span class="n">verify_token</span><span class="p">(</span><span class="n">credentials</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;token&quot;</span><span class="p">,</span> <span class="s2">&quot;&quot;</span><span class="p">))</span>
+        
+        <span class="k">return</span> <span class="kc">None</span></div>
+
+    
+<div class="viewcode-block" id="AuthManager.require_role">
+<a class="viewcode-back" href="../../modules/seclib/seclib.html#seclib.auth.AuthManager.require_role">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">require_role</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">user</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="n">User</span><span class="p">],</span> <span class="n">required_role</span><span class="p">:</span> <span class="n">Role</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">User</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        Require user to have specific role.</span>
+<span class="sd">        </span>
+<span class="sd">        Args:</span>
+<span class="sd">            user: User object or None</span>
+<span class="sd">            required_role: Required role</span>
+<span class="sd">            </span>
+<span class="sd">        Returns:</span>
+<span class="sd">            User object if authorized</span>
+<span class="sd">            </span>
+<span class="sd">        Raises:</span>
+<span class="sd">            AuthError: If not authenticated or not authorized</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="k">if</span> <span class="n">user</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="n">AuthError</span><span class="p">(</span><span class="s2">&quot;Authentication required&quot;</span><span class="p">)</span>
+        
+        <span class="k">if</span> <span class="ow">not</span> <span class="n">user</span><span class="o">.</span><span class="n">has_role</span><span class="p">(</span><span class="n">required_role</span><span class="p">):</span>
+            <span class="k">raise</span> <span class="n">AuthError</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Role &#39;</span><span class="si">{</span><span class="n">required_role</span><span class="o">.</span><span class="n">value</span><span class="si">}</span><span class="s2">&#39; required&quot;</span><span class="p">)</span>
+        
+        <span class="k">return</span> <span class="n">user</span></div>
+
+    
+<div class="viewcode-block" id="AuthManager.require_any_role">
+<a class="viewcode-back" href="../../modules/seclib/seclib.html#seclib.auth.AuthManager.require_any_role">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">require_any_role</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">user</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="n">User</span><span class="p">],</span> <span class="n">required_roles</span><span class="p">:</span> <span class="n">List</span><span class="p">[</span><span class="n">Role</span><span class="p">])</span> <span class="o">-&gt;</span> <span class="n">User</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        Require user to have any of the specified roles.</span>
+<span class="sd">        </span>
+<span class="sd">        Args:</span>
+<span class="sd">            user: User object or None</span>
+<span class="sd">            required_roles: List of acceptable roles</span>
+<span class="sd">            </span>
+<span class="sd">        Returns:</span>
+<span class="sd">            User object if authorized</span>
+<span class="sd">            </span>
+<span class="sd">        Raises:</span>
+<span class="sd">            AuthError: If not authenticated or not authorized</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="k">if</span> <span class="n">user</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="n">AuthError</span><span class="p">(</span><span class="s2">&quot;Authentication required&quot;</span><span class="p">)</span>
+        
+        <span class="k">if</span> <span class="ow">not</span> <span class="n">user</span><span class="o">.</span><span class="n">has_any_role</span><span class="p">(</span><span class="n">required_roles</span><span class="p">):</span>
+            <span class="n">roles_str</span> <span class="o">=</span> <span class="s2">&quot;, &quot;</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">r</span><span class="o">.</span><span class="n">value</span> <span class="k">for</span> <span class="n">r</span> <span class="ow">in</span> <span class="n">required_roles</span><span class="p">)</span>
+            <span class="k">raise</span> <span class="n">AuthError</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;One of roles required: </span><span class="si">{</span><span class="n">roles_str</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+        
+        <span class="k">return</span> <span class="n">user</span></div>
+</div>
+
+
+
+<span class="c1"># Global auth manager instance</span>
+<span class="n">auth_manager</span> <span class="o">=</span> <span class="n">AuthManager</span><span class="p">()</span>
+
+
+<div class="viewcode-block" id="get_auth_manager">
+<a class="viewcode-back" href="../../modules/seclib/seclib.html#seclib.auth.get_auth_manager">[docs]</a>
+<span class="k">def</span><span class="w"> </span><span class="nf">get_auth_manager</span><span class="p">()</span> <span class="o">-&gt;</span> <span class="n">AuthManager</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Get global auth manager instance.&quot;&quot;&quot;</span>
+    <span class="k">return</span> <span class="n">auth_manager</span></div>
+
+</pre></div>
+
+           </div>
+          </div>
+          <footer>
+
+  <hr/>
+
+  <div role="contentinfo">
+    <p>&#169; Copyright 2025, Alex Hellberg.</p>
+  </div>
+
+  Built with <a href="https://www.sphinx-doc.org/">Sphinx</a> using a
+    <a href="https://github.com/readthedocs/sphinx_rtd_theme">theme</a>
+    provided by <a href="https://readthedocs.org">Read the Docs</a>.
+   
+
+</footer>
+        </div>
+      </div>
+    </section>
+  </div>
+  <script>
+      jQuery(function () {
+          SphinxRtdTheme.Navigation.enable(true);
+      });
+  </script> 
+
+</body>
+</html>

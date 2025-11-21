@@ -1,0 +1,190 @@
+
+
+<!DOCTYPE html>
+<html class="writer-html5" lang="en" data-content_root="../../">
+<head>
+  <meta charset="utf-8" /><meta name="viewport" content="width=device-width, initial-scale=1" />
+
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>seclib &mdash; SecAudit+ 1.0.0 Documentation</title>
+      <link rel="stylesheet" type="text/css" href="../../_static/pygments.css?v=b86133f3" />
+      <link rel="stylesheet" type="text/css" href="../../_static/css/theme.css?v=e59714d7" />
+
+  
+      <script src="../../_static/jquery.js?v=5d32c60e"></script>
+      <script src="../../_static/_sphinx_javascript_frameworks_compat.js?v=2cd50e6c"></script>
+      <script src="../../_static/documentation_options.js?v=8d563738"></script>
+      <script src="../../_static/doctools.js?v=9bcbadda"></script>
+      <script src="../../_static/sphinx_highlight.js?v=dc90522c"></script>
+    <script src="../../_static/js/theme.js"></script>
+    <link rel="index" title="Index" href="../../genindex.html" />
+    <link rel="search" title="Search" href="../../search.html" /> 
+</head>
+
+<body class="wy-body-for-nav"> 
+  <div class="wy-grid-for-nav">
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-scroll">
+        <div class="wy-side-nav-search" >
+
+          
+          
+          <a href="../../index.html" class="icon icon-home">
+            SecAudit+
+          </a>
+<div role="search">
+  <form id="rtd-search-form" class="wy-form" action="../../search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" aria-label="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+        </div><div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="Navigation menu">
+              <p class="caption" role="heading"><span class="caption-text">Contents:</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../modules.html">modules</a></li>
+</ul>
+
+        </div>
+      </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap"><nav class="wy-nav-top" aria-label="Mobile navigation menu" >
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="../../index.html">SecAudit+</a>
+      </nav>
+
+      <div class="wy-nav-content">
+        <div class="rst-content">
+          <div role="navigation" aria-label="Page navigation">
+  <ul class="wy-breadcrumbs">
+      <li><a href="../../index.html" class="icon icon-home" aria-label="Home"></a></li>
+      <li class="breadcrumb-item active">seclib</li>
+      <li class="wy-breadcrumbs-aside">
+            <a href="../../_sources/modules/seclib/modules.rst.txt" rel="nofollow"> View page source</a>
+      </li>
+  </ul>
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+           <div itemprop="articleBody">
+             
+  <section id="seclib">
+<h1>seclib<a class="headerlink" href="#seclib" title="Link to this heading"></a></h1>
+<div class="toctree-wrapper compound">
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="seclib.html">seclib package</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="seclib.html#submodules">Submodules</a></li>
+<li class="toctree-l2"><a class="reference internal" href="seclib.html#module-seclib.auth">seclib.auth module</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="seclib.html#seclib.auth.Role"><code class="docutils literal notranslate"><span class="pre">Role</span></code></a><ul>
+<li class="toctree-l4"><a class="reference internal" href="seclib.html#seclib.auth.Role.VIEWER"><code class="docutils literal notranslate"><span class="pre">Role.VIEWER</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="seclib.html#seclib.auth.Role.AUDITOR"><code class="docutils literal notranslate"><span class="pre">Role.AUDITOR</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="seclib.html#seclib.auth.Role.ADMIN"><code class="docutils literal notranslate"><span class="pre">Role.ADMIN</span></code></a></li>
+</ul>
+</li>
+<li class="toctree-l3"><a class="reference internal" href="seclib.html#seclib.auth.AuthError"><code class="docutils literal notranslate"><span class="pre">AuthError</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="seclib.html#seclib.auth.User"><code class="docutils literal notranslate"><span class="pre">User</span></code></a><ul>
+<li class="toctree-l4"><a class="reference internal" href="seclib.html#seclib.auth.User.username"><code class="docutils literal notranslate"><span class="pre">User.username</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="seclib.html#seclib.auth.User.roles"><code class="docutils literal notranslate"><span class="pre">User.roles</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="seclib.html#seclib.auth.User.metadata"><code class="docutils literal notranslate"><span class="pre">User.metadata</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="seclib.html#seclib.auth.User.has_role"><code class="docutils literal notranslate"><span class="pre">User.has_role()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="seclib.html#seclib.auth.User.has_any_role"><code class="docutils literal notranslate"><span class="pre">User.has_any_role()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="seclib.html#seclib.auth.User.can_view_results"><code class="docutils literal notranslate"><span class="pre">User.can_view_results()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="seclib.html#seclib.auth.User.can_run_audit"><code class="docutils literal notranslate"><span class="pre">User.can_run_audit()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="seclib.html#seclib.auth.User.can_manage_users"><code class="docutils literal notranslate"><span class="pre">User.can_manage_users()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="seclib.html#seclib.auth.User.__init__"><code class="docutils literal notranslate"><span class="pre">User.__init__()</span></code></a></li>
+</ul>
+</li>
+<li class="toctree-l3"><a class="reference internal" href="seclib.html#seclib.auth.APIKeyAuth"><code class="docutils literal notranslate"><span class="pre">APIKeyAuth</span></code></a><ul>
+<li class="toctree-l4"><a class="reference internal" href="seclib.html#seclib.auth.APIKeyAuth.__init__"><code class="docutils literal notranslate"><span class="pre">APIKeyAuth.__init__()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="seclib.html#seclib.auth.APIKeyAuth.generate_key"><code class="docutils literal notranslate"><span class="pre">APIKeyAuth.generate_key()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="seclib.html#seclib.auth.APIKeyAuth.hash_key"><code class="docutils literal notranslate"><span class="pre">APIKeyAuth.hash_key()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="seclib.html#seclib.auth.APIKeyAuth.authenticate"><code class="docutils literal notranslate"><span class="pre">APIKeyAuth.authenticate()</span></code></a></li>
+</ul>
+</li>
+<li class="toctree-l3"><a class="reference internal" href="seclib.html#seclib.auth.JWTAuth"><code class="docutils literal notranslate"><span class="pre">JWTAuth</span></code></a><ul>
+<li class="toctree-l4"><a class="reference internal" href="seclib.html#seclib.auth.JWTAuth.__init__"><code class="docutils literal notranslate"><span class="pre">JWTAuth.__init__()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="seclib.html#seclib.auth.JWTAuth.create_token"><code class="docutils literal notranslate"><span class="pre">JWTAuth.create_token()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="seclib.html#seclib.auth.JWTAuth.verify_token"><code class="docutils literal notranslate"><span class="pre">JWTAuth.verify_token()</span></code></a></li>
+</ul>
+</li>
+<li class="toctree-l3"><a class="reference internal" href="seclib.html#seclib.auth.AuthManager"><code class="docutils literal notranslate"><span class="pre">AuthManager</span></code></a><ul>
+<li class="toctree-l4"><a class="reference internal" href="seclib.html#seclib.auth.AuthManager.__init__"><code class="docutils literal notranslate"><span class="pre">AuthManager.__init__()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="seclib.html#seclib.auth.AuthManager.configure_api_keys"><code class="docutils literal notranslate"><span class="pre">AuthManager.configure_api_keys()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="seclib.html#seclib.auth.AuthManager.configure_jwt"><code class="docutils literal notranslate"><span class="pre">AuthManager.configure_jwt()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="seclib.html#seclib.auth.AuthManager.authenticate"><code class="docutils literal notranslate"><span class="pre">AuthManager.authenticate()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="seclib.html#seclib.auth.AuthManager.require_role"><code class="docutils literal notranslate"><span class="pre">AuthManager.require_role()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="seclib.html#seclib.auth.AuthManager.require_any_role"><code class="docutils literal notranslate"><span class="pre">AuthManager.require_any_role()</span></code></a></li>
+</ul>
+</li>
+<li class="toctree-l3"><a class="reference internal" href="seclib.html#seclib.auth.get_auth_manager"><code class="docutils literal notranslate"><span class="pre">get_auth_manager()</span></code></a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="seclib.html#seclib-encryption-module">seclib.encryption module</a></li>
+<li class="toctree-l2"><a class="reference internal" href="seclib.html#module-seclib.redaction">seclib.redaction module</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="seclib.html#seclib.redaction.SensitiveDataRedactor"><code class="docutils literal notranslate"><span class="pre">SensitiveDataRedactor</span></code></a><ul>
+<li class="toctree-l4"><a class="reference internal" href="seclib.html#seclib.redaction.SensitiveDataRedactor.__init__"><code class="docutils literal notranslate"><span class="pre">SensitiveDataRedactor.__init__()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="seclib.html#seclib.redaction.SensitiveDataRedactor.redact_text"><code class="docutils literal notranslate"><span class="pre">SensitiveDataRedactor.redact_text()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="seclib.html#seclib.redaction.SensitiveDataRedactor.redact_dict"><code class="docutils literal notranslate"><span class="pre">SensitiveDataRedactor.redact_dict()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="seclib.html#seclib.redaction.SensitiveDataRedactor.redact_list"><code class="docutils literal notranslate"><span class="pre">SensitiveDataRedactor.redact_list()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="seclib.html#seclib.redaction.SensitiveDataRedactor.get_redaction_stats"><code class="docutils literal notranslate"><span class="pre">SensitiveDataRedactor.get_redaction_stats()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="seclib.html#seclib.redaction.SensitiveDataRedactor.reset_stats"><code class="docutils literal notranslate"><span class="pre">SensitiveDataRedactor.reset_stats()</span></code></a></li>
+</ul>
+</li>
+<li class="toctree-l3"><a class="reference internal" href="seclib.html#seclib.redaction.redact_evidence"><code class="docutils literal notranslate"><span class="pre">redact_evidence()</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="seclib.html#seclib.redaction.redact_results"><code class="docutils literal notranslate"><span class="pre">redact_results()</span></code></a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="seclib.html#module-seclib.security">seclib.security module</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="seclib.html#seclib.security.SecurityError"><code class="docutils literal notranslate"><span class="pre">SecurityError</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="seclib.html#seclib.security.validate_variable_name"><code class="docutils literal notranslate"><span class="pre">validate_variable_name()</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="seclib.html#seclib.security.validate_variable_value"><code class="docutils literal notranslate"><span class="pre">validate_variable_value()</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="seclib.html#seclib.security.validate_variables"><code class="docutils literal notranslate"><span class="pre">validate_variables()</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="seclib.html#seclib.security.redact_sensitive_data"><code class="docutils literal notranslate"><span class="pre">redact_sensitive_data()</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="seclib.html#seclib.security.validate_file_path"><code class="docutils literal notranslate"><span class="pre">validate_file_path()</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="seclib.html#seclib.security.sanitize_filename"><code class="docutils literal notranslate"><span class="pre">sanitize_filename()</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="seclib.html#seclib.security.check_command_safety"><code class="docutils literal notranslate"><span class="pre">check_command_safety()</span></code></a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="seclib.html#module-seclib.validator">seclib.validator module</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="seclib.html#seclib.validator.normalize_profile"><code class="docutils literal notranslate"><span class="pre">normalize_profile()</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="seclib.html#seclib.validator.validate_profile"><code class="docutils literal notranslate"><span class="pre">validate_profile()</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="seclib.html#seclib.validator.severity_rank"><code class="docutils literal notranslate"><span class="pre">severity_rank()</span></code></a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="seclib.html#module-seclib">Module contents</a></li>
+</ul>
+</li>
+</ul>
+</div>
+</section>
+
+
+           </div>
+          </div>
+          <footer>
+
+  <hr/>
+
+  <div role="contentinfo">
+    <p>&#169; Copyright 2025, Alex Hellberg.</p>
+  </div>
+
+  Built with <a href="https://www.sphinx-doc.org/">Sphinx</a> using a
+    <a href="https://github.com/readthedocs/sphinx_rtd_theme">theme</a>
+    provided by <a href="https://readthedocs.org">Read the Docs</a>.
+   
+
+</footer>
+        </div>
+      </div>
+    </section>
+  </div>
+  <script>
+      jQuery(function () {
+          SphinxRtdTheme.Navigation.enable(true);
+      });
+  </script> 
+
+</body>
+</html>

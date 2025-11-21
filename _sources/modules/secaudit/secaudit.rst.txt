@@ -1,0 +1,37 @@
+secaudit package
+================
+
+Submodules
+----------
+
+secaudit.exceptions module
+--------------------------
+
+.. automodule:: secaudit.exceptions
+   :members:
+   :show-inheritance:
+   :undoc-members:
+
+secaudit.health module
+----------------------
+
+.. automodule:: secaudit.health
+   :members:
+   :show-inheritance:
+   :undoc-members:
+
+secaudit.main module
+--------------------
+
+.. automodule:: secaudit.main
+   :members:
+   :show-inheritance:
+   :undoc-members:
+
+Module contents
+---------------
+
+.. automodule:: secaudit
+   :members:
+   :show-inheritance:
+   :undoc-members:

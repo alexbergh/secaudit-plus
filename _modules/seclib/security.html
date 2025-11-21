@@ -1,0 +1,413 @@
+
+
+<!DOCTYPE html>
+<html class="writer-html5" lang="en" data-content_root="../../">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>seclib.security &mdash; SecAudit+ 1.0.0 Documentation</title>
+      <link rel="stylesheet" type="text/css" href="../../_static/pygments.css?v=b86133f3" />
+      <link rel="stylesheet" type="text/css" href="../../_static/css/theme.css?v=e59714d7" />
+
+  
+      <script src="../../_static/jquery.js?v=5d32c60e"></script>
+      <script src="../../_static/_sphinx_javascript_frameworks_compat.js?v=2cd50e6c"></script>
+      <script src="../../_static/documentation_options.js?v=8d563738"></script>
+      <script src="../../_static/doctools.js?v=9bcbadda"></script>
+      <script src="../../_static/sphinx_highlight.js?v=dc90522c"></script>
+    <script src="../../_static/js/theme.js"></script>
+    <link rel="index" title="Index" href="../../genindex.html" />
+    <link rel="search" title="Search" href="../../search.html" /> 
+</head>
+
+<body class="wy-body-for-nav"> 
+  <div class="wy-grid-for-nav">
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-scroll">
+        <div class="wy-side-nav-search" >
+
+          
+          
+          <a href="../../index.html" class="icon icon-home">
+            SecAudit+
+          </a>
+<div role="search">
+  <form id="rtd-search-form" class="wy-form" action="../../search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" aria-label="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+        </div><div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="Navigation menu">
+              <p class="caption" role="heading"><span class="caption-text">Contents:</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../modules/modules.html">modules</a></li>
+</ul>
+
+        </div>
+      </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap"><nav class="wy-nav-top" aria-label="Mobile navigation menu" >
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="../../index.html">SecAudit+</a>
+      </nav>
+
+      <div class="wy-nav-content">
+        <div class="rst-content">
+          <div role="navigation" aria-label="Page navigation">
+  <ul class="wy-breadcrumbs">
+      <li><a href="../../index.html" class="icon icon-home" aria-label="Home"></a></li>
+          <li class="breadcrumb-item"><a href="../index.html">Module code</a></li>
+      <li class="breadcrumb-item active">seclib.security</li>
+      <li class="wy-breadcrumbs-aside">
+      </li>
+  </ul>
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+           <div itemprop="articleBody">
+             
+  <h1>Source code for seclib.security</h1><div class="highlight"><pre>
+<span></span><span class="sd">&quot;&quot;&quot;Security utilities для SecAudit+.&quot;&quot;&quot;</span>
+
+<span class="kn">import</span><span class="w"> </span><span class="nn">re</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">typing</span><span class="w"> </span><span class="kn">import</span> <span class="n">Dict</span><span class="p">,</span> <span class="n">Any</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">pathlib</span><span class="w"> </span><span class="kn">import</span> <span class="n">Path</span>
+
+
+<div class="viewcode-block" id="SecurityError">
+<a class="viewcode-back" href="../../modules/seclib/seclib.html#seclib.security.SecurityError">[docs]</a>
+<span class="k">class</span><span class="w"> </span><span class="nc">SecurityError</span><span class="p">(</span><span class="ne">Exception</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Исключение для security-related ошибок.&quot;&quot;&quot;</span>
+    <span class="k">pass</span></div>
+
+
+
+<span class="c1"># Паттерны для валидации</span>
+<span class="n">ALLOWED_VAR_NAME_PATTERN</span> <span class="o">=</span> <span class="n">re</span><span class="o">.</span><span class="n">compile</span><span class="p">(</span><span class="sa">r</span><span class="s1">&#39;^[A-Z][A-Z0-9_]*$&#39;</span><span class="p">)</span>
+<span class="n">ALLOWED_VAR_VALUE_PATTERN</span> <span class="o">=</span> <span class="n">re</span><span class="o">.</span><span class="n">compile</span><span class="p">(</span><span class="sa">r</span><span class="s1">&#39;^[a-zA-Z0-9\s\-_./,:@]+$&#39;</span><span class="p">)</span>
+
+<span class="c1"># Паттерны для обнаружения sensitive данных</span>
+<span class="n">SENSITIVE_PATTERNS</span> <span class="o">=</span> <span class="p">[</span>
+    <span class="p">(</span><span class="sa">r</span><span class="s1">&#39;password[&quot;\s:=]+([^\s&quot;]+)&#39;</span><span class="p">,</span> <span class="s1">&#39;PASSWORD&#39;</span><span class="p">),</span>
+    <span class="p">(</span><span class="sa">r</span><span class="s1">&#39;passwd[&quot;\s:=]+([^\s&quot;]+)&#39;</span><span class="p">,</span> <span class="s1">&#39;PASSWORD&#39;</span><span class="p">),</span>
+    <span class="p">(</span><span class="sa">r</span><span class="s1">&#39;token[&quot;\s:=]+([^\s&quot;]+)&#39;</span><span class="p">,</span> <span class="s1">&#39;TOKEN&#39;</span><span class="p">),</span>
+    <span class="p">(</span><span class="sa">r</span><span class="s1">&#39;api[_-]?key[&quot;\s:=]+([^\s&quot;]+)&#39;</span><span class="p">,</span> <span class="s1">&#39;API_KEY&#39;</span><span class="p">),</span>
+    <span class="p">(</span><span class="sa">r</span><span class="s1">&#39;secret[&quot;\s:=]+([^\s&quot;]+)&#39;</span><span class="p">,</span> <span class="s1">&#39;SECRET&#39;</span><span class="p">),</span>
+    <span class="p">(</span><span class="sa">r</span><span class="s1">&#39;private[_-]?key[&quot;\s:=]+([^\s&quot;]+)&#39;</span><span class="p">,</span> <span class="s1">&#39;PRIVATE_KEY&#39;</span><span class="p">),</span>
+    <span class="p">(</span><span class="sa">r</span><span class="s1">&#39;-----BEGIN\s+(?:RSA\s+)?PRIVATE\s+KEY-----&#39;</span><span class="p">,</span> <span class="s1">&#39;PRIVATE_KEY&#39;</span><span class="p">),</span>
+    <span class="p">(</span><span class="sa">r</span><span class="s1">&#39;[A-Za-z0-9+/]{40,}={0,2}&#39;</span><span class="p">,</span> <span class="s1">&#39;BASE64_TOKEN&#39;</span><span class="p">),</span>  <span class="c1"># Длинные base64 строки</span>
+<span class="p">]</span>
+
+<span class="c1"># Опасные символы для command injection</span>
+<span class="n">DANGEROUS_CHARS</span> <span class="o">=</span> <span class="p">[</span><span class="s1">&#39;;&#39;</span><span class="p">,</span> <span class="s1">&#39;|&#39;</span><span class="p">,</span> <span class="s1">&#39;&amp;&#39;</span><span class="p">,</span> <span class="s1">&#39;$&#39;</span><span class="p">,</span> <span class="s1">&#39;`&#39;</span><span class="p">,</span> <span class="s1">&#39;(&#39;</span><span class="p">,</span> <span class="s1">&#39;)&#39;</span><span class="p">,</span> <span class="s1">&#39;&lt;&#39;</span><span class="p">,</span> <span class="s1">&#39;&gt;&#39;</span><span class="p">,</span> <span class="s1">&#39;</span><span class="se">\n</span><span class="s1">&#39;</span><span class="p">,</span> <span class="s1">&#39;</span><span class="se">\r</span><span class="s1">&#39;</span><span class="p">]</span>
+
+
+<div class="viewcode-block" id="validate_variable_name">
+<a class="viewcode-back" href="../../modules/seclib/seclib.html#seclib.security.validate_variable_name">[docs]</a>
+<span class="k">def</span><span class="w"> </span><span class="nf">validate_variable_name</span><span class="p">(</span><span class="n">name</span><span class="p">:</span> <span class="nb">str</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">bool</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    Валидация имени переменной.</span>
+<span class="sd">    </span>
+<span class="sd">    Разрешены только:</span>
+<span class="sd">    - Заглавные буквы A-Z</span>
+<span class="sd">    - Цифры 0-9</span>
+<span class="sd">    - Подчеркивание _</span>
+<span class="sd">    - Должно начинаться с буквы</span>
+<span class="sd">    </span>
+<span class="sd">    Args:</span>
+<span class="sd">        name: Имя переменной</span>
+<span class="sd">        </span>
+<span class="sd">    Returns:</span>
+<span class="sd">        bool: True если валидно</span>
+<span class="sd">        </span>
+<span class="sd">    Raises:</span>
+<span class="sd">        SecurityError: Если имя невалидно</span>
+<span class="sd">        </span>
+<span class="sd">    Example:</span>
+<span class="sd">        &gt;&gt;&gt; validate_variable_name(&quot;FAILLOCK_DENY&quot;)</span>
+<span class="sd">        True</span>
+<span class="sd">        &gt;&gt;&gt; validate_variable_name(&quot;invalid-name&quot;)</span>
+<span class="sd">        SecurityError: Invalid variable name</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="k">if</span> <span class="ow">not</span> <span class="n">name</span><span class="p">:</span>
+        <span class="k">raise</span> <span class="n">SecurityError</span><span class="p">(</span><span class="s2">&quot;Variable name cannot be empty&quot;</span><span class="p">)</span>
+    
+    <span class="k">if</span> <span class="ow">not</span> <span class="n">ALLOWED_VAR_NAME_PATTERN</span><span class="o">.</span><span class="n">match</span><span class="p">(</span><span class="n">name</span><span class="p">):</span>
+        <span class="k">raise</span> <span class="n">SecurityError</span><span class="p">(</span>
+            <span class="sa">f</span><span class="s2">&quot;Invalid variable name: &#39;</span><span class="si">{</span><span class="n">name</span><span class="si">}</span><span class="s2">&#39;. &quot;</span>
+            <span class="sa">f</span><span class="s2">&quot;Only uppercase letters, digits and underscore allowed. &quot;</span>
+            <span class="sa">f</span><span class="s2">&quot;Must start with a letter.&quot;</span>
+        <span class="p">)</span>
+    
+    <span class="k">return</span> <span class="kc">True</span></div>
+
+
+
+<div class="viewcode-block" id="validate_variable_value">
+<a class="viewcode-back" href="../../modules/seclib/seclib.html#seclib.security.validate_variable_value">[docs]</a>
+<span class="k">def</span><span class="w"> </span><span class="nf">validate_variable_value</span><span class="p">(</span><span class="n">value</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">allow_empty</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">bool</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    Валидация значения переменной.</span>
+<span class="sd">    </span>
+<span class="sd">    Проверяет на:</span>
+<span class="sd">    - Опасные символы для command injection</span>
+<span class="sd">    - Подозрительные паттерны</span>
+<span class="sd">    - Длину значения</span>
+<span class="sd">    </span>
+<span class="sd">    Args:</span>
+<span class="sd">        value: Значение переменной</span>
+<span class="sd">        allow_empty: Разрешить пустое значение</span>
+<span class="sd">        </span>
+<span class="sd">    Returns:</span>
+<span class="sd">        bool: True если валидно</span>
+<span class="sd">        </span>
+<span class="sd">    Raises:</span>
+<span class="sd">        SecurityError: Если значение невалидно</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="k">if</span> <span class="ow">not</span> <span class="n">value</span> <span class="ow">and</span> <span class="ow">not</span> <span class="n">allow_empty</span><span class="p">:</span>
+        <span class="k">raise</span> <span class="n">SecurityError</span><span class="p">(</span><span class="s2">&quot;Variable value cannot be empty&quot;</span><span class="p">)</span>
+    
+    <span class="k">if</span> <span class="ow">not</span> <span class="n">value</span> <span class="ow">and</span> <span class="n">allow_empty</span><span class="p">:</span>
+        <span class="k">return</span> <span class="kc">True</span>
+    
+    <span class="c1"># Проверка на опасные символы</span>
+    <span class="k">for</span> <span class="n">char</span> <span class="ow">in</span> <span class="n">DANGEROUS_CHARS</span><span class="p">:</span>
+        <span class="k">if</span> <span class="n">char</span> <span class="ow">in</span> <span class="n">value</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="n">SecurityError</span><span class="p">(</span>
+                <span class="sa">f</span><span class="s2">&quot;Dangerous character &#39;</span><span class="si">{</span><span class="n">char</span><span class="si">}</span><span class="s2">&#39; found in value: &#39;</span><span class="si">{</span><span class="n">value</span><span class="si">}</span><span class="s2">&#39;&quot;</span>
+            <span class="p">)</span>
+    
+    <span class="c1"># Проверка на допустимые символы</span>
+    <span class="k">if</span> <span class="ow">not</span> <span class="n">ALLOWED_VAR_VALUE_PATTERN</span><span class="o">.</span><span class="n">match</span><span class="p">(</span><span class="n">value</span><span class="p">):</span>
+        <span class="k">raise</span> <span class="n">SecurityError</span><span class="p">(</span>
+            <span class="sa">f</span><span class="s2">&quot;Invalid characters in value: &#39;</span><span class="si">{</span><span class="n">value</span><span class="si">}</span><span class="s2">&#39;. &quot;</span>
+            <span class="sa">f</span><span class="s2">&quot;Only alphanumeric, spaces, and -_./,:@ allowed.&quot;</span>
+        <span class="p">)</span>
+    
+    <span class="c1"># Проверка длины</span>
+    <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">value</span><span class="p">)</span> <span class="o">&gt;</span> <span class="mi">1024</span><span class="p">:</span>
+        <span class="k">raise</span> <span class="n">SecurityError</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Value too long: </span><span class="si">{</span><span class="nb">len</span><span class="p">(</span><span class="n">value</span><span class="p">)</span><span class="si">}</span><span class="s2"> characters (max 1024)&quot;</span><span class="p">)</span>
+    
+    <span class="k">return</span> <span class="kc">True</span></div>
+
+
+
+<div class="viewcode-block" id="validate_variables">
+<a class="viewcode-back" href="../../modules/seclib/seclib.html#seclib.security.validate_variables">[docs]</a>
+<span class="k">def</span><span class="w"> </span><span class="nf">validate_variables</span><span class="p">(</span><span class="n">variables</span><span class="p">:</span> <span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">])</span> <span class="o">-&gt;</span> <span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="nb">str</span><span class="p">]:</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    Валидация словаря переменных.</span>
+<span class="sd">    </span>
+<span class="sd">    Args:</span>
+<span class="sd">        variables: Словарь переменных для валидации</span>
+<span class="sd">        </span>
+<span class="sd">    Returns:</span>
+<span class="sd">        Dict[str, str]: Валидированный словарь (все значения str)</span>
+<span class="sd">        </span>
+<span class="sd">    Raises:</span>
+<span class="sd">        SecurityError: Если найдены невалидные переменные</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="n">validated</span> <span class="o">=</span> <span class="p">{}</span>
+    
+    <span class="k">for</span> <span class="n">key</span><span class="p">,</span> <span class="n">value</span> <span class="ow">in</span> <span class="n">variables</span><span class="o">.</span><span class="n">items</span><span class="p">():</span>
+        <span class="c1"># Валидация имени</span>
+        <span class="n">validate_variable_name</span><span class="p">(</span><span class="n">key</span><span class="p">)</span>
+        
+        <span class="c1"># Конвертация в строку</span>
+        <span class="n">str_value</span> <span class="o">=</span> <span class="nb">str</span><span class="p">(</span><span class="n">value</span><span class="p">)</span> <span class="k">if</span> <span class="n">value</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span> <span class="k">else</span> <span class="s2">&quot;&quot;</span>
+        
+        <span class="c1"># Валидация значения</span>
+        <span class="n">validate_variable_value</span><span class="p">(</span><span class="n">str_value</span><span class="p">,</span> <span class="n">allow_empty</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+        
+        <span class="n">validated</span><span class="p">[</span><span class="n">key</span><span class="p">]</span> <span class="o">=</span> <span class="n">str_value</span>
+    
+    <span class="k">return</span> <span class="n">validated</span></div>
+
+
+
+<div class="viewcode-block" id="redact_sensitive_data">
+<a class="viewcode-back" href="../../modules/seclib/seclib.html#seclib.security.redact_sensitive_data">[docs]</a>
+<span class="k">def</span><span class="w"> </span><span class="nf">redact_sensitive_data</span><span class="p">(</span><span class="n">text</span><span class="p">:</span> <span class="nb">str</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">str</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    Удаление sensitive данных из текста.</span>
+<span class="sd">    </span>
+<span class="sd">    Заменяет пароли, токены, ключи на ***REDACTED***.</span>
+<span class="sd">    </span>
+<span class="sd">    Args:</span>
+<span class="sd">        text: Текст для обработки</span>
+<span class="sd">        </span>
+<span class="sd">    Returns:</span>
+<span class="sd">        str: Текст с замененными sensitive данными</span>
+<span class="sd">        </span>
+<span class="sd">    Example:</span>
+<span class="sd">        &gt;&gt;&gt; redact_sensitive_data(&quot;password=secret123&quot;)</span>
+<span class="sd">        &#39;password=***REDACTED***&#39;</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="k">if</span> <span class="ow">not</span> <span class="n">text</span><span class="p">:</span>
+        <span class="k">return</span> <span class="n">text</span>
+    
+    <span class="n">result</span> <span class="o">=</span> <span class="n">text</span>
+    
+    <span class="k">for</span> <span class="n">pattern</span><span class="p">,</span> <span class="n">label</span> <span class="ow">in</span> <span class="n">SENSITIVE_PATTERNS</span><span class="p">:</span>
+        <span class="n">result</span> <span class="o">=</span> <span class="n">re</span><span class="o">.</span><span class="n">sub</span><span class="p">(</span>
+            <span class="n">pattern</span><span class="p">,</span>
+            <span class="sa">f</span><span class="s1">&#39;</span><span class="si">{</span><span class="n">label</span><span class="si">}</span><span class="s1">=***REDACTED***&#39;</span><span class="p">,</span>
+            <span class="n">result</span><span class="p">,</span>
+            <span class="n">flags</span><span class="o">=</span><span class="n">re</span><span class="o">.</span><span class="n">IGNORECASE</span>
+        <span class="p">)</span>
+    
+    <span class="k">return</span> <span class="n">result</span></div>
+
+
+
+<div class="viewcode-block" id="validate_file_path">
+<a class="viewcode-back" href="../../modules/seclib/seclib.html#seclib.security.validate_file_path">[docs]</a>
+<span class="k">def</span><span class="w"> </span><span class="nf">validate_file_path</span><span class="p">(</span><span class="n">path</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">allowed_dirs</span><span class="p">:</span> <span class="nb">list</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Path</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    Валидация пути к файлу для предотвращения path traversal.</span>
+<span class="sd">    </span>
+<span class="sd">    Args:</span>
+<span class="sd">        path: Путь к файлу</span>
+<span class="sd">        allowed_dirs: Список разрешенных директорий</span>
+<span class="sd">        </span>
+<span class="sd">    Returns:</span>
+<span class="sd">        Path: Валидированный путь</span>
+<span class="sd">        </span>
+<span class="sd">    Raises:</span>
+<span class="sd">        SecurityError: Если путь невалиден или опасен</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="k">if</span> <span class="ow">not</span> <span class="n">path</span><span class="p">:</span>
+        <span class="k">raise</span> <span class="n">SecurityError</span><span class="p">(</span><span class="s2">&quot;File path cannot be empty&quot;</span><span class="p">)</span>
+    
+    <span class="c1"># Проверка на path traversal</span>
+    <span class="k">if</span> <span class="s1">&#39;..&#39;</span> <span class="ow">in</span> <span class="n">path</span><span class="p">:</span>
+        <span class="k">raise</span> <span class="n">SecurityError</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Path traversal detected in: &#39;</span><span class="si">{</span><span class="n">path</span><span class="si">}</span><span class="s2">&#39;&quot;</span><span class="p">)</span>
+    
+    <span class="c1"># Проверка на абсолютные пути вне allowed_dirs</span>
+    <span class="n">file_path</span> <span class="o">=</span> <span class="n">Path</span><span class="p">(</span><span class="n">path</span><span class="p">)</span><span class="o">.</span><span class="n">resolve</span><span class="p">()</span>
+    
+    <span class="k">if</span> <span class="n">allowed_dirs</span><span class="p">:</span>
+        <span class="n">allowed</span> <span class="o">=</span> <span class="kc">False</span>
+        <span class="k">for</span> <span class="n">allowed_dir</span> <span class="ow">in</span> <span class="n">allowed_dirs</span><span class="p">:</span>
+            <span class="n">allowed_path</span> <span class="o">=</span> <span class="n">Path</span><span class="p">(</span><span class="n">allowed_dir</span><span class="p">)</span><span class="o">.</span><span class="n">resolve</span><span class="p">()</span>
+            <span class="k">try</span><span class="p">:</span>
+                <span class="n">file_path</span><span class="o">.</span><span class="n">relative_to</span><span class="p">(</span><span class="n">allowed_path</span><span class="p">)</span>
+                <span class="n">allowed</span> <span class="o">=</span> <span class="kc">True</span>
+                <span class="k">break</span>
+            <span class="k">except</span> <span class="ne">ValueError</span><span class="p">:</span>
+                <span class="k">continue</span>
+        
+        <span class="k">if</span> <span class="ow">not</span> <span class="n">allowed</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="n">SecurityError</span><span class="p">(</span>
+                <span class="sa">f</span><span class="s2">&quot;Path &#39;</span><span class="si">{</span><span class="n">path</span><span class="si">}</span><span class="s2">&#39; is outside allowed directories: </span><span class="si">{</span><span class="n">allowed_dirs</span><span class="si">}</span><span class="s2">&quot;</span>
+            <span class="p">)</span>
+    
+    <span class="k">return</span> <span class="n">file_path</span></div>
+
+
+
+<div class="viewcode-block" id="sanitize_filename">
+<a class="viewcode-back" href="../../modules/seclib/seclib.html#seclib.security.sanitize_filename">[docs]</a>
+<span class="k">def</span><span class="w"> </span><span class="nf">sanitize_filename</span><span class="p">(</span><span class="n">filename</span><span class="p">:</span> <span class="nb">str</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">str</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    Санитизация имени файла.</span>
+<span class="sd">    </span>
+<span class="sd">    Удаляет опасные символы и ограничивает длину.</span>
+<span class="sd">    </span>
+<span class="sd">    Args:</span>
+<span class="sd">        filename: Исходное имя файла</span>
+<span class="sd">        </span>
+<span class="sd">    Returns:</span>
+<span class="sd">        str: Безопасное имя файла</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="k">if</span> <span class="ow">not</span> <span class="n">filename</span><span class="p">:</span>
+        <span class="k">return</span> <span class="s2">&quot;unnamed&quot;</span>
+    
+    <span class="c1"># Удаление path separators</span>
+    <span class="n">safe_name</span> <span class="o">=</span> <span class="n">filename</span><span class="o">.</span><span class="n">replace</span><span class="p">(</span><span class="s1">&#39;/&#39;</span><span class="p">,</span> <span class="s1">&#39;_&#39;</span><span class="p">)</span><span class="o">.</span><span class="n">replace</span><span class="p">(</span><span class="s1">&#39;</span><span class="se">\\</span><span class="s1">&#39;</span><span class="p">,</span> <span class="s1">&#39;_&#39;</span><span class="p">)</span>
+    
+    <span class="c1"># Удаление опасных символов</span>
+    <span class="n">safe_name</span> <span class="o">=</span> <span class="n">re</span><span class="o">.</span><span class="n">sub</span><span class="p">(</span><span class="sa">r</span><span class="s1">&#39;[^a-zA-Z0-9._-]&#39;</span><span class="p">,</span> <span class="s1">&#39;_&#39;</span><span class="p">,</span> <span class="n">safe_name</span><span class="p">)</span>
+    
+    <span class="c1"># Удаление множественных подчеркиваний</span>
+    <span class="n">safe_name</span> <span class="o">=</span> <span class="n">re</span><span class="o">.</span><span class="n">sub</span><span class="p">(</span><span class="sa">r</span><span class="s1">&#39;_+&#39;</span><span class="p">,</span> <span class="s1">&#39;_&#39;</span><span class="p">,</span> <span class="n">safe_name</span><span class="p">)</span>
+    
+    <span class="c1"># Удаление ведущих/завершающих символов</span>
+    <span class="n">safe_name</span> <span class="o">=</span> <span class="n">safe_name</span><span class="o">.</span><span class="n">strip</span><span class="p">(</span><span class="s1">&#39;._-&#39;</span><span class="p">)</span>
+    
+    <span class="c1"># Ограничение длины</span>
+    <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">safe_name</span><span class="p">)</span> <span class="o">&gt;</span> <span class="mi">255</span><span class="p">:</span>
+        <span class="n">safe_name</span> <span class="o">=</span> <span class="n">safe_name</span><span class="p">[:</span><span class="mi">255</span><span class="p">]</span>
+    
+    <span class="k">return</span> <span class="n">safe_name</span> <span class="ow">or</span> <span class="s2">&quot;unnamed&quot;</span></div>
+
+
+
+<div class="viewcode-block" id="check_command_safety">
+<a class="viewcode-back" href="../../modules/seclib/seclib.html#seclib.security.check_command_safety">[docs]</a>
+<span class="k">def</span><span class="w"> </span><span class="nf">check_command_safety</span><span class="p">(</span><span class="n">command</span><span class="p">:</span> <span class="nb">str</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">bool</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    Проверка команды на потенциально опасные паттерны.</span>
+<span class="sd">    </span>
+<span class="sd">    Args:</span>
+<span class="sd">        command: Команда для проверки</span>
+<span class="sd">        </span>
+<span class="sd">    Returns:</span>
+<span class="sd">        bool: True если команда выглядит безопасно</span>
+<span class="sd">        </span>
+<span class="sd">    Raises:</span>
+<span class="sd">        SecurityError: Если обнаружены опасные паттерны</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="k">if</span> <span class="ow">not</span> <span class="n">command</span><span class="p">:</span>
+        <span class="k">raise</span> <span class="n">SecurityError</span><span class="p">(</span><span class="s2">&quot;Command cannot be empty&quot;</span><span class="p">)</span>
+    
+    <span class="c1"># Проверка на command chaining</span>
+    <span class="n">dangerous_patterns</span> <span class="o">=</span> <span class="p">[</span>
+        <span class="sa">r</span><span class="s1">&#39;;\s*rm\s+-rf&#39;</span><span class="p">,</span>
+        <span class="sa">r</span><span class="s1">&#39;\|\s*sh&#39;</span><span class="p">,</span>
+        <span class="sa">r</span><span class="s1">&#39;\|\s*bash&#39;</span><span class="p">,</span>
+        <span class="sa">r</span><span class="s1">&#39;&gt;\s*/dev/&#39;</span><span class="p">,</span>
+        <span class="sa">r</span><span class="s1">&#39;curl.*\|\s*sh&#39;</span><span class="p">,</span>
+        <span class="sa">r</span><span class="s1">&#39;wget.*\|\s*sh&#39;</span><span class="p">,</span>
+    <span class="p">]</span>
+    
+    <span class="k">for</span> <span class="n">pattern</span> <span class="ow">in</span> <span class="n">dangerous_patterns</span><span class="p">:</span>
+        <span class="k">if</span> <span class="n">re</span><span class="o">.</span><span class="n">search</span><span class="p">(</span><span class="n">pattern</span><span class="p">,</span> <span class="n">command</span><span class="p">,</span> <span class="n">re</span><span class="o">.</span><span class="n">IGNORECASE</span><span class="p">):</span>
+            <span class="k">raise</span> <span class="n">SecurityError</span><span class="p">(</span>
+                <span class="sa">f</span><span class="s2">&quot;Potentially dangerous command pattern detected: </span><span class="si">{</span><span class="n">pattern</span><span class="si">}</span><span class="s2">&quot;</span>
+            <span class="p">)</span>
+    
+    <span class="k">return</span> <span class="kc">True</span></div>
+
+</pre></div>
+
+           </div>
+          </div>
+          <footer>
+
+  <hr/>
+
+  <div role="contentinfo">
+    <p>&#169; Copyright 2025, Alex Hellberg.</p>
+  </div>
+
+  Built with <a href="https://www.sphinx-doc.org/">Sphinx</a> using a
+    <a href="https://github.com/readthedocs/sphinx_rtd_theme">theme</a>
+    provided by <a href="https://readthedocs.org">Read the Docs</a>.
+   
+
+</footer>
+        </div>
+      </div>
+    </section>
+  </div>
+  <script>
+      jQuery(function () {
+          SphinxRtdTheme.Navigation.enable(true);
+      });
+  </script> 
+
+</body>
+</html>

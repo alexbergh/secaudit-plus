@@ -1,0 +1,29 @@
+utils package
+=============
+
+Submodules
+----------
+
+utils.audit\_logger module
+--------------------------
+
+.. automodule:: utils.audit_logger
+   :members:
+   :show-inheritance:
+   :undoc-members:
+
+utils.logger module
+-------------------
+
+.. automodule:: utils.logger
+   :members:
+   :show-inheritance:
+   :undoc-members:
+
+Module contents
+---------------
+
+.. automodule:: utils
+   :members:
+   :show-inheritance:
+   :undoc-members:
