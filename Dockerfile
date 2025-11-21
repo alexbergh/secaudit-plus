@@ -1,3 +1,4 @@
+# syntax=docker/dockerfile:1.3
 # Multi-stage build for SecAudit+
 FROM python:3.12-slim AS builder
 
@@ -18,7 +19,8 @@ COPY requirements.lock* ./
 
 # Install Python dependencies
 # Use requirements.lock with hashes for security if available, fallback to requirements.txt
-RUN pip install --no-cache-dir --upgrade pip && \
+RUN --mount=type=cache,target=/root/.cache/pip \
+    pip install --no-cache-dir --upgrade pip && \
     if [ -f requirements.lock ]; then \
         echo "Installing from requirements.lock with hash verification..."; \
         pip install --no-cache-dir --require-hashes -r requirements.lock; \
@@ -68,9 +70,9 @@ ENV PYTHONUNBUFFERED=1 \
     SECAUDIT_LEVEL=baseline \
     SECAUDIT_WORKERS=4
 
-# Health check
+# Health check using dedicated health module
 HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
-    CMD secaudit --info || exit 1
+    CMD python -m secaudit.health liveness || exit 1
 
 # Security Note: Many audit checks require root privileges or specific capabilities.
 # When running in Docker/K8s, use capabilities (SYS_ADMIN, SYS_PTRACE, etc.) 

@@ -1,0 +1,52 @@
+name: Update Dependencies
+
+on:
+  schedule:
+    - cron: '0 0 * * 1'  # Weekly on Monday
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  update-requirements-lock:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install pip-tools
+        run: pip install pip-tools
+
+      - name: Update requirements.lock
+        run: |
+          pip-compile --generate-hashes --upgrade --output-file=requirements.lock requirements.txt
+
+      - name: Create Pull Request
+        uses: peter-evans/create-pull-request@v7
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          commit-message: "chore(deps): update requirements.lock"
+          title: "chore(deps): Update requirements.lock with latest hashes"
+          body: |
+            ## Automated Dependency Update
+            
+            This PR updates `requirements.lock` with the latest dependency versions and cryptographic hashes.
+            
+            **Changes:**
+            - Updated all dependencies to latest compatible versions
+            - Regenerated SHA256 hashes for supply chain security
+            
+            **Security:**
+            - All hashes verified against PyPI
+            - Compatible with Python 3.10+
+            
+            Please review the changes and run tests before merging.
+          branch: auto-update-requirements-lock
+          delete-branch: true

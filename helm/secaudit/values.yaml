@@ -213,7 +213,9 @@ auditLog:
     #   index: secaudit-audit
 
 encryption:
-  enabled: false
+  # SECURITY BEST PRACTICE: Encryption enabled by default for production
+  # For development/testing, set --set encryption.enabled=false
+  enabled: true  # Production default
   
   # GPG encryption for reports
   gpg:
@@ -272,12 +274,13 @@ tls:
     clientCA: ""
 
 externalSecrets:
-  # SECURITY RECOMMENDATION: Enable External Secrets for production!
+  # SECURITY BEST PRACTICE: External Secrets enabled by default for production!
   # External Secrets Operator must be installed in the cluster first:
   # helm repo add external-secrets https://charts.external-secrets.io
   # helm install external-secrets external-secrets/external-secrets \
   #   -n external-secrets-system --create-namespace
-  enabled: false  # Set to true for production
+  # For development/testing, set --set externalSecrets.enabled=false
+  enabled: true  # Production default (disable for dev/test)
   
   # External Secrets Operator integration
   secretStore: vault-backend
@@ -329,10 +332,11 @@ vault:
   agentInject: true
 
 networkPolicy:
-  # SECURITY RECOMMENDATION: Enable Network Policies for production!
+  # SECURITY BEST PRACTICE: Network Policies enabled by default for production!
   # Requires a CNI plugin that supports NetworkPolicy (Calico, Cilium, Weave Net)
   # CIS Kubernetes Benchmark 5.3.2: Ensure that all Namespaces have Network Policies defined
-  enabled: false  # Set to true for production
+  # For development/testing, set --set networkPolicy.enabled=false
+  enabled: true  # Production default (disable for dev/test without CNI support)
   
   ingress:
     enabled: true
@@ -353,8 +357,9 @@ networkPolicy:
     # Allow DNS resolution (required)
     allowDNS: true
     
-    # Allow HTTPS to external services (for updates, APIs)
-    allowExternal: false
+    # Restrict HTTPS to external services (security best practice)
+    # Set to true only if external API calls are needed
+    allowExternal: false  # Production default: deny all external traffic
     
     # Monitoring namespace for Prometheus
     monitoringNamespace: monitoring

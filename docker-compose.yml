@@ -83,6 +83,15 @@ services:
     
     network_mode: host
 
+  # Staging environment
+  secaudit-staging:
+    extends: secaudit
+    container_name: secaudit-staging
+    environment:
+      - SECAUDIT_LEVEL=strict
+      - SECAUDIT_STAGING=true
+    command: audit --profile profiles/base/server.yml --level strict
+
   # Test runner
   secaudit-test:
     build:
