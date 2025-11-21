@@ -36,17 +36,17 @@ jobs:
           title: "chore(deps): Update requirements.lock with latest hashes"
           body: |
             ## Automated Dependency Update
-            
+
             This PR updates `requirements.lock` with the latest dependency versions and cryptographic hashes.
-            
+
             **Changes:**
             - Updated all dependencies to latest compatible versions
             - Regenerated SHA256 hashes for supply chain security
-            
+
             **Security:**
             - All hashes verified against PyPI
             - Compatible with Python 3.10+
-            
+
             Please review the changes and run tests before merging.
           branch: auto-update-requirements-lock
           delete-branch: true

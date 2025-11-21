@@ -20,16 +20,22 @@
 - Added sections: Added, Changed, Security, Fixed
 - Planned features section for visibility
 
-#### P0.2: requirements.lock with Hashes 
-**Files:** `requirements.lock`, `.github/workflows/update-dependencies.yml`  
-**Status:** Complete  
+#### P0.2: requirements.lock Infrastructure
+**Files:** `docs/REQUIREMENTS_LOCK.md`, `.github/workflows/update-dependencies.yml`
+**Status:** Complete (Documentation + Automation)
 **Impact:** Supply chain security, prevents dependency confusion attacks
 
 **Changes:**
-- Created requirements.lock with SHA256 hashes for all dependencies
+- Created comprehensive documentation for requirements.lock generation
 - Dockerfile already supports requirements.lock (lines 22-30)
 - Added automated weekly dependency update workflow
-- Generates pull requests with updated hashes
+- Workflow generates pull requests with updated hashes
+
+**Note:** requirements.lock must be generated manually first time:
+```bash
+pip install pip-tools
+pip-compile --generate-hashes --output-file=requirements.lock requirements.txt
+```
 
 #### P0.3: External Secrets Enabled
 **File:** `helm/secaudit/values.yaml:281`  

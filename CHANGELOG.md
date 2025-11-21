@@ -43,11 +43,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- Documentation for requirements.lock generation (docs/REQUIREMENTS_LOCK.md)
+- Automated weekly dependency update workflow
+- Sphinx API documentation structure (docs/api/)
+- Performance benchmark test suite (tests/test_benchmarks.py)
+- Staging environment in docker-compose.yml
+- Health command in CLI (secaudit health)
+
+### Changed
+- External Secrets enabled by default in Helm values
+- Network Policies enabled by default in Helm values (CIS Benchmark 5.3.2)
+- Encryption enabled by default in Helm values
+- Dockerfile HEALTHCHECK uses dedicated health module
+
 ### Planned
 - SLSA provenance attestation for supply chain security
-- Requirements lock file with cryptographic hashes
-- API documentation with Sphinx
-- Benchmark performance tests
 - Falco/AppArmor/SELinux runtime security profiles
 - NIST 800-53 and PCI-DSS compliance mappings
 
